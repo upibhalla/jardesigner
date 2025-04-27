@@ -28,7 +28,7 @@ const createNewOutputFile = () => ({
 
 
 
-// Component signature already includes getCurrentJsonData from your provided file
+// Component signature includes getCurrentJsonData
 const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData }) => {
     // States for "Save Model"
     const [modelFileName, setModelFileName] = useState('model');
@@ -40,13 +40,10 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
 
     const fileInputRef = useRef();
 
-    // validateJson remains the same
+    // validateJson remains (used in handleLoadModel)
     const validateJson = (jsonContent) => {
-        // Note: Using require might not work in all environments (e.g., browser builds without specific config)
-        // Consider fetching or importing the schema differently if needed.
         try {
-            // Assuming schema file is correctly located relative to this file
-            const schema = require('../../rdesigneurSchema.json');
+            const schema = require('../../rdesigneurSchema.json'); // Adjust path if needed
             const ajv = new Ajv();
             const validate = ajv.compile(schema);
             const valid = validate(jsonContent);
@@ -64,7 +61,7 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
         }
     };
 
-    // --- UPDATED handleSaveModel with showSaveFilePicker ---
+    // --- handleSaveModel using showSaveFilePicker with fallback ---
     const handleSaveModel = async () => { // Make function async
         // Check if the function to get data is provided
         if (!getCurrentJsonData) {
@@ -92,6 +89,7 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
         // Try using the File System Access API (showSaveFilePicker)
         if (window.showSaveFilePicker) {
             try {
+                console.log("Attempting to use showSaveFilePicker...");
                 const fileHandle = await window.showSaveFilePicker({
                     suggestedName: suggestedName,
                     types: [{
@@ -99,12 +97,15 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
                         accept: { 'application/json': ['.json'] },
                     }],
                 });
+                console.log("File handle obtained:", fileHandle);
 
                 // Create a FileSystemWritableFileStream to write to.
                 const writableStream = await fileHandle.createWritable();
+                console.log("Writable stream created.");
 
                 // Write the blob to the stream
                 await writableStream.write(blob);
+                console.log("Blob written to stream.");
 
                 // Close the file and write the contents to disk.
                 await writableStream.close();
@@ -116,9 +117,8 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
                     console.log('User cancelled the save dialog.');
                 } else {
                     console.error('Error saving file with showSaveFilePicker:', err);
-                    alert(`Could not save file: ${err.message}`);
-                    // Optionally fall back to the old method here if desired on error
-                    // fallbackSave(blob, suggestedName); // Need to define fallbackSave if used here
+                    alert(`Could not save file using Save As dialog: ${err.message}`);
+                    // NOTE: No fallback here on error, only if API is unsupported.
                 }
             }
         } else {
@@ -140,10 +140,10 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
             }
         }
     };
-    // --- END UPDATED handleSaveModel ---
+    // --- END handleSaveModel ---
 
 
-    // handleLoadModel remains the same as in your provided file
+    // handleLoadModel remains the same (uses validateJson)
     const handleLoadModel = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -152,8 +152,8 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
             const fileContent = e.target.result;
             try {
                 const jsonData = JSON.parse(fileContent);
+                // Ensure validateJson is called here
                 if (validateJson(jsonData)) {
-                    // Propagate the loaded and validated content string upwards
                     if (setJsonContent) {
                          setJsonContent(JSON.stringify(jsonData, null, 2));
                     }
@@ -165,21 +165,23 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
             }
         };
         reader.readAsText(file);
-         // Reset file input value so onChange fires again for the same file
          if (fileInputRef.current) {
              fileInputRef.current.value = '';
          }
     };
 
-    // Handlers for Output Files remain the same
+    // --- Handlers for Output Files ---
+    // Removed outputFiles.length from dependency array
     const addOutputFile = useCallback(() => {
         setOutputFiles((prev) => [...prev, createNewOutputFile()]);
+        // Setting active index based on current state before update is fine
         setActiveOutputFileIndex(outputFiles.length);
-    }, [outputFiles.length]);
+    }, []); // Removed outputFiles.length dependency
+
     const removeOutputFile = useCallback((indexToRemove) => {
         setOutputFiles((prev) => prev.filter((_, i) => i !== indexToRemove));
         setActiveOutputFileIndex((prev) => Math.max(0, prev - (prev >= indexToRemove ? 1 : 0)));
-    }, []);
+    }, []); // No dependencies needed
 
      const updateOutputFile = useCallback((index, key, value) => {
         setOutputFiles((prevFiles) =>
@@ -187,10 +189,9 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
                 i === index ? { ...fileEntry, [key]: value } : fileEntry
             )
         );
-        // useEffect below handles calling onConfigurationChange
-    }, []);
+    }, []); // No dependencies needed
 
-    // Format 'files' Data (getFileData) remains the same
+    // Format 'files' Data (getFileData) - Kept outputFiles dependency as it's correct
      const getFileData = useCallback(() => {
         return outputFiles.map(fileState => {
              // Basic validation: Check required fields
@@ -225,7 +226,7 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
              return fileSchemaItem;
 
         }).filter(item => item !== null); // Filter out invalid entries
-    }, [outputFiles]); // Depends on outputFiles state
+    }, [outputFiles]); // Correctly depends on outputFiles state
 
      // useEffect hook remains the same
      useEffect(() => {
@@ -236,7 +237,7 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
     }, [outputFiles, getFileData, onConfigurationChange]); // Dependencies
 
 
-    // --- JSX Rendering (remains the same as your provided file, but Save button calls new handleSaveModel) ---
+    // --- JSX Rendering ---
     return (
         <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
             {/* === Save Model Section === */}
@@ -253,10 +254,12 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
                      </TextField>
                  </Grid>
                  <Grid item xs={12}>
+                     {/* --- UPDATED Button Text --- */}
                     <Button variant="contained" fullWidth sx={{ bgcolor: '#e0e0e0', color: 'black', ':hover': { bgcolor: '#bdbdbd' } }}
                         onClick={handleSaveModel}> {/* This button triggers the updated function */}
-                        Save Model Config As...
+                        Save
                     </Button>
+                     {/* --- END UPDATED Button Text --- */}
                 </Grid>
             </Grid>
 
@@ -287,6 +290,7 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
               {outputFiles.length > 0 && activeOutputFileIndex < outputFiles.length && outputFiles[activeOutputFileIndex] && (
                   <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                        <Grid container spacing={1.5}>
+                            {/* ... TextFields for output file config ... */}
                             {/* Row 1: Filename, Type */}
                            <Grid item xs={12} sm={7}>
                                <TextField fullWidth size="small" label="Output Filename (e.g., output.h5)" required value={outputFiles[activeOutputFileIndex].file}
@@ -339,3 +343,4 @@ const FileMenuBox = ({ setJsonContent, onConfigurationChange, getCurrentJsonData
 };
 
 export default FileMenuBox;
+

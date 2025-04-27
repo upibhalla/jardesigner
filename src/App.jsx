@@ -155,8 +155,7 @@ const App = () => {
         		 getCurrentJsonData={getCurrentJsonData} // Pass function to get current data for saving
              />}
           {activeMenu === 'Configure' && <ConfigureMenuBox onConfigurationChange={updateJsonData} />}
-          {/* ... other MenuBoxes with onConfigurationChange={updateJsonData} ... */}
-           {activeMenu === 'Run' && <RunMenuBox /* Needs props */ />}
+          {activeMenu === 'Run' && <RunMenuBox onConfigurationChange={updateJsonData} />}
            {activeMenu === 'Morphology' && <MorphoMenuBox onConfigurationChange={updateJsonData} />}
            {activeMenu === 'Spines' && <SpineMenuBox onConfigurationChange={updateJsonData} />}
            {activeMenu === 'Channels' && <ElecMenuBox onConfigurationChange={updateJsonData} />}
