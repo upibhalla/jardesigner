@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Added useEffect, useCallback
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
 import {
     Box,
     Tabs,
@@ -6,7 +6,7 @@ import {
     Typography,
     TextField,
     Grid,
-    IconButton, // Keep for AddIcon
+    IconButton,
     MenuItem,
     Button,
     Divider,
@@ -14,56 +14,94 @@ import {
     FormControlLabel,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete'; // Import DeleteIcon
+import DeleteIcon from '@mui/icons-material/Delete';
 
-// Initial state for a new 3D plot entry (moogli array item)
-const createNewMoogliEntry = () => ({
-    path: '', // Required
-    field: 'Vm', // Default field, Required
-    relativePath: '.', // Default -> relpath
-    title: '', // Optional
-    diameterScale: '1.0', // Optional -> diaScale (number)
-    dt: '0.1', // Optional -> dt (number)
-});
-
-// Initial state for global display settings (displayMoogli object)
-const initialGlobalSettings = {
-    runtime: '0.3', // number
-    rotation: '0.006283', // number
-    azimuth: '0.0', // number -> azim
-    elevation: '0.0', // number -> elev
-    mergeDisplays: false, // boolean
-    fullScreen: false, // boolean -> fullscreen
-    colormap: 'jet', // string
-    background: 'default', // string -> bg
-    center: '[0,0,0]', // string to be parsed to array[3] of numbers
-    block: true, // boolean
+// Helper to safely convert value to string
+const safeToString = (value, defaultValue = '') => {
+    return value !== undefined && value !== null ? String(value) : defaultValue;
 };
 
+// --- RESTORED: Field Options ---
+// Field Options (Matches schema fieldEnum)
+const fieldOptions = [
+    'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
+    'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
+    'modulation', 'psdArea',
+];
+// --- END RESTORED ---
 
-const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
-    const [tabs, setTabs] = useState([createNewMoogliEntry()]); // State for moogli array
+// Colormap options (remain the same)
+const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
+
+// Default state creators
+const createDefaultMoogliEntry = () => ({
+    path: '',
+    field: fieldOptions[0], // Use first field option as default
+    relativePath: '.',
+    title: '',
+    diameterScale: '1.0',
+    dt: '0.1',
+});
+const createDefaultGlobalSettings = () => ({
+    runtime: '0.3', rotation: '0.006283', azimuth: '0.0', elevation: '0.0',
+    mergeDisplays: false, fullScreen: false, colormap: 'jet', background: 'default',
+    center: '[0,0,0]', block: true,
+});
+
+// Accept currentConfig prop: { moogli: [], displayMoogli: {} }
+const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
+
+    // --- Initialize state from props using useState initializer ---
+    const [tabs, setTabs] = useState(() => {
+        console.log("ThreeDMenuBox: Initializing tabs (moogli) from props", currentConfig?.moogli);
+        const initialTabs = currentConfig?.moogli?.map(m => ({
+            path: m.path || '',
+            field: m.field || fieldOptions[0], // Use default field if missing
+            relativePath: m.relpath || '.', // Map schema key
+            title: m.title || '',
+            diameterScale: safeToString(m.diaScale, createDefaultMoogliEntry().diameterScale), // Map schema key
+            dt: safeToString(m.dt, createDefaultMoogliEntry().dt),
+        })) || [];
+        return initialTabs.length > 0 ? initialTabs : [createDefaultMoogliEntry()];
+    });
+
+    const [globalSettings, setGlobalSettings] = useState(() => {
+        console.log("ThreeDMenuBox: Initializing globalSettings (displayMoogli) from props", currentConfig?.displayMoogli);
+        const initialDisplay = currentConfig?.displayMoogli || {};
+        const defaults = createDefaultGlobalSettings();
+        return {
+            runtime: safeToString(initialDisplay.runtime, defaults.runtime),
+            rotation: safeToString(initialDisplay.rotation, defaults.rotation),
+            azimuth: safeToString(initialDisplay.azim, defaults.azimuth), // Map schema key
+            elevation: safeToString(initialDisplay.elev, defaults.elevation), // Map schema key
+            mergeDisplays: initialDisplay.mergeDisplays ?? defaults.mergeDisplays,
+            fullScreen: initialDisplay.fullscreen ?? defaults.fullScreen, // Map schema key
+            colormap: initialDisplay.colormap || defaults.colormap,
+            background: initialDisplay.bg || defaults.background, // Map schema key
+            // Convert center array back to JSON string for TextField
+            center: JSON.stringify(initialDisplay.center || JSON.parse(defaults.center)), // Ensure default is parsed if needed
+            block: initialDisplay.block ?? defaults.block,
+        };
+    });
+
     const [activeTab, setActiveTab] = useState(0);
-
-    // State for displayMoogli object
-    const [globalSettings, setGlobalSettings] = useState(initialGlobalSettings);
-
-    // Field Options (Matches schema fieldEnum)
-    const fieldOptions = [
-        'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
-        'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
-        'modulation', 'psdArea',
-    ];
-
-    // Colormap options (example, add more if needed)
-    const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
+    // --- END Initialization ---
 
 
-    // --- Handlers for moogli array ('tabs' state) ---
+    // Refs for cleanup function
+    const onConfigurationChangeRef = useRef(onConfigurationChange);
+    useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
+    const tabsRef = useRef(tabs);
+    useEffect(() => { tabsRef.current = tabs; }, [tabs]);
+    const globalSettingsRef = useRef(globalSettings);
+    useEffect(() => { globalSettingsRef.current = globalSettings; }, [globalSettings]);
+
+
+    // --- Handlers ONLY update LOCAL state ---
     const addTab = useCallback(() => {
-        setTabs((prev) => [...prev, createNewMoogliEntry()]);
-        setActiveTab(tabs.length);
-    }, [tabs.length]);
+        setTabs((prev) => [...prev, createDefaultMoogliEntry()]);
+        setActiveTab(tabsRef.current.length); // Use ref
+    }, []);
 
     const removeTab = useCallback((indexToRemove) => {
         setTabs((prev) => prev.filter((_, i) => i !== indexToRemove));
@@ -71,6 +109,7 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
     }, []);
 
     const updateTab = useCallback((index, key, value) => {
+        console.log(`ThreeDMenuBox Tab: Local state change - Index ${index}, Key ${key}: ${value}`);
         setTabs((prevTabs) =>
             prevTabs.map((tab, i) =>
                 i === index ? { ...tab, [key]: value } : tab
@@ -78,93 +117,94 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
         );
     }, []);
 
-
-    // --- Handlers for displayMoogli object ('globalSettings' state) ---
     const updateGlobalSetting = useCallback((key, value) => {
-        // Handle checkbox boolean conversion explicitly
         const actualValue = (typeof value === 'boolean') ? value : value;
+        console.log(`ThreeDMenuBox Global: Local state change - Key ${key}: ${actualValue}`);
         setGlobalSettings((prev) => ({ ...prev, [key]: actualValue }));
     }, []);
 
+    const handleTabChange = (event, newValue) => {
+        setActiveTab(newValue);
+    };
+    // --- END Handlers ---
 
-    // --- NEW: Format Data for Schema ---
-    const getThreeDData = useCallback(() => {
+
+    // --- Function to format local state for pushing up (used on unmount) ---
+    const getThreeDDataForUnmount = () => {
+        const currentTabs = tabsRef.current;
+        const currentGlobalSettings = globalSettingsRef.current;
+        console.log("ThreeDMenuBox: Formatting final local state for push:", { tabs: currentTabs, globalSettings: currentGlobalSettings });
+
         // Format moogli array
-        const moogliData = tabs.map(tabState => {
-            // Basic validation
-            if (!tabState.path || !tabState.field) {
-                console.warn("Skipping 3D moogli entry due to missing path or field:", tabState);
-                return null;
-            }
+        const moogliData = currentTabs.map(tabState => {
+            if (!tabState.path || !tabState.field) return null; // Validation
             const diaScaleNum = parseFloat(tabState.diameterScale);
             const dtNum = parseFloat(tabState.dt);
+            const defaults = createDefaultMoogliEntry(); // Get defaults for comparison
 
             const moogliSchemaItem = {
                 path: tabState.path,
                 field: tabState.field,
-                // Optional fields only included if non-default/non-empty
-                ...(tabState.relativePath && tabState.relativePath !== '.' && { relpath: tabState.relativePath }), // Map key, check default
+                // Optional: only include if non-default/non-empty
+                ...(tabState.relativePath && tabState.relativePath !== defaults.relativePath && { relpath: tabState.relativePath }),
                 ...(tabState.title && { title: tabState.title }),
-                ...( (!isNaN(diaScaleNum) && diaScaleNum !== 1) && { diaScale: diaScaleNum }), // Map key, check default
-                ...( (!isNaN(dtNum)) && { dt: dtNum }), // Include if valid number
-                // ymin, ymax are in schema but not in component state
+                ...( (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaults.diameterScale) && { diaScale: diaScaleNum }),
+                ...( (!isNaN(dtNum) && safeToString(dtNum) !== defaults.dt) && { dt: dtNum }), // Check against string default
             };
              return moogliSchemaItem;
-        }).filter(item => item !== null); // Filter out invalid entries
-
+        }).filter(item => item !== null);
 
         // Format displayMoogli object
-        let centerArray = [0, 0, 0]; // Default center
+        let centerArray = JSON.parse(createDefaultGlobalSettings().center); // Default center
         try {
-            const parsedCenter = JSON.parse(globalSettings.center);
+            const parsedCenter = JSON.parse(currentGlobalSettings.center);
             if (Array.isArray(parsedCenter) && parsedCenter.length === 3 && parsedCenter.every(n => typeof n === 'number')) {
                 centerArray = parsedCenter;
             } else {
-                 console.warn("Invalid format for Center coordinates, using default [0,0,0]. Input:", globalSettings.center);
+                 console.warn("Invalid format for Center coordinates, using default [0,0,0]. Input:", currentGlobalSettings.center);
             }
         } catch (e) {
-            console.warn("Error parsing Center coordinates, using default [0,0,0]. Input:", globalSettings.center, "Error:", e);
+            console.warn("Error parsing Center coordinates, using default [0,0,0]. Input:", currentGlobalSettings.center, "Error:", e);
         }
 
+        const defaultsGlobal = createDefaultGlobalSettings(); // Get defaults for comparison
         const displayMoogliData = {
-            // Map state keys to schema keys, perform type conversions
-            runtime: parseFloat(globalSettings.runtime) || 0.3,
-            rotation: parseFloat(globalSettings.rotation) || 0.006283,
-            azim: parseFloat(globalSettings.azimuth) || 0, // Map key
-            elev: parseFloat(globalSettings.elevation) || 0, // Map key
-            mergeDisplays: globalSettings.mergeDisplays,
-            fullscreen: globalSettings.fullScreen, // Map key
-            colormap: globalSettings.colormap || 'jet',
-            bg: globalSettings.background || 'default', // Map key
+            // Required or always included fields
+            runtime: parseFloat(currentGlobalSettings.runtime) || 0,
+            rotation: parseFloat(currentGlobalSettings.rotation) || 0,
+            azim: parseFloat(currentGlobalSettings.azimuth) || 0, // Map key
+            elev: parseFloat(currentGlobalSettings.elevation) || 0, // Map key
+            colormap: currentGlobalSettings.colormap || defaultsGlobal.colormap,
+            bg: currentGlobalSettings.background || defaultsGlobal.background, // Map key
             center: centerArray,
-            block: globalSettings.block,
-            // dt, animation, movieFrame are in schema but not component state
+            block: currentGlobalSettings.block,
+            // Optional: only include if non-default
+            ...(currentGlobalSettings.mergeDisplays !== defaultsGlobal.mergeDisplays && { mergeDisplays: currentGlobalSettings.mergeDisplays }),
+            ...(currentGlobalSettings.fullScreen !== defaultsGlobal.fullScreen && { fullscreen: currentGlobalSettings.fullScreen }), // Map key
         };
 
-        // Only include non-default boolean values to keep JSON cleaner
-        if (!displayMoogliData.mergeDisplays) delete displayMoogliData.mergeDisplays;
-        if (!displayMoogliData.fullscreen) delete displayMoogliData.fullscreen;
-        // Block defaults to true in component but false in schema? Check schema again.
-        // Assuming schema default for block is true. Let's keep it simple and always include it.
-        // if (!displayMoogliData.block) delete displayMoogliData.block;
-
-
         return { moogli: moogliData, displayMoogli: displayMoogliData };
+    };
 
-    }, [tabs, globalSettings]); // Depends on both states
 
-
-    // --- NEW: useEffect to call the prop when relevant state changes ---
+    // --- useEffect hook to push changes up ON UNMOUNT ---
     useEffect(() => {
-        if (onConfigurationChange) {
-            const threeDData = getThreeDData();
-            onConfigurationChange(threeDData); // Pass object with both keys
-        }
-    }, [tabs, globalSettings, getThreeDData, onConfigurationChange]); // Dependencies
-    // --- END NEW ---
+        console.log("ThreeDMenuBox: Mounted, setting up unmount cleanup.");
+        return () => {
+            const latestOnConfigurationChange = onConfigurationChangeRef.current;
+            if (latestOnConfigurationChange) {
+                console.log("ThreeDMenuBox: Unmounting, pushing final state up.");
+                const configData = getThreeDDataForUnmount();
+                latestOnConfigurationChange(configData); // Push object with both keys
+            } else {
+                console.warn("ThreeDMenuBox: onConfigurationChange not available on unmount.");
+            }
+        };
+    }, []); // IMPORTANT: Empty dependency array
+    // --- END Unmount Effect ---
 
 
-    // --- JSX Rendering ---
+    // --- JSX Rendering (uses local state) ---
     return (
         <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
             <Typography variant="h6" gutterBottom>3D Visualization (Moogli)</Typography>
@@ -172,7 +212,7 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
             {/* === Moogli Array Section (Tabs) === */}
             <Typography variant="subtitle1" gutterBottom sx={{ mt: 1, fontWeight: 'bold' }}>Data Sources</Typography>
              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                 <Tabs value={activeTab} onChange={(e, nv) => setActiveTab(nv)} variant="scrollable" scrollButtons="auto" aria-label="Moogli data sources">
+                 <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" aria-label="Moogli data sources">
                     {tabs.map((tab, index) => (
                         <Tab key={index} label={`${tab.field || 'New'} @ ${tab.path || '?'}`} />
                      ))}
@@ -188,15 +228,17 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
                                  onChange={(e) => updateTab(activeTab, 'path', e.target.value)} />
                          </Grid>
                          <Grid item xs={12} sm={6}>
+                             {/* --- RESTORED Field Dropdown --- */}
                              <TextField select fullWidth size="small" label="Field" required value={tabs[activeTab].field}
                                  onChange={(e) => updateTab(activeTab, 'field', e.target.value)}>
                                  <MenuItem value=""><em>Select Field...</em></MenuItem>
                                  {fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                              </TextField>
+                             {/* --- END RESTORED --- */}
                          </Grid>
                           {/* Row 2: RelPath, Title */}
                          <Grid item xs={12} sm={6}>
-                             <TextField fullWidth size="small" label="Relative Path (Optional)" defaultValue="." value={tabs[activeTab].relativePath}
+                             <TextField fullWidth size="small" label="Relative Path (Optional)" value={tabs[activeTab].relativePath}
                                  onChange={(e) => updateTab(activeTab, 'relativePath', e.target.value)} />
                          </Grid>
                           <Grid item xs={12} sm={6}>
@@ -205,14 +247,13 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
                          </Grid>
                          {/* Row 3: DiaScale, Dt */}
                            <Grid item xs={12} sm={6}>
-                             <TextField fullWidth size="small" label="Diameter Scale (Optional)" type="number" defaultValue="1.0" value={tabs[activeTab].diameterScale}
+                             <TextField fullWidth size="small" label="Diameter Scale (Optional)" type="number" value={tabs[activeTab].diameterScale}
                                  onChange={(e) => updateTab(activeTab, 'diameterScale', e.target.value)} InputProps={{ inputProps: { step: 0.1 } }}/>
                          </Grid>
                            <Grid item xs={12} sm={6}>
-                             <TextField fullWidth size="small" label="dt (Update Interval, Optional)" type="number" defaultValue="0.1" value={tabs[activeTab].dt}
+                             <TextField fullWidth size="small" label="dt (Update Interval, Optional)" type="number" value={tabs[activeTab].dt}
                                  onChange={(e) => updateTab(activeTab, 'dt', e.target.value)} InputProps={{ inputProps: { min: 1e-5, step: 0.01 } }}/>
                          </Grid>
-                         {/* Ymin/Ymax fields from schema are not included in UI */}
                      </Grid>
                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ marginTop: '16px' }}>
                          Remove Data Source {activeTab + 1}
@@ -259,9 +300,9 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
                              placeholder="e.g., [1.5e-5, 0, -2e-5]" />
                      </Grid>
                      <Grid item xs={12} sm={4} container direction="column" >
-                        <FormControlLabel control={ <Checkbox checked={globalSettings.mergeDisplays} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays"/>
-                        <FormControlLabel control={ <Checkbox checked={globalSettings.fullScreen} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen"/>
-                        <FormControlLabel control={ <Checkbox checked={globalSettings.block} onChange={(e) => updateGlobalSetting('block', e.target.checked)} />} label="Block Thread"/>
+                        <FormControlLabel control={ <Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays"/>
+                        <FormControlLabel control={ <Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen"/>
+                        <FormControlLabel control={ <Checkbox checked={Boolean(globalSettings.block)} onChange={(e) => updateGlobalSetting('block', e.target.checked)} />} label="Block Thread"/>
                      </Grid>
                  </Grid>
             </Box>
@@ -270,3 +311,4 @@ const ThreeDMenuBox = ({ onConfigurationChange }) => { // Accept prop
 };
 
 export default ThreeDMenuBox;
+

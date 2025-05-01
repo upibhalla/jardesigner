@@ -866,7 +866,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def buildAdaptors( self ):
         if not hasattr( self, 'adaptors' ):
             return
-        for i in self.adaptorList:
+        for i in self.adaptors:
             mesh, name = self.findMeshOnName( i[0] )
             if mesh == "":
                 mesh, name = self.findMeshOnName( i[2] )
@@ -1290,7 +1290,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
 
     def _save( self ):
         self._finishedSaving = True
-        if not hasattr( self, 'files' ):
+        if not hasattr( self, 'files' ) or not hasattr(self, 'nsdfPathList' ):
             return
         # Stuff here for doing saves to different formats
         for nsdfPath in self.nsdfPathList:
@@ -1337,7 +1337,11 @@ rdesigneur.rmoogli.updateMoogliViewer()
         k = 0
         # rstim class has {fname, path, field, dt, flush_steps }
         for i in self.stims:
-            field = i['field']
+            stimType = i['type']
+            if stimType == 'field':
+                field = i['field']
+            else:   # Backward compat. In the json file it is cleaner.
+                field = stimType
             pair = i['path'] + " " + i['geomExpr']
             dendCompts = self.elecid.compartmentsFromExpression[ pair ]
             if field == 'vclamp':
@@ -1450,7 +1454,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
         #self._buildNeuroMesh()
 
         self._configureSolvers()
-        for i in self.adaptorList:
+        for i in self.adaptors:
             #  print(i)
             assert len(i) >= 8
             self._buildAdaptor( i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7] )

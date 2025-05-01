@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Added useEffect, useCallback
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
 import {
     Box,
     Tabs,
@@ -6,74 +6,112 @@ import {
     Typography,
     TextField,
     Grid,
-    IconButton, // Keep for AddIcon
+    IconButton,
     MenuItem,
     Button,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete'; // Import DeleteIcon
+import DeleteIcon from '@mui/icons-material/Delete';
 
-// Define fieldOptions outside the component for stability
+// Define fieldOptions and typeOptions outside
 const fieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
     'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
     'modulation', 'psdArea',
 ];
-// Define typeOptions outside
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
 
-// Initial state for a new stim entry
-const createNewStim = () => ({
-    path: '', // Required
-    field: 'Vm', // Required only if type is 'Field'
-    relativePath: '.', // Optional -> relpath
-    geometryExpression: '1', // Optional -> geomExpr (default '1')
-    stimulusExpression: '', // Required -> expr
-    type: 'Field', // Component type ('Field', 'Periodic Synapse', 'Random Synapse') -> schema type
-    weight: '1.0', // Required only if type is 'Periodic Synapse' or 'Random Synapse'
+// Helper to safely convert value to string
+const safeToString = (value, defaultValue = '') => {
+    return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Default state for a new stim entry in the component
+const createDefaultStim = () => ({
+    path: '',
+    field: fieldOptions[0], // Default field
+    relativePath: '.',
+    geometryExpression: '1',
+    stimulusExpression: '',
+    type: typeOptions[0], // Default type 'Field'
+    weight: '1.0',
 });
 
+// Helper to map schema type back to component type
+const mapSchemaTypeToComponent = (schemaType) => {
+    if (schemaType === 'field') return 'Field';
+    if (schemaType === 'periodicsyn') return 'Periodic Synapse';
+    if (schemaType === 'randsyn') return 'Random Synapse';
+    return typeOptions[0]; // Default to 'Field' if unknown
+};
 
-const StimMenuBox = ({ onConfigurationChange }) => { // Accept prop
-    const [stims, setStims] = useState([createNewStim()]); // Start with one default stim
+// Accept currentConfig prop (should be jsonData.stims array)
+const StimMenuBox = ({ onConfigurationChange, currentConfig }) => {
+
+    // --- Initialize state from props using useState initializer ---
+    const [stims, setStims] = useState(() => {
+        console.log("StimMenuBox: Initializing stims from props", currentConfig);
+        const initialStims = currentConfig?.map(s => ({
+            path: s.path || '',
+            field: s.field || fieldOptions[0], // Populate field if present
+            relativePath: s.relpath || '.',
+            geometryExpression: s.geomExpr || '1',
+            stimulusExpression: s.expr || '',
+            type: mapSchemaTypeToComponent(s.type), // Map schema type back
+            weight: safeToString(s.weight, '1.0'), // Populate weight if present
+        })) || [];
+        // Ensure there's at least one stim entry to start with
+        return initialStims.length > 0 ? initialStims : [createDefaultStim()];
+    });
     const [activeStim, setActiveStim] = useState(0);
+    // --- END Initialization ---
 
 
-    // --- Stim Handlers ---
+    // Refs for cleanup function
+    const onConfigurationChangeRef = useRef(onConfigurationChange);
+    useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
+    const stimsRef = useRef(stims);
+    useEffect(() => { stimsRef.current = stims; }, [stims]);
+
+
+    // --- Handlers ONLY update LOCAL state ---
     const addStim = useCallback(() => {
-        setStims((prev) => [...prev, createNewStim()]);
-        setActiveStim(stims.length);
-    }, [stims.length]);
+        setStims((prev) => [...prev, createDefaultStim()]);
+        setActiveStim(stimsRef.current.length); // Use ref for correct length before state update
+    }, []); // No dependency needed
 
     const removeStim = useCallback((indexToRemove) => {
         setStims((prev) => prev.filter((_, i) => i !== indexToRemove));
         setActiveStim((prev) => Math.max(0, prev - (prev >= indexToRemove ? 1 : 0)));
-    }, []);
+    }, []); // No dependency needed
 
     const updateStim = useCallback((index, key, value) => {
+         console.log(`StimMenuBox: Local state change - Index ${index}, Key ${key}: ${value}`);
         setStims((prevStims) =>
             prevStims.map((stim, i) =>
                 i === index ? { ...stim, [key]: value } : stim
             )
         );
-        // useEffect below handles calling onConfigurationChange
-    }, []);
+    }, []); // No dependency needed
+    // --- END Handlers ---
 
 
-    // --- NEW: Format Data for Schema ---
-    const getStimData = useCallback(() => {
-        return stims.map(stimState => {
+    // --- Function to format local state for pushing up (used on unmount) ---
+    const getStimDataForUnmount = () => {
+        const currentStims = stimsRef.current; // Use ref for latest state
+        console.log("StimMenuBox: Formatting final local state for push:", currentStims);
+
+        return currentStims.map(stimState => {
             let schemaType = 'field'; // Default schema type
             if (stimState.type === 'Periodic Synapse') schemaType = 'periodicsyn';
             if (stimState.type === 'Random Synapse') schemaType = 'randsyn';
 
             const stimSchemaItemBase = {
                 type: schemaType,
-                path: stimState.path || "", // Required
-                // Optional fields included if not default/empty
+                path: stimState.path || "",
                 ...(stimState.relativePath && stimState.relativePath !== '.' && { relpath: stimState.relativePath }),
                 ...(stimState.geometryExpression && stimState.geometryExpression !== '1' && { geomExpr: stimState.geometryExpression }),
-                expr: stimState.stimulusExpression || "", // Required
+                expr: stimState.stimulusExpression || "",
             };
 
             // Add type-specific required fields and perform validation
@@ -82,36 +120,41 @@ const StimMenuBox = ({ onConfigurationChange }) => { // Accept prop
                      console.warn("Skipping 'field' stim due to missing required fields (path, field, expr):", stimState);
                      return null;
                 }
-                stimSchemaItemBase.field = stimState.field; // Add field specific to 'field' type
+                stimSchemaItemBase.field = stimState.field;
             } else { // 'periodicsyn' or 'randsyn'
                  const weightNum = parseFloat(stimState.weight);
-                 if (!stimSchemaItemBase.path || isNaN(weightNum) || !stimSchemaItemBase.expr || !stimSchemaItemBase.relpath) { // relpath also required for syn types
+                 // Check required fields for synapse types
+                 if (!stimSchemaItemBase.path || isNaN(weightNum) || !stimSchemaItemBase.expr || !stimState.relativePath) { // Use stimState.relativePath for check
                      console.warn(`Skipping '${schemaType}' stim due to missing required fields (path, relpath, weight, expr):`, stimState);
                      return null;
                  }
-                 stimSchemaItemBase.weight = weightNum; // Add weight specific to 'syn' types
-                 // Ensure relpath is present, even if default '.'
+                 stimSchemaItemBase.weight = weightNum;
+                  // Ensure relpath is present for synapse types, even if default '.'
                  if (!stimSchemaItemBase.relpath) stimSchemaItemBase.relpath = '.';
-
             }
-
             return stimSchemaItemBase;
-
         }).filter(item => item !== null); // Filter out invalid entries
+    };
 
-    }, [stims]); // Depends on stims state
 
-    // --- NEW: useEffect to call the prop when stims state changes ---
+    // --- useEffect hook to push changes up ON UNMOUNT ---
     useEffect(() => {
-        if (onConfigurationChange) {
-            const stimData = getStimData();
-            onConfigurationChange({ stims: stimData }); // Pass array under 'stims' key
-        }
-    }, [stims, getStimData, onConfigurationChange]); // Dependencies
-    // --- END NEW ---
+        console.log("StimMenuBox: Mounted, setting up unmount cleanup.");
+        return () => {
+            const latestOnConfigurationChange = onConfigurationChangeRef.current;
+            if (latestOnConfigurationChange) {
+                console.log("StimMenuBox: Unmounting, pushing final state up.");
+                const configData = getStimDataForUnmount();
+                latestOnConfigurationChange({ stims: configData }); // Pass array under 'stims' key
+            } else {
+                console.warn("StimMenuBox: onConfigurationChange not available on unmount.");
+            }
+        };
+    }, []); // IMPORTANT: Empty dependency array
+    // --- END Unmount Effect ---
 
 
-    // --- JSX Rendering ---
+    // --- JSX Rendering (uses local state) ---
     return (
         <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
             <Typography variant="h6" gutterBottom>Stimulus Configuration</Typography>
@@ -120,7 +163,6 @@ const StimMenuBox = ({ onConfigurationChange }) => { // Accept prop
              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                  <Tabs value={activeStim} onChange={(e, nv) => setActiveStim(nv)} variant="scrollable" scrollButtons="auto" aria-label="Stimulus configurations">
                      {stims.map((stim, index) => (
-                          // Improve tab label
                          <Tab key={index} label={`${stim.type || 'New'} @ ${stim.path || '?'}`} />
                      ))}
                       <IconButton onClick={addStim} sx={{ alignSelf: 'center', marginLeft: '10px' }}><AddIcon /></IconButton>

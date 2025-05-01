@@ -1,93 +1,84 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Typography, TextField, Button, Alert } from '@mui/material';
-// import Ajv from 'ajv'; // Example import
+// import Ajv from 'ajv'; // Schema validation requires library
 
-// const ajv = new Ajv();
-// let schemaValidator = null;
-
-const JsonText = ({ getCurrentJsonData, schema }) => {
-  const [displayedJson, setDisplayedJson] = useState('');
+// Accept jsonString and setActiveMenu props
+const JsonText = ({ jsonString, schema, setActiveMenu }) => {
+  // No local state needed for displayedJson anymore
   const [validationResult, setValidationResult] = useState(null);
+  // Placeholder for schema validator
+  // let schemaValidator = null;
 
-  // Placeholder schema compilation logic (see previous response)
-  // Note: This compilation step needs to happen carefully in a real app.
-  // Using useEffect might be appropriate if the schema prop could change.
-  // if (schema && !schemaValidator) {
-  //   try {
-  //     schemaValidator = ajv.compile(schema);
-  //     console.log("Schema compiled successfully for validation.");
-  //   } catch (error) {
-  //     console.error("Failed to compile schema:", error);
-  //     setValidationResult({ type: 'error', message: `Failed to compile schema: ${error.message}` });
-  //   }
-  // }
-  // --- End Placeholder ---
-
+  // --- MODIFIED: handleRefreshClick ONLY closes menu ---
   const handleRefreshClick = useCallback(() => {
-    if (getCurrentJsonData) {
-      const currentData = getCurrentJsonData();
-      const jsonString = JSON.stringify(currentData, null, 2);
-      setDisplayedJson(jsonString);
+    console.log("JsonText: Refresh clicked.");
 
-      // --- Schema Validation Placeholder ---
-      setValidationResult(null); // Clear previous result
-      // if (schemaValidator) { // Check if validator was compiled
-      //   const isValid = schemaValidator(currentData);
-      //   if (isValid) {
-      //     setValidationResult({ type: 'success', message: 'JSON is valid according to the schema.' });
-      //   } else {
-      //     // Format Ajv errors for display
-      //     const errorMessages = schemaValidator.errors.map(err => `${err.instancePath || '/'} ${err.message}`).join('; ');
-      //     setValidationResult({ type: 'error', message: `JSON is invalid: ${errorMessages}` });
-      //     console.error("Schema validation errors:", schemaValidator.errors);
-      //   }
-      // } else if (schema) {
-      //   setValidationResult({ type: 'warning', message: 'Schema available but validator could not be compiled.' });
-      // } else {
-      //    setValidationResult({ type: 'info', message: 'No schema provided for validation.' });
-      // }
-      // --- Placeholder Message ---
-      setValidationResult({ type: 'info', message: 'Schema validation requires integrating a library like Ajv.' });
-      // --- End Schema Validation ---
-
+    // 1. Close any currently open menu box
+    if (setActiveMenu) {
+        console.log("JsonText: Closing active menu.");
+        setActiveMenu(null); // This triggers unmount and state update in App.jsx
     } else {
-      setDisplayedJson('Error: Function to get current JSON data not provided.');
-      setValidationResult({ type: 'error', message: 'Cannot perform validation.' });
+        console.warn("JsonText: setActiveMenu function not provided.");
     }
-    // The 'schema' dependency is included below because it *is* used within
-    // the commented-out validation logic. If that logic were permanently removed,
-    // 'schema' could be removed from the dependencies. Keeping it anticipates
-    // enabling validation later. If the lint warning is bothersome, you could add:
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getCurrentJsonData, schema]); // Dependency array includes schema
+
+    // 2. Perform validation on the NEXT render cycle (when jsonString prop updates)
+    // We can use a simple effect for this, or do it here (less ideal)
+    // For simplicity, let's just show the placeholder validation message immediately
+    setValidationResult(null); // Clear previous result
+    setValidationResult({ type: 'info', message: 'Schema validation requires integrating a library like Ajv.' });
+    // A more robust validation would likely happen in an effect watching jsonString
+
+  }, [setActiveMenu]); // Only depends on setActiveMenu now
+
+  // Optional: Effect to run validation when the jsonString prop changes
+  // useEffect(() => {
+  //    console.log("JsonText: jsonString prop changed, re-validating...");
+  //    if (schema) {
+  //       // ... (Compile schema if needed) ...
+  //       // try {
+  //       //    const data = JSON.parse(jsonString || '{}');
+  //       //    // ... (Run ajv validation) ...
+  //       //    // setValidationResult(...)
+  //       // } catch (e) {
+  //       //    setValidationResult({ type: 'error', message: 'Invalid JSON format.' });
+  //       // }
+  //    }
+  // }, [jsonString, schema]);
 
   return (
     <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
       <Typography variant="h6" gutterBottom>
         Text View of JSON File
       </Typography>
+       {/* --- MODIFIED: Button Text --- */}
       <Button variant="contained" onClick={handleRefreshClick} style={{ marginBottom: '10px' }}>
-        Show/Refresh JSON & Validate
+        Show model json
       </Button>
+       {/* --- END MODIFIED --- */}
 
+      {/* Display Validation Result */}
       {validationResult && (
         <Alert severity={validationResult.type} style={{ marginBottom: '10px' }}>
           {validationResult.message}
         </Alert>
       )}
 
+      {/* --- MODIFIED: Use jsonString prop directly --- */}
       <TextField
         fullWidth
         multiline
         rows={18}
-        value={displayedJson}
+        value={jsonString || ''} // Display the prop directly
         InputProps={{
           readOnly: true,
         }}
         variant="outlined"
+        key={jsonString} // Add key to force re-render if needed, though usually not required
       />
+       {/* --- END MODIFIED --- */}
     </Box>
   );
 };
 
 export default JsonText;
+
