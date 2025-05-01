@@ -1,0 +1,549 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "fieldEnum": {
+      "type": "string",
+      "enum": ["Vm", "Im", "inject", "Gbar", "Gk", "Ik", "ICa", "Cm", "Rm", "Ra", "Ca", "n", "conc", "volume", "activation", "concInit", "current", "modulation", "psdArea"]
+    }
+  },
+  "type": "object",
+  "properties": {
+    "filetype": {
+      "type": "string",
+      "enum": ["rdesigneur"]
+    },
+    "version": {
+      "type": "string",
+      "enum": ["1.0"]
+    },
+	"modelPath": { "type": "string", "default": "/model" },
+	"diffusionLength": { "type": "number", "minimum": 0, "default": 2e-6 },
+	"turnOffElec": { "type": "boolean", "default": false },
+	"useGssa": { "type": "boolean", "default": false },
+	"odeMethod": { "type": "string", "default": "lsoda" },
+	"verbose": { "type": "boolean", "default": false },
+	"combineSegments": { "type": "boolean", "default": true },
+	"stealCellFromLibrary": { "type": "boolean", "default": false },
+	"benchmark": { "type": "boolean", "default": false },
+	"temperature": { "type": "number", "minimum": 0.0, "default": 32 },
+	"elecDt": { "type": "number", "minimum": 1e-7, "default": 50e-6 },
+	"chemDt": { "type": "number", "minimum": 1e-6, "default": 0.1 },
+	"funcDt": { "type": "number", "minimum": 1e-6, "default": 100e-6 },
+	"diffDt": { "type": "number", "minimum": 1e-6, "default": 10e-3 },
+	"elecPlotDt": { "type": "number", "minimum": 1e-7, "default": 100e-6 },
+	"chemPlotDt": { "type": "number", "minimum": 1e-6, "default": 1.0 },
+	"statusDt": { "type": "number", "minimum": 0.0, "default": 0.0 },
+	"runtime": { "type": "number", "minimum": 1e-6, "default": 0.3 },
+	"randseed": { "type": "integer", "minimum": 0, "default": 1234 },
+	"numWaveFrames": { "type": "integer", "minimum": 0, "default": 100 },
+    "cellProto": {
+      "type": "object",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["file", "func", "in_memory"]
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": ["type", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["soma"]
+            },
+            "somaDia": {
+              "type": "number",
+              "minimum": 0,
+			  "default": 5e-4
+            },
+            "somaLen": {
+              "type": "number",
+              "minimum": 0,
+			  "default": 5e-4
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ballAndStick"]
+            },
+            "somaDia": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 10e-6
+            },
+            "somaLen": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 10e-6
+            },
+            "dendDia": {
+              "type": "number",
+              "minimum": 0.2e-6,
+			  "default": 4e-6
+            },
+            "dendLen": {
+              "type": "number",
+              "minimum": 10e-6,
+			  "default": 200e-6
+            },
+            "dendNumSeg": {
+              "type": "integer",
+              "minimum": 1,
+			  "default": 1
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["branchedCell"]
+            },
+            "somaDia": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 10e-6
+            },
+            "somaLen": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 10e-6
+            },
+            "dendDia": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 10e-6
+            },
+            "dendLen": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 200e-6
+            },
+            "dendNumSeg": {
+              "type": "integer",
+              "minimum": 1,
+			  "default": 1
+            },
+            "branchDia": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 2.5e-6
+            },
+            "branchLen": {
+              "type": "number",
+              "minimum": 0.5e-6,
+			  "default": 200e-6
+            },
+            "branchNumSeg": {
+              "type": "integer",
+              "minimum": 1,
+			  "default": 1
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "passiveDistrib": {
+      "type": "array",
+      "items": {
+        "type": "object",
+            "properties": { 
+				"path": { "type": "string", "default": "soma" },
+				"CM": { "oneof": [
+					{ "type": "number", "minimum": 1e-5, "default": 0.01 },
+					{ "type": "string", "default": "0.01" }
+			  		]
+				},
+				"RM": { "oneof": [
+					{ "type": "number", "minimum": 1e-3, "default": 1.0 },
+					{ "type": "string", "default": "1.0" }
+					]
+				},
+				"RA": { "oneof": [
+					{ "type": "number", "minimum": 1e-3, "default": 1.0 },
+					{ "type": "string", "default": "1.0" }
+					]
+				},
+				"Em": { "oneof": [
+					{ "type": "number", "minimum": -0.1, "default": -0.065},
+					{ "type": "string", "default": "-0.065" }
+					]
+				},
+				"initVm": { "oneof": [
+					{"type": "number", "minimum": -0.1, "default": -0.065},
+					{ "type": "string", "default": "-0.065" }
+				]
+			  }
+            },
+            "required": ["path"],
+       	    "additionalProperties": false
+		}
+	},
+  	"spineProto": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["builtin", "func"]
+          },
+          "source": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shaftDia": {
+            "type": "number"
+          },
+          "shaftLen": {
+            "type": "number"
+          },
+          "headDia": {
+            "type": "number"
+          },
+          "headLen": {
+            "type": "number"
+          },
+	      "gluGbar": {
+        	"type": "number",
+        	"if": {
+          		"properties": {
+            		"source": {
+              			"const": "activeSpine"
+            		}
+          		}
+        	}
+      	  },
+      	  "nmdaGbar": {
+        	"type": "number",
+        	"if": {
+          		"properties": {
+            		"source": {
+              			"const": "activeSpine"
+            		}
+          		}
+        	}
+      	  }
+        },
+        "required": ["type", "source", "name"]
+      }
+    },
+    "spineDistrib": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "proto": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "spacing": {
+            "oneOf": [
+              { "type": "number", "default": 10e-6 },
+              { "type": "string", "default": "10e-6" }
+            ]
+          },
+          "minSpacing": {
+            "oneOf": [
+              { "type": "number", "default": 1e-6 },
+              { "type": "string", "default": "1e-6" }
+            ]
+          },
+          "sizeScale": {
+            "oneOf": [
+              { "type": "number", "default": 1 },
+              { "type": "string", "default": "1" }
+            ]
+          },
+          "sizeSdev": {
+            "oneOf": [
+              { "type": "number", "default": 0.5 },
+              { "type": "string", "default": "0.5" }
+            ]
+          },
+          "angle": {
+            "oneOf": [
+              { "type": "number", "default": 0 },
+              { "type": "string", "default": "0" }
+            ]
+          },
+          "angleSdev": {
+            "oneOf": [
+				{ "type": "number", "default": 6.2831853 },
+				{ "type": "string", "default": "6.2831853" }
+			]
+          }
+        },
+        "required": ["proto", "path", "spacing"],
+  		"additionalProperties": false
+      }
+    },
+	"chanProto": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["builtin", "neuroml"]
+          },
+          "source": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "source", "name"]
+      }
+    },
+	"chanDistrib": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "proto": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "Gbar": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+			  "description": "Channel conductance. It can be a function of channel position using an expression for Gbar."
+          },
+          "tau": {
+              "type": "number",
+		 	  "description": "Used only for Ca_concen objects. Specify time course of settling of Calcium."
+          }
+        },
+        "required": ["proto", "path"],
+		"anyOf": [
+			{"required": ["Gbar"] },
+			{"required": ["tau"] }
+		]
+	  }
+    },
+	"chemProto": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["builtin", "sbml", "kkit", "in_memory"]
+          },
+          "source": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "source", "name"]
+      }
+    },
+	"chemDistrib": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "proto": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string", "enum": ["presyn_spine", "presyn_dend", "dend", "spine", "psd", "endo"]
+          }
+        },
+        "required": ["proto", "path", "type"]
+      }
+    },
+	"adaptors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": { "type": "string" },
+          "sourceField": {"$ref": "#/definitions/fieldEnum"},
+          "dest": { "type": "string" },
+          "destField": {"$ref": "#/definitions/fieldEnum"},
+          "baseline": { "type": "number" },
+          "slope": { "type": "number" }
+        },
+        "required": ["source", "sourceField", "dest", "destField", "baseline", "slope"]
+      }
+    },
+	"plots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "field": {"$ref": "#/definitions/fieldEnum"},
+          "relpath": { "type": "string" },
+          "title": { "type": "string" },
+          "ymin": { "type": "number", "default": 0 },
+          "ymax": { "type": "number", "default": 0 },
+          "mode": { "type": "string", "enum": ["time","space","wave", "raster"], 
+				  "default": "time" },
+          "numWaveFrames": { "type": "integer", "default": 0 }
+        },
+        "required": ["path", "field"]
+      }
+    },
+	"files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "type": { "type": "string", 
+			  "enum": ["nsdf", "hdf5", "tsv", "csv", "xml"] },
+          "path": { "type": "string" },
+          "field": {"$ref": "#/definitions/fieldEnum"},
+          "relpath": { "type": "string" },
+          "dt": { "type": "number", "minimum": 1e-7 },
+          "flushSteps": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["file", "type", "path", "field", "dt"]
+      }
+    },
+	"moogli": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "field": {"$ref": "#/definitions/fieldEnum"},
+          "relpath": { "type": "string", "default": "." },
+          "title": { "type": "string", "default": "" },
+          "ymin": { "type": "number", "default": 0 },
+          "ymax": { "type": "number", "default": 0 },
+          "diaScale": { "type": "number", "default": 1 },
+          "dt": { "type": "number" }
+        },
+        "required": ["path", "field"]
+      }
+    },
+	"displayMoogli": {
+		"type": "object",
+		"properties": {
+			"dt": {"type": "number", "minimum": 1e-5, "default": 0.1 },
+			"runtime": {"type": "number", "minimum": 1e-3, "default": 0.3 },
+			"rotation": {"type": "number", "default": 0.006283},
+			"azim": {"type": "number", "default": 0},
+			"elev": {"type": "number", "default": 0},
+			"mergeDisplays": {"type": "boolean", "default": false },
+			"colormap": {"type": "string", "default": "jet"},
+			"bg": {"type": "string", "default": "default"},
+			"block": {"type": "boolean", "default": true},
+			"fullscreen": {"type": "boolean", "default": false},
+			"center": {"type": "array", "items": {"type": "number" },
+					"minItems": 3, "maxItems": 3,
+					"default": [0,0,0]
+			},
+			"animation": {
+				"type": "array",
+				"items": { "type": "object",
+					"properties": {
+						"key": {"type": "string"},
+						"time": {"type": "number"}
+					}
+				},
+				"default": []
+			},
+			"movieFrame": {
+				"type": "object",
+				"properties": {
+					"x": {"type": "integer", "minimum": 0, "default": 0 },
+					"y": {"type": "integer", "minimum": 0, "default": 0 },
+					"w": {"type": "integer", "minimum": 0, "default": 0 },
+					"h": {"type": "integer", "minimum": 0, "default": 0 }
+				}
+			}
+		}
+	},
+	"moogliEvents": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          { "type": "string" },
+          { "type": "number" }
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+	"stims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+		"oneOf": [
+		  {
+        	"type": "object",
+        	"properties": {
+          		"type": { "type": "string", 
+			  		"enum": ["field"] },
+          		"path": { "type": "string" },
+          		"field": { "type": "string" },
+          		"relpath": { "type": "string" },
+          		"geomExpr": { "type": "string", "default": "1" },
+          		"expr": { "type": "string" }
+        	},
+        	"required": ["type", "path", "field", "expr"]
+		  },
+		  {
+        	"type": "object",
+        	"properties": {
+          		"type": { "type": "string", 
+			  		"enum": ["periodicsyn", "randsyn"] },
+          		"path": { "type": "string" },
+          		"relpath": { "type": "string" },
+          		"geomExpr": { "type": "string", "default": "1" },
+		  		"weight": { "type": "number" },
+          		"expr": { "type": "string" }
+        	},
+        	"required": ["type", "path", "relpath", "weight", "expr"]
+		  }
+		]
+      }
+    }
+  },
+  "required": ["filetype", "version"],
+  "additionalProperties": false
+}

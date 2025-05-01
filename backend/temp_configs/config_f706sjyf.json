@@ -1,0 +1,52 @@
+{
+  "filetype": "rdesigneur",
+  "version": "1.0",
+  "cellProto": {
+    "type": "ballAndStick",
+    "somaDia": 1e-05,
+    "somaLen": 1e-05,
+    "dendDia": 4e-06,
+    "dendLen": 0.0002,
+    "dendNumSeg": 1
+  },
+  "passiveDistrib": [],
+  "chanProto": [
+    {
+      "type": "builtin",
+      "source": "make_HH_Na()",
+      "name": "Na_HH"
+    },
+    {
+      "type": "builtin",
+      "source": "make_HH_K()",
+      "name": "KDR_HH"
+    }
+  ],
+  "chanDistrib": [
+    {
+      "proto": "Na_HH",
+      "path": "soma",
+      "Gbar": 1
+    },
+    {
+      "proto": "KDR_HH",
+      "path": "soma",
+      "Gbar": 1
+    }
+  ],
+  "plots": [
+    {
+      "path": "soma",
+      "field": "Vm"
+    }
+  ],
+  "stims": [
+    {
+      "type": "field",
+      "path": "soma",
+      "expr": "1e-10",
+      "field": "inject"
+    }
+  ],
+  "runtime": 0.3
+}
