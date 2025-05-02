@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
 import {
     Box,
     Tabs,
@@ -13,89 +13,151 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-// --- NEW: Helper function to map component type to schema source string ---
+// Helper function to map component type to schema source string
 const getChemSourceString = (componentType) => {
     switch (componentType) {
         case 'Oscillator': return 'makeChemOscillator()';
         case 'Bistable':   return 'makeChemBistable()';
         case 'LTP':        return 'makeChemLTP()';
         case 'STP':        return 'makeChemSTP()';
-        case 'betaAd':     return 'makeChemBetaAR()'; // Added
-        case 'mGluR':      return 'makeChem_mGluR()'; // Added
-        case 'EGFR':       return 'makeChemEGFR()';   // Added
-        case 'CaMKII':     return 'makeChemCaMKII()'; // Added
+        case 'betaAd':     return 'makeChemBetaAR()';
+        case 'mGluR':      return 'makeChem_mGluR()';
+        case 'EGFR':       return 'makeChemEGFR()';
+        case 'CaMKII':     return 'makeChemCaMKII()';
         // For SBML, kkit, User Func, In-memory, the source is handled differently
-        // Return the type itself as a fallback for unmapped built-ins
-        default:           return componentType;
+        default:           return componentType; // Fallback
     }
 };
-// --- END NEW HELPER ---
 
-// --- UPDATED: Dropdown options list including new types ---
-// Define prototype type options outside the component
-const prototypeTypeOptions = [
-    'Oscillator', 'Bistable', 'LTP', 'STP', 'betaAd', 'mGluR', 'EGFR', 'CaMKII', // Added new types
-    'SBML', 'kkit', 'User Func', 'In-memory' // Existing types requiring source input
-];
-// --- END UPDATED ---
-
-
-// Initial state creators
-const createNewChemPrototype = () => {
-    const defaultType = prototypeTypeOptions[0]; // Use the first option
-    return {
-        type: defaultType, // Component's internal type
-        name: defaultType, // Default name matches type initially
-        file: '', // Potentially used by 'User Func' if source is a file path
-        source: '', // Used for SBML, kkit, User Func, In-memory
-        manualName: false, // Flag for custom naming
-    };
+// Helper to map schema type/source back to component type display name
+const getComponentTypeFromSchema = (schemaType, schemaSource) => {
+    if (schemaType === 'sbml') return 'SBML';
+    if (schemaType === 'kkit') return 'kkit';
+    if (schemaType === 'in_memory') return 'In-memory';
+    // For builtins, try to find the matching option based on source string
+    const options = prototypeTypeOptions.filter(opt => !['SBML', 'kkit', 'User Func', 'In-memory'].includes(opt));
+    const match = options.find(opt => getChemSourceString(opt) === schemaSource || opt === schemaSource);
+    if (match) return match;
+    // Fallback for 'User Func' or unknown builtins
+    if (schemaSource && schemaSource.includes('Func')) return 'User Func'; // Heuristic
+    return schemaSource || 'Unknown'; // Fallback
 };
 
-const createNewChemDistribution = () => ({
-    prototype: '', // Name of a defined prototype
-    location: 'Dendrite', // Component location maps to schema type
-    path: 'soma', // Default path
+
+// Define prototype type options outside the component
+const prototypeTypeOptions = [
+    'Oscillator', 'Bistable', 'LTP', 'STP', 'betaAd', 'mGluR', 'EGFR', 'CaMKII',
+    'SBML', 'kkit', 'User Func', 'In-memory'
+];
+
+// Helper to safely convert value to string
+const safeToString = (value, defaultValue = '') => {
+    return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Default state creators
+const createDefaultChemPrototype = () => ({
+    type: prototypeTypeOptions[0],
+    name: prototypeTypeOptions[0],
+    file: '', // Not directly used unless type is 'User Func' and source is file
+    source: '', // For SBML, kkit, etc.
+    manualName: false,
+});
+const createDefaultChemDistribution = () => ({
+    prototype: '',
+    location: 'Dendrite',
+    path: 'soma',
 });
 
 
-const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
-    // State for Prototypes
-    const [prototypes, setPrototypes] = useState([createNewChemPrototype()]); // Start with one
+// Accept currentConfig prop: { chemProto: [], chemDistrib: [] }
+const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
+
+    // --- Initialize state from props using useState initializer ---
+    const [prototypes, setPrototypes] = useState(() => {
+        console.log("ChemMenuBox: Initializing prototypes from props", currentConfig?.chemProto);
+        const initialProtos = currentConfig?.chemProto?.map(p => {
+            const componentType = getComponentTypeFromSchema(p.type, p.source);
+            let sourceValue = '';
+            // Only populate source field if it's relevant for the component type
+            if (['SBML', 'kkit', 'User Func', 'In-memory'].includes(componentType)) {
+                sourceValue = p.source || '';
+            }
+            return {
+                type: componentType,
+                name: p.name,
+                file: '', // File isn't directly stored in schema this way
+                source: sourceValue,
+                manualName: p.name !== componentType, // Initial guess for manual name
+            };
+        }) || [];
+        return initialProtos.length > 0 ? initialProtos : [createDefaultChemPrototype()];
+    });
+
+    const [distributions, setDistributions] = useState(() => {
+        console.log("ChemMenuBox: Initializing distributions from props", currentConfig?.chemDistrib);
+        // Map schema type back to component location display name
+        const mapSchemaDistribTypeToLocation = (type) => {
+            switch(type) {
+                case 'dend': return 'Dendrite';
+                case 'spine': return 'Spine';
+                case 'psd': return 'PSD';
+                case 'endo': return 'Endo';
+                case 'presyn_spine': return 'Presyn_spine';
+                case 'presyn_dend': return 'Presyn_dend';
+                default: return 'Dendrite'; // Fallback
+            }
+        };
+        const initialDists = currentConfig?.chemDistrib?.map(d => ({
+            prototype: d.proto,
+            location: mapSchemaDistribTypeToLocation(d.type),
+            path: d.path,
+        })) || [];
+        return initialDists.length > 0 ? initialDists : [createDefaultChemDistribution()];
+    });
+
     const [activePrototype, setActivePrototype] = useState(0);
-
-    // State for Distributions
-    const [distributions, setDistributions] = useState([createNewChemDistribution()]); // Start with one
     const [activeDistribution, setActiveDistribution] = useState(0);
+    // --- END Initialization ---
 
-    // --- Prototype Handlers ---
+
+    // Refs for cleanup function
+    const onConfigurationChangeRef = useRef(onConfigurationChange);
+    useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
+    const prototypesRef = useRef(prototypes);
+    useEffect(() => { prototypesRef.current = prototypes; }, [prototypes]);
+    const distributionsRef = useRef(distributions);
+    useEffect(() => { distributionsRef.current = distributions; }, [distributions]);
+
+
+    // --- Handlers ONLY update LOCAL state ---
     const addPrototype = useCallback(() => {
-        setPrototypes((prev) => [...prev, createNewChemPrototype()]);
-        setActivePrototype(prototypes.length);
-    }, [prototypes.length]);
+        setPrototypes((prev) => [...prev, createDefaultChemPrototype()]);
+        setActivePrototype(prototypesRef.current.length); // Use ref
+    }, []);
 
     const removePrototype = useCallback((indexToRemove) => {
-        const removedProtoName = prototypes[indexToRemove]?.name;
+        const currentPrototypes = prototypesRef.current;
+        const removedProtoName = currentPrototypes[indexToRemove]?.name;
         setPrototypes((prev) => prev.filter((_, i) => i !== indexToRemove));
-        // Also remove/reset distributions using this prototype
+        // Reset distributions using the removed prototype
         setDistributions(prevDists => prevDists.map(dist =>
             dist.prototype === removedProtoName ? { ...dist, prototype: '' } : dist
         ));
         setActivePrototype((prev) => Math.max(0, prev - (prev >= indexToRemove ? 1 : 0)));
-    }, [prototypes]); // Depends on prototypes to get name
+    }, []);
 
     const updatePrototype = useCallback((index, key, value) => {
+        console.log(`ChemMenuBox Proto: Local state change - Index ${index}, Key ${key}: ${value}`);
         setPrototypes((prevPrototypes) =>
             prevPrototypes.map((proto, i) => {
                 if (i === index) {
                     const updatedProto = { ...proto, [key]: value };
-                    // Automatically update Prototype Name from Type, unless manually overridden
                     if (key === 'type' && !updatedProto.manualName) {
-                        updatedProto.name = value; // Set name = type
+                        updatedProto.name = value;
                     }
-                    // Clear source field if type is changed to one that doesn't use it
                     if (key === 'type' && !['SBML', 'kkit', 'User Func', 'In-memory'].includes(value)) {
-                         updatedProto.source = '';
+                         updatedProto.source = ''; // Clear source if type changes
                     }
                     return updatedProto;
                 }
@@ -104,7 +166,6 @@ const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
         );
     }, []);
 
-    // Handle setting a custom Prototype Name, marks it as manual
     const setCustomPrototypeName = useCallback((index, value) => {
         setPrototypes((prevPrototypes) =>
             prevPrototypes.map((proto, i) =>
@@ -113,12 +174,10 @@ const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
         );
     }, []);
 
-
-    // --- Distribution Handlers ---
     const addDistribution = useCallback(() => {
-        setDistributions((prev) => [...prev, createNewChemDistribution()]);
-        setActiveDistribution(distributions.length);
-    }, [distributions.length]);
+        setDistributions((prev) => [...prev, createDefaultChemDistribution()]);
+        setActiveDistribution(distributionsRef.current.length); // Use ref
+    }, []);
 
     const removeDistribution = useCallback((indexToRemove) => {
         setDistributions((prev) => prev.filter((_, i) => i !== indexToRemove));
@@ -126,99 +185,85 @@ const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
     }, []);
 
     const updateDistribution = useCallback((index, key, value) => {
+        console.log(`ChemMenuBox Distrib: Local state change - Index ${index}, Key ${key}: ${value}`);
         setDistributions((prevDists) =>
             prevDists.map((dist, i) =>
                 i === index ? { ...dist, [key]: value } : dist
             )
         );
     }, []);
+    // --- END Handlers ---
 
 
-    // --- MODIFIED: Format Data for Schema with new source mapping ---
-    const getChemData = useCallback(() => {
+    // --- Function to format local state for pushing up (used on unmount) ---
+    const getChemDataForUnmount = () => {
+        const currentPrototypes = prototypesRef.current;
+        const currentDistributions = distributionsRef.current;
+        console.log("ChemMenuBox: Formatting final local state for push:", { prototypes: currentPrototypes, distributions: currentDistributions });
+
         // Format Prototypes
-        const chemProtoData = prototypes.map(protoState => {
-            let schemaType = "builtin"; // Default schema type
-            let schemaSource = ""; // Initialize source
-
+        const chemProtoData = currentPrototypes.map(protoState => {
+            let schemaType = "builtin";
+            let schemaSource = "";
             const componentType = protoState.type;
 
-            // Map component types requiring source input to schema types/sources
             if (componentType === 'SBML') { schemaType = 'sbml'; schemaSource = protoState.source; }
             else if (componentType === 'kkit') { schemaType = 'kkit'; schemaSource = protoState.source; }
             else if (componentType === 'In-memory') { schemaType = 'in_memory'; schemaSource = protoState.source; }
             else if (componentType === 'User Func') {
-                // Schema doesn't explicitly list 'func', map to 'builtin' and use source
-                schemaType = 'builtin'; // Or handle as error/omit if schema strict
-                schemaSource = protoState.source || protoState.name; // Use source field or name
+                schemaType = 'builtin'; // Or 'func' if schema supported it
+                schemaSource = protoState.source || protoState.name;
             } else {
-                // For other types (Oscillator, Bistable, LTP, STP, betaAd, etc.),
-                // schema type is 'builtin', use helper for source string
                 schemaType = 'builtin';
                 schemaSource = getChemSourceString(componentType);
             }
 
-            // Validate required fields (name is always required)
-            if (!protoState.name) {
-                 console.warn("Skipping prototype due to missing name:", protoState);
-                 return null;
-            }
-            // Validate source if required by schema type
-            if (['sbml', 'kkit', 'in_memory'].includes(schemaType) && !schemaSource) {
-                 console.warn(`Source field is required for prototype '${protoState.name}' of type '${schemaType}' but is empty.`);
-                 return null; // Skip invalid prototype
-            }
-            // Ensure source is not empty even for builtins (should be function call string)
-             if (schemaType === 'builtin' && !schemaSource) {
-                  console.warn(`Could not determine source string for builtin prototype '${protoState.name}' of type '${componentType}'.`);
-                  return null; // Skip invalid prototype
-             }
+            // Validation
+            if (!protoState.name) return null;
+            if (['sbml', 'kkit', 'in_memory'].includes(schemaType) && !schemaSource) return null;
+            if (schemaType === 'builtin' && !schemaSource) return null;
 
+            return { type: schemaType, source: schemaSource, name: protoState.name };
+        }).filter(p => p !== null);
 
-            return {
-                type: schemaType,
-                source: schemaSource, // Use mapped or direct source
-                name: protoState.name, // Use custom name or default name
-            };
-        }).filter(p => p !== null); // Filter out skipped prototypes
-
-        // Format Distributions (logic remains the same)
-        const chemDistribData = distributions.map(distState => {
-            // Map component location to schema type
+        // Format Distributions
+        const chemDistribData = currentDistributions.map(distState => {
             let schemaDistribType = distState.location?.toLowerCase() || 'dend';
             if (distState.location === 'Presyn_spine') schemaDistribType = 'presyn_spine';
             if (distState.location === 'Presyn_dend') schemaDistribType = 'presyn_dend';
 
-            // Ensure prototype name exists in the valid prototypes list
+            // Ensure prototype name exists in the *valid* list being saved
             const selectedProtoExists = chemProtoData.some(p => p.name === distState.prototype);
 
             if (!selectedProtoExists || !distState.prototype || !distState.path || !schemaDistribType) {
                  console.warn("Skipping chem distribution due to missing/invalid prototype, path, or location:", distState);
                  return null;
              }
-
-            return {
-                proto: distState.prototype,
-                path: distState.path,
-                type: schemaDistribType,
-            };
+            return { proto: distState.prototype, path: distState.path, type: schemaDistribType };
         }).filter(item => item !== null);
 
         return { chemProto: chemProtoData, chemDistrib: chemDistribData };
+    };
 
-    }, [prototypes, distributions]); // Depends on both state arrays
 
-
-    // useEffect hook remains the same
+    // --- useEffect hook to push changes up ON UNMOUNT ---
     useEffect(() => {
-        if (onConfigurationChange) {
-            const chemData = getChemData();
-            onConfigurationChange(chemData); // Pass object with both keys
-        }
-    }, [prototypes, distributions, getChemData, onConfigurationChange]);
+        console.log("ChemMenuBox: Mounted, setting up unmount cleanup.");
+        return () => {
+            const latestOnConfigurationChange = onConfigurationChangeRef.current;
+            if (latestOnConfigurationChange) {
+                console.log("ChemMenuBox: Unmounting, pushing final state up.");
+                const configData = getChemDataForUnmount();
+                latestOnConfigurationChange(configData); // Push object with both keys
+            } else {
+                console.warn("ChemMenuBox: onConfigurationChange not available on unmount.");
+            }
+        };
+    }, []); // IMPORTANT: Empty dependency array
+    // --- END Unmount Effect ---
 
 
-    // --- JSX Rendering ---
+    // --- JSX Rendering (uses local state) ---
     return (
         <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
             <Typography variant="h6" gutterBottom>Chemical Signaling Definitions</Typography>
@@ -235,7 +280,6 @@ const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
                 <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={1.5}>
                         <Grid item xs={12} sm={6}>
-                             {/* UPDATED: Use prototypeTypeOptions for mapping */}
                              <TextField select fullWidth size="small" label="Type" value={prototypes[activePrototype].type}
                                 onChange={(e) => updatePrototype(activePrototype, 'type', e.target.value)}>
                                 {prototypeTypeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
@@ -261,7 +305,7 @@ const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
             )}
              {prototypes.length === 0 && <Typography sx={{ mt: 1, fontStyle: 'italic' }}>No chemical prototypes defined.</Typography>}
 
-             {/* === Distributions Section (JSX remains the same) === */}
+             {/* === Distributions Section === */}
             <Typography variant="subtitle1" gutterBottom sx={{ mt: 3, fontWeight: 'bold' }}>Distributions</Typography>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                  <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} variant="scrollable" scrollButtons="auto" aria-label="Chemical Distributions">
@@ -287,7 +331,7 @@ const ChemMenuBox = ({ onConfigurationChange }) => { // Accept prop
                           <Grid item xs={12} sm={4}>
                               <TextField select fullWidth size="small" label="Location (-> Type)" required value={distributions[activeDistribution].location}
                                  onChange={(e) => updateDistribution(activeDistribution, 'location', e.target.value)}>
-                                 {[ 'Dendrite', 'Spine', 'PSD', 'Endo', 'Presyn_spine', 'Presyn_dend' ]
+                                 {[ 'dend', 'spine', 'psd', 'endo', 'presyn_spine', 'presyn_dend' ]
                                      .map(loc => <MenuItem key={loc} value={loc}>{loc}</MenuItem>)}
                              </TextField>
                           </Grid>

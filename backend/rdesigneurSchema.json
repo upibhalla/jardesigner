@@ -387,6 +387,9 @@
           },
           "type": {
             "type": "string", "enum": ["presyn_spine", "presyn_dend", "dend", "spine", "psd", "endo"]
+          },
+          "diffusionLength": {
+            "type": "number", "minimum": 0, "default": 2.0e-6
           }
         },
         "required": ["proto", "path", "type"]
