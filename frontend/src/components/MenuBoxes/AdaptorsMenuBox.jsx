@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
 import {
     Box,
     Tabs,
@@ -6,110 +6,148 @@ import {
     Typography,
     TextField,
     Grid,
-    IconButton, // Keep for AddIcon
+    IconButton,
     MenuItem,
     Button,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-// Define fieldOptions outside the component to avoid re-creation on render
-// This resolves the useCallback dependency warning from the previous step.
+// Define fieldOptions outside the component
 const fieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
     'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
     'modulation', 'psdArea',
 ];
 
-// Initial state for a new adaptor entry
-const createNewAdaptor = () => ({
-    source: '', // Required
-    sourceField: fieldOptions[0], // Default to first field option, Required
-    destination: '', // Required -> dest
-    destinationField: fieldOptions[0], // Default to first field option, Required -> destField
-    baseline: '0.0', // Required (number)
-    slope: '1.0', // Required (number)
+// Helper to safely convert value to string
+const safeToString = (value, defaultValue = '') => {
+    return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Default state for a new adaptor entry in the component
+const createDefaultAdaptor = () => ({
+    source: '',
+    sourceField: fieldOptions[0],
+    destination: '', // Component state uses 'destination'
+    destinationField: fieldOptions[0], // Component state uses 'destinationField'
+    baseline: '0.0',
+    slope: '1.0',
 });
 
+// Accept currentConfig prop (should be jsonData.adaptors array)
+const AdaptorsMenuBox = ({ onConfigurationChange, currentConfig }) => {
 
-const AdaptorsMenuBox = ({ onConfigurationChange }) => { // Accept prop
-    // State for Adaptors
-    const [adaptors, setAdaptors] = useState([createNewAdaptor()]); // Start with one default adaptor
+    // --- Initialize state from props using useState initializer ---
+    const [adaptors, setAdaptors] = useState(() => {
+        console.log("AdaptorsMenuBox: Initializing adaptors from props", currentConfig);
+        const initialAdaptors = currentConfig?.map(a => ({
+            source: a.source || '',
+            sourceField: a.sourceField || fieldOptions[0],
+            destination: a.dest || '', // Map schema 'dest' back to component 'destination'
+            destinationField: a.destField || fieldOptions[0], // Map schema 'destField' back
+            baseline: safeToString(a.baseline, createDefaultAdaptor().baseline), // Convert number to string
+            slope: safeToString(a.slope, createDefaultAdaptor().slope), // Convert number to string
+        })) || [];
+        // Ensure there's at least one adaptor entry to start with
+        return initialAdaptors.length > 0 ? initialAdaptors : [createDefaultAdaptor()];
+    });
     const [activeAdaptor, setActiveAdaptor] = useState(0);
+    // --- END Initialization ---
 
-    // --- Adaptor Handlers ---
+
+    // Refs for cleanup function
+    const onConfigurationChangeRef = useRef(onConfigurationChange);
+    useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
+    const adaptorsRef = useRef(adaptors);
+    useEffect(() => { adaptorsRef.current = adaptors; }, [adaptors]);
+
+
+    // --- Handlers ONLY update LOCAL state ---
     const addAdaptor = useCallback(() => {
-        setAdaptors((prev) => [...prev, createNewAdaptor()]);
-        setActiveAdaptor(adaptors.length);
-    }, [adaptors.length]); // fieldOptions is now stable, no need to include
+        setAdaptors((prev) => [...prev, createDefaultAdaptor()]);
+        setActiveAdaptor(adaptorsRef.current.length); // Use ref for correct length before state update
+    }, []); // No dependency needed
 
     const removeAdaptor = useCallback((indexToRemove) => {
         setAdaptors((prev) => prev.filter((_, i) => i !== indexToRemove));
         setActiveAdaptor((prev) => Math.max(0, prev - (prev >= indexToRemove ? 1 : 0)));
-    }, []);
+    }, []); // No dependency needed
 
     const updateAdaptor = useCallback((index, key, value) => {
+        console.log(`AdaptorsMenuBox: Local state change - Index ${index}, Key ${key}: ${value}`);
         setAdaptors((prevAdaptors) =>
             prevAdaptors.map((adaptor, i) =>
                 i === index ? { ...adaptor, [key]: value } : adaptor
             )
         );
-        // useEffect below handles calling onConfigurationChange
-    }, []);
+    }, []); // No dependency needed
+
+    const handleTabChange = (event, newValue) => {
+        setActiveAdaptor(newValue);
+    };
+    // --- END Handlers ---
 
 
-    // --- NEW: Format Data for Schema ---
-    const getAdaptorData = useCallback(() => {
-        return adaptors.map(adaptorState => {
-             // Basic validation: Ensure required fields have values
+    // --- Function to format local state for pushing up (used on unmount) ---
+    const getAdaptorDataForUnmount = () => {
+        const currentAdaptors = adaptorsRef.current; // Use ref for latest state
+        console.log("AdaptorsMenuBox: Formatting final local state for push:", currentAdaptors);
+
+        return currentAdaptors.map(adaptorState => {
+             // Basic validation
              if (!adaptorState.source || !adaptorState.sourceField || !adaptorState.destination || !adaptorState.destinationField) {
-                 console.warn("Skipping adaptor due to missing required fields (source/dest path or field):", adaptorState);
-                 return null; // Skip invalid adaptor configurations
+                 console.warn("Skipping adaptor due to missing required fields:", adaptorState);
+                 return null;
              }
              const baselineNum = parseFloat(adaptorState.baseline);
              const slopeNum = parseFloat(adaptorState.slope);
-
-             // Check if baseline and slope are valid numbers
              if (isNaN(baselineNum) || isNaN(slopeNum)) {
                  console.warn("Skipping adaptor due to invalid baseline or slope:", adaptorState);
-                 return null; // Skip if conversion fails
+                 return null;
              }
 
-            // Convert state values to schema format
+            // Convert state values back to schema format
             const adaptorSchemaItem = {
                 source: adaptorState.source,
                 sourceField: adaptorState.sourceField,
-                dest: adaptorState.destination, // Map key: destination -> dest
-                destField: adaptorState.destinationField, // Map key: destinationField -> destField
-                baseline: baselineNum, // Convert to number
-                slope: slopeNum, // Convert to number
+                dest: adaptorState.destination, // Map component 'destination' back to schema 'dest'
+                destField: adaptorState.destinationField, // Map component 'destinationField' back
+                baseline: baselineNum, // Convert string to number
+                slope: slopeNum, // Convert string to number
             };
             return adaptorSchemaItem;
 
         }).filter(item => item !== null); // Filter out invalid entries
+    };
 
-    }, [adaptors]); // Depends on adaptors state
 
-    // --- NEW: useEffect to call the prop when adaptors state changes ---
+    // --- useEffect hook to push changes up ON UNMOUNT ---
     useEffect(() => {
-        if (onConfigurationChange) {
-            const adaptorData = getAdaptorData();
-            onConfigurationChange({ adaptors: adaptorData }); // Pass array under 'adaptors' key
-        }
-    }, [adaptors, getAdaptorData, onConfigurationChange]); // Dependencies
-    // --- END NEW ---
+        console.log("AdaptorsMenuBox: Mounted, setting up unmount cleanup.");
+        return () => {
+            const latestOnConfigurationChange = onConfigurationChangeRef.current;
+            if (latestOnConfigurationChange) {
+                console.log("AdaptorsMenuBox: Unmounting, pushing final state up.");
+                const configData = getAdaptorDataForUnmount();
+                latestOnConfigurationChange({ adaptors: configData }); // Pass array under 'adaptors' key
+            } else {
+                console.warn("AdaptorsMenuBox: onConfigurationChange not available on unmount.");
+            }
+        };
+    }, []); // IMPORTANT: Empty dependency array
+    // --- END Unmount Effect ---
 
 
-    // --- JSX Rendering ---
+    // --- JSX Rendering (uses local state) ---
     return (
         <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
             <Typography variant="h6" gutterBottom>Adaptors Configuration</Typography>
 
             {/* Adaptor Tabs */}
              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activeAdaptor} onChange={(e, nv) => setActiveAdaptor(nv)} variant="scrollable" scrollButtons="auto" aria-label="Adaptor configurations">
+                <Tabs value={activeAdaptor} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" aria-label="Adaptor configurations">
                     {adaptors.map((adaptor, index) => (
-                         // Improve tab label
                         <Tab key={index} label={`${adaptor.sourceField || '?'} -> ${adaptor.destinationField || '?'}`} />
                     ))}
                      <IconButton onClick={addAdaptor} sx={{ alignSelf: 'center', marginLeft: '10px' }}><AddIcon /></IconButton>
