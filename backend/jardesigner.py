@@ -878,14 +878,14 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         if not hasattr( self, 'adaptors' ):
             return
         for i in self.adaptors:
-            mesh, name = self.findMeshOnName( i[0] )
+            mesh, name = self.findMeshOnName( i['source'] )
             if mesh == "":
-                mesh, name = self.findMeshOnName( i[2] )
+                mesh, name = self.findMeshOnName( i['dest'] )
                 if  mesh == "":
-                    raise BuildError( "buildAdaptors: Failed for " + i[2] )
-                self._buildAdaptor( mesh, i[0], i[1], name, i[3], True, i[4], i[5] )
+                    raise BuildError( "buildAdaptors: Failed for " + i['dest'] )
+                self._buildAdaptor( mesh, i['source'], i['sourceField'], name, i['destField'], True, i['baseline'], i['slope'] )
             else:
-                self._buildAdaptor( mesh, i[2], i[3], name, i[1], False, i[4], i[5] )
+                self._buildAdaptor( mesh, i['dest'], i['destField'], name, i['sourceField'], False, i['baseline'], i['slope'] )
 
     ################################################################
     # Here we set up the plots. Dummy for cases that don't match conditions
@@ -1113,48 +1113,51 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     ################################################################
 
     def _displayMoogli( self ):
-        if hasattr( self, 'displayMoogli' ):
-            dm = self.displayMoogli
-            
-            mvf = dm.get("movieFrame")
-            if mvf and mvf['w'] > 0 and mvf['h'] > 0:
-                mvfArray = [mvf['x'], mvf['y'], mvf['w'], mvf['h']]
-            else:
-                mvfArray = []
+        if not hasattr( self, 'moogli' ) or not hasattr( self, 'displayMoogli' ):
+            return False
+        if len( self.moogli ) == 0:
+            return False
+        dm = self.displayMoogli
         
-            # If center is empty then use autoscaling.
-            rmoogli.displayMoogli( self, 
-                    dm["dt"], dm['runtime'], rotation = dm['rotation'], 
-                    fullscreen = dm['fullscreen'], azim = dm['azim'], 
-                    elev = dm['elev'], 
-                    mergeDisplays = dm['mergeDisplays'], 
-                    colormap = dm['colormap'], 
-                    center = dm['center'], bg = dm['bg'], 
-                    animation = dm['animation'], 
-                    movieFrame = mvfArray
-                    #block = dm['block']
-            )
-            pr = moose.PyRun( '/model/updateMoogli' )
+        mvf = dm.get("movieFrame")
+        if mvf and mvf['w'] > 0 and mvf['h'] > 0:
+            mvfArray = [mvf['x'], mvf['y'], mvf['w'], mvf['h']]
+        else:
+            mvfArray = []
+        
+        # If center is empty then use autoscaling.
+        rmoogli.displayMoogli( self, 
+                dm["dt"], dm['runtime'], rotation = dm['rotation'], 
+                fullscreen = dm['fullscreen'], azim = dm['azim'], 
+                elev = dm['elev'], 
+                mergeDisplays = dm['mergeDisplays'], 
+                colormap = dm['colormap'], 
+                center = dm['center'], bg = dm['bg'], 
+                animation = dm['animation'], 
+                movieFrame = mvfArray
+                #block = dm['block']
+        )
+        pr = moose.PyRun( '/model/updateMoogli' )
 
-            pr.runString = '''
+        pr.runString = '''
 import rdesigneur.rmoogli
 rdesigneur.rmoogli.updateMoogliViewer()
 '''
-            moose.setClock( pr.tick, dm["dt"] )
-            moose.reinit()
-            moose.start( dm["runtime"] )
-            self._save()                                            
-            rmoogli.notifySimulationEnd()
-            if dm["block"]:
-                self.display( len( self.moogNames ) + 1)
-            while True:
-                time.sleep(1)
+        moose.setClock( pr.tick, dm["dt"] )
+        moose.reinit()
+        moose.start( dm["runtime"] )
+        self._save()                                            
+        rmoogli.notifySimulationEnd()
+        if dm["block"]:
+            self.display( len( self.moogNames ) + 1)
+        while True:
+            time.sleep(1)
+        return True
 
     def _display( self, startIndex = 0, block=True ):
-        if not hasattr( self, 'displayMoogli' ):
-            # Unless Moogli code has run it, do it here.
-            moose.reinit()
-            moose.start( self.runtime )
+        moose.reinit()
+        moose.start( self.runtime )
+        self._save()                                            
         self.display( startIndex, block )
 
     def display( self, startIndex = 0, block=True ):
@@ -1174,6 +1177,8 @@ rdesigneur.rmoogli.updateMoogliViewer()
                 
             else:
                 t = np.arange( 0, vtab[0].vector.size, 1 ) * vtab[0].dt
+                if len( t ) <=1:
+                    print( "Warning: no points on plot {}. Check that your plot Dt < runtime.".format( i[1] ) )
                 for j in vtab:
                     plt.plot( t, j.vector * i[3] )
             
@@ -1925,8 +1930,8 @@ def main():
     rdes.buildModel()
     args.run = True
     if args.run:
-        rdes._displayMoogli() 
-        rdes._display() 
+        if not rdes._displayMoogli():
+            rdes._display() 
 
 
 
