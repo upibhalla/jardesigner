@@ -13,11 +13,9 @@ import plotsIcon from './assets/plots.png';
 import stimIcon from './assets/stim.png';
 import d3Icon from './assets/3D.png';
 import fileIcon from './assets/file.png';
-// --- UPDATED: Use simOutput.png for the Sim Output icon ---
-import simOutputIcon from './assets/simOutput.png'; // Changed from file.png
+import simOutputIcon from './assets/simOutput.png';
 
 // --- Import Menu Boxes ---
-// Use the modified FileMenuBox (Save/Load only) and the new SimOutputMenuBox
 import FileMenuBox from './components/MenuBoxes/FileMenuBox';
 import SimOutputMenuBox from './components/MenuBoxes/SimOutputMenuBox';
 import ConfigureMenuBox from './components/MenuBoxes/ConfigureMenuBox';
@@ -72,7 +70,7 @@ const initialJsonData = {
   chemDistrib: [],
   adaptors: [],
   plots: [],
-  files: [], // This is now managed by SimOutputMenuBox
+  files: [],
   moogli: [],
   displayMoogli: {},
   moogliEvents: [],
@@ -82,19 +80,18 @@ const initialJsonData = {
 const App = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [jsonData, setJsonData] = useState(initialJsonData);
-  // String state is primarily for File Load/Save now
   const [jsonContent, setJsonContent] = useState(JSON.stringify(initialJsonData, null, 2));
-  const activeMenuBoxRef = useRef(null); // Keep ref for potential future use
+  const activeMenuBoxRef = useRef(null);
 
   // --- Callbacks ---
-  // Updates main JSON object state AND the string state (used by most MenuBoxes)
+  // Updates main JSON object state AND the string state
   const updateJsonData = useCallback((newDataPart) => {
     console.log("App.jsx: Updating jsonData with:", newDataPart);
     setJsonData(prevData => {
         const updatedData = { ...prevData, ...newDataPart };
-        // Only update jsonContent string if the whole object wasn't just loaded
+        // Keep string state in sync unless the entire object was just loaded
         if (Object.keys(newDataPart).length !== Object.keys(updatedData).length) {
-             setJsonContent(JSON.stringify(updatedData, null, 2)); // Keep string in sync for display/save
+             setJsonContent(JSON.stringify(updatedData, null, 2));
         }
         return updatedData;
     });
@@ -105,25 +102,33 @@ const App = () => {
      setJsonContent(newJsonString); // Update string state immediately
      try {
          const parsedData = JSON.parse(newJsonString);
-         // Validate essential structure? (Optional)
          if (typeof parsedData === 'object' && parsedData !== null) {
-             setJsonData(parsedData); // Overwrite entire object state on successful load
+             setJsonData(parsedData); // Overwrite entire object state
              console.log("App.jsx: Successfully parsed and updated jsonData from loaded file.");
          } else {
             throw new Error("Loaded content is not a valid JSON object.");
          }
      } catch (e) {
          console.error("App.jsx: Error parsing loaded JSON string:", e);
-         // Optionally revert string state or show error to user
-         // setJsonContent(JSON.stringify(jsonData, null, 2)); // Revert to previous good state?
          alert(`Failed to load model: ${e.message}`);
      }
-  }, []); // Removed jsonData dependency to avoid loops if parsing fails
+  }, []);
 
   // Gets the current JSON object state (needed for File Save)
   const getCurrentJsonData = useCallback(() => {
     return jsonData;
   }, [jsonData]);
+
+  // --- Function to get chemical prototype names ---
+  const getChemProtos = useCallback(() => {
+      // Safely access chemProto array and map to names
+      const protos = jsonData?.chemProto;
+      if (Array.isArray(protos)) {
+          // Ensure only valid, non-empty names are returned
+          return protos.map(proto => proto?.name).filter(name => name && typeof name === 'string' && name.trim() !== '');
+      }
+      return []; // Return empty array if chemProto is not an array or doesn't exist
+  }, [jsonData?.chemProto]); // Dependency on the specific array within jsonData
 
   // Toggles the active menu
   const toggleMenu = (menu) => {
@@ -131,17 +136,18 @@ const App = () => {
   };
 
   // --- Memoized Menu Box Components ---
-  // Pass necessary props, including currentConfig slices and refs if needed elsewhere
+  // Pass necessary props, including currentConfig slices and the getChemProtos function
   const menuComponents = useMemo(() => ({
       File: <FileMenuBox
                 ref={activeMenu === 'File' ? activeMenuBoxRef : null}
-                setJsonContent={updateJsonString} // For loading file content
-                getCurrentJsonData={getCurrentJsonData} // For saving file content
+                setJsonContent={updateJsonString}
+                getCurrentJsonData={getCurrentJsonData}
             />,
       SimOutput: <SimOutputMenuBox
                      ref={activeMenu === 'SimOutput' ? activeMenuBoxRef : null}
-                     onConfigurationChange={updateJsonData} // Updates the 'files' part of jsonData
-                     currentConfig={jsonData.files} // Pass the current 'files' array
+                     onConfigurationChange={updateJsonData}
+                     currentConfig={jsonData.files}
+                     getChemProtos={getChemProtos}
                  />,
       Configure: <ConfigureMenuBox ref={activeMenu === 'Configure' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ diffusionLength: jsonData.diffusionLength, randseed: jsonData.randseed, temperature: jsonData.temperature, numWaveFrames: jsonData.numWaveFrames, turnOffElec: jsonData.turnOffElec, useGssa: jsonData.useGssa, verbose: jsonData.verbose, combineSegments: jsonData.combineSegments, benchmark: jsonData.benchmark, stealCellFromLibrary: jsonData.stealCellFromLibrary, modelPath: jsonData.modelPath, odeMethod: jsonData.odeMethod }} />,
       Run: <RunMenuBox ref={activeMenu === 'Run' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} getCurrentJsonData={getCurrentJsonData} currentConfig={{ runtime: jsonData.runtime, elecDt: jsonData.elecDt, elecPlotDt: jsonData.elecPlotDt, chemDt: jsonData.chemDt, chemPlotDt: jsonData.chemPlotDt, diffDt: jsonData.diffDt, funcDt: jsonData.funcDt, statusDt: jsonData.statusDt }} />,
@@ -149,35 +155,54 @@ const App = () => {
       Spines: <SpineMenuBox ref={activeMenu === 'Spines' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
       Channels: <ElecMenuBox ref={activeMenu === 'Channels' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
       Passive: <PassiveMenuBox ref={activeMenu === 'Passive' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
-      Signaling: <ChemMenuBox ref={activeMenu === 'Signaling' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} />,
+      Signaling: <ChemMenuBox
+                     ref={activeMenu === 'Signaling' ? activeMenuBoxRef : null}
+                     onConfigurationChange={updateJsonData}
+                     currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }}
+                     getChemProtos={getChemProtos}
+                 />,
       Adaptors: <AdaptorsMenuBox ref={activeMenu === 'Adaptors' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
-      Stimuli: <StimMenuBox ref={activeMenu === 'Stimuli' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} />,
-      Plots: <PlotMenuBox ref={activeMenu === 'Plots' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} />,
-      '3D': <ThreeDMenuBox ref={activeMenu === '3D' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} />,
-  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData]); // Dependencies
+      Stimuli: <StimMenuBox
+                   ref={activeMenu === 'Stimuli' ? activeMenuBoxRef : null}
+                   onConfigurationChange={updateJsonData}
+                   currentConfig={jsonData.stims}
+                   getChemProtos={getChemProtos}
+               />,
+      Plots: <PlotMenuBox
+                 ref={activeMenu === 'Plots' ? activeMenuBoxRef : null}
+                 onConfigurationChange={updateJsonData}
+                 currentConfig={jsonData.plots}
+                 getChemProtos={getChemProtos}
+             />,
+      '3D': <ThreeDMenuBox
+                ref={activeMenu === '3D' ? activeMenuBoxRef : null}
+                onConfigurationChange={updateJsonData}
+                currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }}
+                getChemProtos={getChemProtos}
+            />,
+  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData, getChemProtos]); // Added getChemProtos to dependency array
 
 
   return (
     <>
       {/* --- Menu Bar --- */}
       <AppBar position="static">
-         {/* Adjust justifyContent if needed with more buttons */}
          <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-             {/* --- Button Order Changed: SimOutput moved to the end --- */}
-             <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '48px', marginBottom: '4px' }} /> File </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Configure')} style={{ flexDirection: 'column', color: activeMenu === 'Configure' ? 'orange' : 'inherit' }} > <img src={configureIcon} alt="Configure Icon" style={{ width: '48px', marginBottom: '4px' }} /> Configure </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '48px', marginBottom: '4px' }} /> Run </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '48px', marginBottom: '4px' }} /> Morphology </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '48px', marginBottom: '4px' }} /> Spines </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} > <img src={elecIcon} alt="Channels Icon" style={{ width: '48px', marginBottom: '4px' }} /> Channels </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} > <img src={passiveIcon} alt="Passive Icon" style={{ width: '48px', marginBottom: '4px' }} /> Passive </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} > <img src={chemIcon} alt="Signaling Icon" style={{ width: '48px', marginBottom: '4px' }} /> Signaling </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} > <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '48px', marginBottom: '4px' }} /> Adaptors </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} > <img src={stimIcon} alt="Stimuli Icon" style={{ width: '48px', marginBottom: '4px' }} /> Stimuli </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} > <img src={plotsIcon} alt="Plots Icon" style={{ width: '48px', marginBottom: '4px' }} /> Plots </Button>
-             <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} > <img src={d3Icon} alt="3D Icon" style={{ width: '48px', marginBottom: '4px' }} /> 3D </Button>
-             {/* --- Sim Output Button moved here --- */}
-             <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} > <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '48px', marginBottom: '4px' }} /> Sim Output </Button>
+             {/* --- UPDATED icon sizes from 48px to 72px --- */}
+             <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Configure')} style={{ flexDirection: 'column', color: activeMenu === 'Configure' ? 'orange' : 'inherit' }} > <img src={configureIcon} alt="Configure Icon" style={{ width: '72px', marginBottom: '4px' }} /> Configure </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} > <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} /> Channels </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} > <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} /> Passive </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} > <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} /> Signaling </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} > <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} /> Adaptors </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} > <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} /> Stimuli </Button>
+             <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} > <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} /> Plots </Button>
+             <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} > <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} /> 3D </Button>
+             <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} > <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} /> Sim Output </Button>
+             {/* --- END UPDATED icon sizes --- */}
          </Toolbar>
       </AppBar>
 
@@ -185,7 +210,7 @@ const App = () => {
       <Grid container spacing={2} style={{ padding: '16px' }}>
         {/* Menu Box Area */}
         <Grid item xs={4}>
-          {/* Render the active menu component based on the updated map */}
+          {/* Render the active menu component */}
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
          {/* Graph Window */}
@@ -195,11 +220,11 @@ const App = () => {
          {/* Display Window & JSON Text */}
         <Grid item xs={4}>
           <DisplayWindow />
-          {/* Pass jsonContent (derived from jsonData) for display */}
+          {/* Pass jsonContent for display */}
           <JsonText
-             jsonString={jsonContent} // Display the string state (updated by load or other changes)
+             jsonString={jsonContent}
              schema={schema}
-             setActiveMenu={setActiveMenu} // Still needed to close menu
+             setActiveMenu={setActiveMenu}
           />
         </Grid>
        </Grid>
