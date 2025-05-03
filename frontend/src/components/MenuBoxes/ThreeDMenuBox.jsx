@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Box,
     Tabs,
@@ -16,21 +16,25 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-// Helper to safely convert value to string
+// Helper to safely convert value to string, handling potential null/undefined
 const safeToString = (value, defaultValue = '') => {
-    return value !== undefined && value !== null ? String(value) : defaultValue;
+    // Check for null or undefined explicitly
+    if (value === undefined || value === null) {
+        return defaultValue;
+    }
+    // Convert other types to string
+    return String(value);
 };
 
-// --- RESTORED: Field Options ---
+
 // Field Options (Matches schema fieldEnum)
 const fieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
     'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
     'modulation', 'psdArea',
 ];
-// --- END RESTORED ---
 
-// Colormap options (remain the same)
+// Colormap options
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
 
 // Default state creators
@@ -41,6 +45,8 @@ const createDefaultMoogliEntry = () => ({
     title: '',
     diameterScale: '1.0',
     dt: '0.1',
+    min: '0', // Add default min
+    max: '0', // Add default max
 });
 const createDefaultGlobalSettings = () => ({
     runtime: '0.3', rotation: '0.006283', azimuth: '0.0', elevation: '0.0',
@@ -54,13 +60,17 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
     // --- Initialize state from props using useState initializer ---
     const [tabs, setTabs] = useState(() => {
         console.log("ThreeDMenuBox: Initializing tabs (moogli) from props", currentConfig?.moogli);
+        const defaults = createDefaultMoogliEntry(); // Get defaults
         const initialTabs = currentConfig?.moogli?.map(m => ({
             path: m.path || '',
             field: m.field || fieldOptions[0], // Use default field if missing
             relativePath: m.relpath || '.', // Map schema key
             title: m.title || '',
-            diameterScale: safeToString(m.diaScale, createDefaultMoogliEntry().diameterScale), // Map schema key
-            dt: safeToString(m.dt, createDefaultMoogliEntry().dt),
+            diameterScale: safeToString(m.diaScale, defaults.diameterScale), // Map schema key
+            dt: safeToString(m.dt, defaults.dt),
+            // Initialize min/max from ymin/ymax, converting to string, using default '0' if absent/invalid
+            min: safeToString(m.ymin, defaults.min),
+            max: safeToString(m.ymax, defaults.max),
         })) || [];
         return initialTabs.length > 0 ? initialTabs : [createDefaultMoogliEntry()];
     });
@@ -140,17 +150,38 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
             if (!tabState.path || !tabState.field) return null; // Validation
             const diaScaleNum = parseFloat(tabState.diameterScale);
             const dtNum = parseFloat(tabState.dt);
+            const minNum = parseFloat(tabState.min); // Parse min
+            const maxNum = parseFloat(tabState.max); // Parse max
             const defaults = createDefaultMoogliEntry(); // Get defaults for comparison
 
+            // Base object with required fields
             const moogliSchemaItem = {
                 path: tabState.path,
                 field: tabState.field,
-                // Optional: only include if non-default/non-empty
-                ...(tabState.relativePath && tabState.relativePath !== defaults.relativePath && { relpath: tabState.relativePath }),
-                ...(tabState.title && { title: tabState.title }),
-                ...( (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaults.diameterScale) && { diaScale: diaScaleNum }),
-                ...( (!isNaN(dtNum) && safeToString(dtNum) !== defaults.dt) && { dt: dtNum }), // Check against string default
             };
+
+            // Add optional fields only if they are valid and different from default
+            if (tabState.relativePath && tabState.relativePath !== defaults.relativePath) {
+                moogliSchemaItem.relpath = tabState.relativePath;
+            }
+            if (tabState.title) {
+                moogliSchemaItem.title = tabState.title;
+            }
+            if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaults.diameterScale) {
+                moogliSchemaItem.diaScale = diaScaleNum;
+            }
+            if (!isNaN(dtNum) && safeToString(dtNum) !== defaults.dt) {
+                moogliSchemaItem.dt = dtNum;
+            }
+            // Add ymin only if it's a valid number and not the default '0'
+            if (!isNaN(minNum) && safeToString(minNum) !== defaults.min) {
+                moogliSchemaItem.ymin = minNum;
+            }
+            // Add ymax only if it's a valid number and not the default '0'
+            if (!isNaN(maxNum) && safeToString(maxNum) !== defaults.max) {
+                moogliSchemaItem.ymax = maxNum;
+            }
+
              return moogliSchemaItem;
         }).filter(item => item !== null);
 
@@ -190,18 +221,32 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
     // --- useEffect hook to push changes up ON UNMOUNT ---
     useEffect(() => {
         console.log("ThreeDMenuBox: Mounted, setting up unmount cleanup.");
+        // Store the initial config stringified to compare on unmount
+        const initialConfigString = JSON.stringify({
+             moogli: currentConfig?.moogli || [],
+             displayMoogli: currentConfig?.displayMoogli || {}
+        });
+
         return () => {
             const latestOnConfigurationChange = onConfigurationChangeRef.current;
             if (latestOnConfigurationChange) {
-                console.log("ThreeDMenuBox: Unmounting, pushing final state up.");
-                const configData = getThreeDDataForUnmount();
-                latestOnConfigurationChange(configData); // Push object with both keys
+                console.log("ThreeDMenuBox: Unmounting, checking for changes before push.");
+                const finalConfigData = getThreeDDataForUnmount();
+                const finalConfigString = JSON.stringify(finalConfigData);
+
+                // Only push if the data has actually changed from initial load
+                if (finalConfigString !== initialConfigString) {
+                    console.log("ThreeDMenuBox: Changes detected, pushing final state up.");
+                    latestOnConfigurationChange(finalConfigData); // Push object with both keys
+                } else {
+                    console.log("ThreeDMenuBox: No changes detected, skipping push on unmount.");
+                }
             } else {
                 console.warn("ThreeDMenuBox: onConfigurationChange not available on unmount.");
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // IMPORTANT: Empty dependency array
-    // --- END Unmount Effect ---
 
 
     // --- JSX Rendering (uses local state) ---
@@ -219,7 +264,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      <IconButton onClick={addTab} sx={{ alignSelf: 'center', marginLeft: '10px' }}><AddIcon /></IconButton>
                  </Tabs>
              </Box>
-             {tabs.length > 0 && activeTab < tabs.length && tabs[activeTab] && (
+             {tabs.length > 0 && activeTab >= 0 && activeTab < tabs.length && tabs[activeTab] && (
                  <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={1.5}>
                           {/* Row 1: Path, Field */}
@@ -228,13 +273,11 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
                                  onChange={(e) => updateTab(activeTab, 'path', e.target.value)} />
                          </Grid>
                          <Grid item xs={12} sm={6}>
-                             {/* --- RESTORED Field Dropdown --- */}
                              <TextField select fullWidth size="small" label="Field" required value={tabs[activeTab].field}
                                  onChange={(e) => updateTab(activeTab, 'field', e.target.value)}>
                                  <MenuItem value=""><em>Select Field...</em></MenuItem>
                                  {fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                              </TextField>
-                             {/* --- END RESTORED --- */}
                          </Grid>
                           {/* Row 2: RelPath, Title */}
                          <Grid item xs={12} sm={6}>
@@ -245,7 +288,32 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig }) => {
                              <TextField fullWidth size="small" label="Title (Optional)" value={tabs[activeTab].title}
                                  onChange={(e) => updateTab(activeTab, 'title', e.target.value)} />
                          </Grid>
-                         {/* Row 3: DiaScale, Dt */}
+                         {/* --- ADDED Row 3: Min, Max --- */}
+                         <Grid item xs={12} sm={6}>
+                             <TextField
+                                 fullWidth
+                                 size="small"
+                                 label="Min (ymin)"
+                                 type="number"
+                                 value={tabs[activeTab].min}
+                                 onChange={(e) => updateTab(activeTab, 'min', e.target.value)}
+                                 InputProps={{ inputProps: { step: 'any' } }} // Allow floats
+                                 helperText="Optional (Default: 0)"
+                             />
+                         </Grid>
+                          <Grid item xs={12} sm={6}>
+                             <TextField
+                                 fullWidth
+                                 size="small"
+                                 label="Max (ymax)"
+                                 type="number"
+                                 value={tabs[activeTab].max}
+                                 onChange={(e) => updateTab(activeTab, 'max', e.target.value)}
+                                 InputProps={{ inputProps: { step: 'any' } }} // Allow floats
+                                 helperText="Optional (Default: 0)"
+                             />
+                         </Grid>
+                         {/* Row 4 (was 3): DiaScale, Dt */}
                            <Grid item xs={12} sm={6}>
                              <TextField fullWidth size="small" label="Diameter Scale (Optional)" type="number" value={tabs[activeTab].diameterScale}
                                  onChange={(e) => updateTab(activeTab, 'diameterScale', e.target.value)} InputProps={{ inputProps: { step: 0.1 } }}/>

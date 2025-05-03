@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Box,
     Tabs,
@@ -50,6 +50,11 @@ const prototypeTypeOptions = [
     'SBML', 'kkit', 'User Func', 'In-memory'
 ];
 
+// Define location options with display names
+const locationOptions = [
+    'Dendrite', 'Spine', 'PSD', 'Endo', 'Presyn_spine', 'Presyn_dend'
+];
+
 // Helper to safely convert value to string
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
@@ -65,8 +70,9 @@ const createDefaultChemPrototype = () => ({
 });
 const createDefaultChemDistribution = () => ({
     prototype: '',
-    location: 'Dendrite',
+    location: locationOptions[0], // Use display name default
     path: 'soma',
+    diffusionLength_um: '', // Initialize diffusion length (in um) as empty string
 });
 
 
@@ -88,7 +94,8 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 name: p.name,
                 file: '', // File isn't directly stored in schema this way
                 source: sourceValue,
-                manualName: p.name !== componentType, // Initial guess for manual name
+                // Check if the loaded name is different from the *derived* component type name
+                manualName: p.name !== componentType,
             };
         }) || [];
         return initialProtos.length > 0 ? initialProtos : [createDefaultChemPrototype()];
@@ -105,14 +112,25 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 case 'endo': return 'Endo';
                 case 'presyn_spine': return 'Presyn_spine';
                 case 'presyn_dend': return 'Presyn_dend';
-                default: return 'Dendrite'; // Fallback
+                default:
+                    console.warn(`ChemMenuBox: Unknown distribution type '${type}' found in config, defaulting to 'Dendrite'.`);
+                    return 'Dendrite'; // Fallback
             }
         };
-        const initialDists = currentConfig?.chemDistrib?.map(d => ({
-            prototype: d.proto,
-            location: mapSchemaDistribTypeToLocation(d.type),
-            path: d.path,
-        })) || [];
+        const initialDists = currentConfig?.chemDistrib?.map(d => {
+            // Convert diffusionLength from meters (schema) to micrometers (state)
+            let diffusionLength_um = ''; // Default to empty string
+            if (d.diffusionLength !== undefined && d.diffusionLength !== null && !isNaN(Number(d.diffusionLength))) {
+                diffusionLength_um = String(Number(d.diffusionLength) * 1e6); // Convert m to µm
+            }
+
+            return {
+                prototype: d.proto,
+                location: mapSchemaDistribTypeToLocation(d.type), // Use the mapping function
+                path: d.path,
+                diffusionLength_um: diffusionLength_um, // Store converted value or default
+            };
+        }) || [];
         return initialDists.length > 0 ? initialDists : [createDefaultChemDistribution()];
     });
 
@@ -153,11 +171,13 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
             prevPrototypes.map((proto, i) => {
                 if (i === index) {
                     const updatedProto = { ...proto, [key]: value };
+                    // If type changes, update name ONLY if manualName is false
                     if (key === 'type' && !updatedProto.manualName) {
-                        updatedProto.name = value;
+                        updatedProto.name = value; // Update name to match new type
                     }
+                    // If type changes and it's not one requiring a source, clear source
                     if (key === 'type' && !['SBML', 'kkit', 'User Func', 'In-memory'].includes(value)) {
-                         updatedProto.source = ''; // Clear source if type changes
+                         updatedProto.source = '';
                     }
                     return updatedProto;
                 }
@@ -166,10 +186,11 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
         );
     }, []);
 
+    // Handler specifically for when the name is manually edited
     const setCustomPrototypeName = useCallback((index, value) => {
         setPrototypes((prevPrototypes) =>
             prevPrototypes.map((proto, i) =>
-                i === index ? { ...proto, name: value, manualName: true } : proto
+                i === index ? { ...proto, name: value, manualName: true } : proto // Set manualName flag
             )
         );
     }, []);
@@ -218,28 +239,60 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 schemaSource = getChemSourceString(componentType);
             }
 
-            // Validation
-            if (!protoState.name) return null;
-            if (['sbml', 'kkit', 'in_memory'].includes(schemaType) && !schemaSource) return null;
-            if (schemaType === 'builtin' && !schemaSource) return null;
+            // Basic Validation
+            if (!protoState.name) { console.warn("Skipping chem prototype due to missing name:", protoState); return null; }
+            if (['sbml', 'kkit', 'in_memory'].includes(schemaType) && !schemaSource) { console.warn(`Skipping chem prototype '${protoState.name}' due to missing source for type '${schemaType}':`, protoState); return null; }
+            if (componentType === 'User Func' && !protoState.source) { console.warn(`Skipping chem prototype '${protoState.name}' due to missing source for type 'User Func':`, protoState); return null; }
+            if (schemaType === 'builtin' && !schemaSource && componentType !== 'User Func') { console.warn(`Skipping chem prototype '${protoState.name}' because source couldn't be determined for type '${componentType}':`, protoState); return null; }
 
             return { type: schemaType, source: schemaSource, name: protoState.name };
         }).filter(p => p !== null);
 
         // Format Distributions
         const chemDistribData = currentDistributions.map(distState => {
-            let schemaDistribType = distState.location?.toLowerCase() || 'dend';
-            if (distState.location === 'Presyn_spine') schemaDistribType = 'presyn_spine';
-            if (distState.location === 'Presyn_dend') schemaDistribType = 'presyn_dend';
+            // Map display location name back to schema type value
+            let schemaDistribType = 'dend'; // Default
+            switch(distState.location) {
+                case 'Dendrite': schemaDistribType = 'dend'; break;
+                case 'Spine': schemaDistribType = 'spine'; break;
+                case 'PSD': schemaDistribType = 'psd'; break;
+                case 'Endo': schemaDistribType = 'endo'; break;
+                case 'Presyn_spine': schemaDistribType = 'presyn_spine'; break;
+                case 'Presyn_dend': schemaDistribType = 'presyn_dend'; break;
+                default:
+                    console.warn(`ChemMenuBox: Unknown location '${distState.location}' during save, defaulting to 'dend'.`);
+                    schemaDistribType = 'dend';
+            }
 
             // Ensure prototype name exists in the *valid* list being saved
             const selectedProtoExists = chemProtoData.some(p => p.name === distState.prototype);
 
-            if (!selectedProtoExists || !distState.prototype || !distState.path || !schemaDistribType) {
-                 console.warn("Skipping chem distribution due to missing/invalid prototype, path, or location:", distState);
+            if (!selectedProtoExists || !distState.prototype || !distState.path) {
+                 console.warn("Skipping chem distribution due to missing/invalid prototype reference or path:", distState);
                  return null;
              }
-            return { proto: distState.prototype, path: distState.path, type: schemaDistribType };
+
+            // Handle diffusionLength conversion (µm -> m) and optional inclusion
+            const length_um_str = distState.diffusionLength_um;
+            let diffusionLengthProp = {}; // Empty object if not valid or not provided
+            if (length_um_str !== undefined && length_um_str !== null && length_um_str.trim() !== '') {
+                const length_um = parseFloat(length_um_str);
+                if (!isNaN(length_um) && length_um >= 0) {
+                    const length_m = length_um * 1e-6; // Convert µm to m
+                    diffusionLengthProp = { diffusionLength: length_m }; // Property to be added
+                } else {
+                     console.warn(`ChemMenuBox: Invalid diffusion length value '${length_um_str}' for distribution with proto '${distState.prototype}', skipping field.`);
+                }
+            }
+
+
+            // Combine base properties with the optional diffusionLength
+            return {
+                proto: distState.prototype,
+                path: distState.path,
+                type: schemaDistribType,
+                ...diffusionLengthProp // Spread the diffusionLength property if valid, otherwise spreads nothing
+            };
         }).filter(item => item !== null);
 
         return { chemProto: chemProtoData, chemDistrib: chemDistribData };
@@ -249,18 +302,32 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
     // --- useEffect hook to push changes up ON UNMOUNT ---
     useEffect(() => {
         console.log("ChemMenuBox: Mounted, setting up unmount cleanup.");
+        // Store the initial config stringified to compare on unmount
+        const initialConfigString = JSON.stringify({
+             chemProto: currentConfig?.chemProto || [],
+             chemDistrib: currentConfig?.chemDistrib || []
+        });
+
         return () => {
             const latestOnConfigurationChange = onConfigurationChangeRef.current;
             if (latestOnConfigurationChange) {
-                console.log("ChemMenuBox: Unmounting, pushing final state up.");
-                const configData = getChemDataForUnmount();
-                latestOnConfigurationChange(configData); // Push object with both keys
+                console.log("ChemMenuBox: Unmounting, checking for changes before push.");
+                const finalConfigData = getChemDataForUnmount();
+                const finalConfigString = JSON.stringify(finalConfigData);
+
+                // Only push if the data has actually changed from initial load
+                if (finalConfigString !== initialConfigString) {
+                    console.log("ChemMenuBox: Changes detected, pushing final state up.");
+                    latestOnConfigurationChange(finalConfigData); // Push object with both keys
+                } else {
+                    console.log("ChemMenuBox: No changes detected, skipping push on unmount.");
+                }
             } else {
                 console.warn("ChemMenuBox: onConfigurationChange not available on unmount.");
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // IMPORTANT: Empty dependency array
-    // --- END Unmount Effect ---
 
 
     // --- JSX Rendering (uses local state) ---
@@ -276,7 +343,7 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                     <IconButton onClick={addPrototype} sx={{ alignSelf: 'center', marginLeft: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
-             {prototypes.length > 0 && activePrototype < prototypes.length && prototypes[activePrototype] && (
+             {prototypes.length > 0 && activePrototype >= 0 && activePrototype < prototypes.length && prototypes[activePrototype] && (
                 <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={1.5}>
                         <Grid item xs={12} sm={6}>
@@ -289,12 +356,13 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                                 <TextField fullWidth size="small" label="Source (File/Function/ID)" value={prototypes[activePrototype].source}
                                     onChange={(e) => updatePrototype(activePrototype, 'source', e.target.value)} sx={{ marginTop: '8px' }}
                                     required // Mark as required visually
+                                    helperText={prototypes[activePrototype].type === 'User Func' ? "e.g., my_func or path/to/file.py" : "e.g., path/to/model.xml or ID"}
                                     />
                             )}
                          </Grid>
                          <Grid item xs={12} sm={6}>
                             <TextField fullWidth size="small" label="Prototype Name" value={prototypes[activePrototype].name}
-                                 onChange={(e) => setCustomPrototypeName(activePrototype, e.target.value)}
+                                 onChange={(e) => setCustomPrototypeName(activePrototype, e.target.value)} // Use specific handler
                                  helperText="Defaults to Type. Edit for uniqueness." required/>
                          </Grid>
                     </Grid>
@@ -313,29 +381,44 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      <IconButton onClick={addDistribution} sx={{ alignSelf: 'center', marginLeft: '10px' }}><AddIcon /></IconButton>
                  </Tabs>
              </Box>
-            {distributions.length > 0 && activeDistribution < distributions.length && distributions[activeDistribution] && (
+            {distributions.length > 0 && activeDistribution >= 0 && activeDistribution < distributions.length && distributions[activeDistribution] && (
                 <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                     {/* --- UPDATED Grid layout for two rows --- */}
                      <Grid container spacing={1.5}>
-                         <Grid item xs={12} sm={4}>
+                         {/* Row 1: Prototype & Path */}
+                         <Grid item xs={12} sm={6}> {/* Takes half width on small screens and up */}
                              <TextField select fullWidth size="small" label="Prototype" required value={distributions[activeDistribution].prototype}
                                  onChange={(e) => updateDistribution(activeDistribution, 'prototype', e.target.value)}>
                                 <MenuItem value=""><em>Select Prototype...</em></MenuItem>
-                                {/* Filter prototypes list to show only valid ones */}
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </TextField>
                          </Grid>
-                          <Grid item xs={12} sm={4}>
+                          <Grid item xs={12} sm={6}> {/* Takes half width on small screens and up */}
                              <TextField fullWidth size="small" label="Path" required value={distributions[activeDistribution].path}
                                 onChange={(e) => updateDistribution(activeDistribution, 'path', e.target.value)} />
                          </Grid>
-                          <Grid item xs={12} sm={4}>
+
+                         {/* Row 2: Location & Diffusion Length */}
+                          <Grid item xs={12} sm={6}> {/* Takes half width on small screens and up */}
                               <TextField select fullWidth size="small" label="Location (-> Type)" required value={distributions[activeDistribution].location}
                                  onChange={(e) => updateDistribution(activeDistribution, 'location', e.target.value)}>
-                                 {[ 'dend', 'spine', 'psd', 'endo', 'presyn_spine', 'presyn_dend' ]
-                                     .map(loc => <MenuItem key={loc} value={loc}>{loc}</MenuItem>)}
+                                 {locationOptions.map(loc => <MenuItem key={loc} value={loc}>{loc}</MenuItem>)}
                              </TextField>
                           </Grid>
+                          <Grid item xs={12} sm={6}> {/* Takes half width on small screens and up */}
+                              <TextField
+                                  fullWidth
+                                  size="small"
+                                  label="Diffusion Length (µm)"
+                                  type="number"
+                                  value={distributions[activeDistribution].diffusionLength_um}
+                                  onChange={(e) => updateDistribution(activeDistribution, 'diffusionLength_um', e.target.value)}
+                                  InputProps={{ inputProps: { min: 0, step: 'any' } }} // Allow non-negative floats
+                                  helperText="Optional"
+                              />
+                          </Grid>
                      </Grid>
+                     {/* --- END UPDATED Grid layout --- */}
                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeDistribution(activeDistribution)} sx={{ marginTop: '16px' }}>
                          Remove Distribution {activeDistribution + 1}
                      </Button>
