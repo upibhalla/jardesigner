@@ -35,8 +35,11 @@ import DisplayWindow from './components/DisplayWindow';
 import JsonText from './components/JsonText';
 // --- Import Schema ---
 import schema from './schema.json'; // Adjust path if necessary
+// --- Utility for deep comparison ---
+import isEqual from 'lodash/isEqual'; // Using lodash for reliable deep comparison
 
-// --- Initial State ---
+// --- Initial State / Defaults ---
+// Defined outside component for reference in compaction
 const initialJsonData = {
   filetype: "rdesigneur",
   version: "1.0",
@@ -77,34 +80,114 @@ const initialJsonData = {
   stims: []
 };
 
+// --- ADDED: List of keys to always keep during compaction ---
+const requiredKeys = ["filetype", "version"];
+
 const App = () => {
   const [activeMenu, setActiveMenu] = useState(null);
+  // Main state holds the full data, including defaults potentially
   const [jsonData, setJsonData] = useState(initialJsonData);
-  const [jsonContent, setJsonContent] = useState(JSON.stringify(initialJsonData, null, 2));
+  // String state for display (will be compacted before stringifying)
+  // Initialize with compacted version for initial display consistency
+  const [jsonContent, setJsonContent] = useState(() => JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
   const activeMenuBoxRef = useRef(null);
 
+
+  // --- UPDATED: Compaction Function ---
+  /**
+   * Recursively removes default values and empty arrays/objects from a JSON object,
+   * ensuring required keys are always kept.
+   * @param {object} currentData The object to compact.
+   * @param {object} defaultData The object containing default values for comparison.
+   * @returns {object} A new object with defaults and empty containers removed (except required keys).
+   */
+   function compactJsonData(currentData, defaultData) {
+    const compacted = {};
+    for (const key in currentData) {
+        if (Object.hasOwnProperty.call(currentData, key)) {
+            const currentValue = currentData[key];
+            const defaultValue = defaultData ? defaultData[key] : undefined;
+
+            // --- ADDED: Check if the key is required ---
+            if (requiredKeys.includes(key)) {
+                compacted[key] = currentValue; // Always keep required keys
+                continue; // Skip further checks for this key
+            }
+            // --- END ADDED ---
+
+            // 1. Handle nested objects
+            if (typeof currentValue === 'object' && currentValue !== null && !Array.isArray(currentValue)) {
+                const compactedValue = compactJsonData(currentValue, defaultValue);
+                // Keep non-empty compacted objects, unless the default is also an empty object but required
+                if (Object.keys(compactedValue).length > 0) {
+                     // Only include if it's not deeply equal to the default object
+                     if (!isEqual(compactedValue, defaultValue)) {
+                        compacted[key] = compactedValue;
+                     }
+                } else if (defaultValue && typeof defaultValue === 'object' && Object.keys(defaultValue).length === 0) {
+                    // Special case: If default is {} and current compacted is {},
+                    // only keep if it differs from default (it won't, so it's removed unless required key handled above)
+                    // This correctly removes empty objects like cellProto unless they differ from an empty default
+                     if (!isEqual(compactedValue, defaultValue)) { // This check will likely be false here
+                         compacted[key] = compactedValue;
+                     }
+                }
+            }
+            // 2. Handle arrays
+            else if (Array.isArray(currentValue)) {
+                // Keep arrays only if they are not empty
+                if (currentValue.length > 0) {
+                     if (!isEqual(currentValue, defaultValue)) { // Check if different from default (usually [])
+                        compacted[key] = currentValue;
+                     }
+                }
+                 // Empty arrays are implicitly removed
+            }
+            // 3. Handle primitive values (and null)
+            else {
+                // Keep the value if it's different from the default value
+                if (!isEqual(currentValue, defaultValue)) {
+                    compacted[key] = currentValue;
+                }
+            }
+        }
+    }
+    return compacted;
+}
+
+
   // --- Callbacks ---
-  // Updates main JSON object state AND the string state
+  // Updates main JSON object state AND the string state for display
   const updateJsonData = useCallback((newDataPart) => {
     console.log("App.jsx: Updating jsonData with:", newDataPart);
     setJsonData(prevData => {
         const updatedData = { ...prevData, ...newDataPart };
-        // Keep string state in sync unless the entire object was just loaded
-        if (Object.keys(newDataPart).length !== Object.keys(updatedData).length) {
-             setJsonContent(JSON.stringify(updatedData, null, 2));
-        }
-        return updatedData;
+        // Update the display string with the compacted version
+        setJsonContent(JSON.stringify(compactJsonData(updatedData, initialJsonData), null, 2));
+        return updatedData; // Return the full data for the state
     });
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Dependency array is empty as compaction uses initialJsonData
 
   // Updates string state AND tries to update JSON object state (used by File Load)
   const updateJsonString = useCallback((newJsonString) => {
-     setJsonContent(newJsonString); // Update string state immediately
+     // Display the loaded string immediately (it might not be compact)
+     setJsonContent(newJsonString);
      try {
          const parsedData = JSON.parse(newJsonString);
          if (typeof parsedData === 'object' && parsedData !== null) {
-             setJsonData(parsedData); // Overwrite entire object state
-             console.log("App.jsx: Successfully parsed and updated jsonData from loaded file.");
+             // IMPORTANT: Merge loaded data with defaults to ensure all keys exist in state
+             // Ensure required keys from initial data are present if missing in loaded file
+             const mergedData = {
+                ...initialJsonData,
+                ...parsedData,
+                filetype: parsedData.filetype || initialJsonData.filetype, // Ensure required keys exist
+                version: parsedData.version || initialJsonData.version
+             };
+             setJsonData(mergedData); // Overwrite state with merged data
+             // Update display string again with the compacted version of the newly loaded data
+             setJsonContent(JSON.stringify(compactJsonData(mergedData, initialJsonData), null, 2));
+             console.log("App.jsx: Successfully parsed, merged, and updated jsonData from loaded file.");
          } else {
             throw new Error("Loaded content is not a valid JSON object.");
          }
@@ -112,41 +195,40 @@ const App = () => {
          console.error("App.jsx: Error parsing loaded JSON string:", e);
          alert(`Failed to load model: ${e.message}`);
      }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array
 
-  // Gets the current JSON object state (needed for File Save)
+  // Gets the COMPACTED JSON object state (needed for File Save)
   const getCurrentJsonData = useCallback(() => {
-    return jsonData;
-  }, [jsonData]);
+    // Return the compacted version of the current state
+    return compactJsonData(jsonData, initialJsonData);
+  }, [jsonData]); // Depends on jsonData
 
-  // --- Function to get chemical prototype names ---
+  // Function to get chemical prototype names (no change needed)
   const getChemProtos = useCallback(() => {
-      // Safely access chemProto array and map to names
       const protos = jsonData?.chemProto;
       if (Array.isArray(protos)) {
-          // Ensure only valid, non-empty names are returned
           return protos.map(proto => proto?.name).filter(name => name && typeof name === 'string' && name.trim() !== '');
       }
-      return []; // Return empty array if chemProto is not an array or doesn't exist
-  }, [jsonData?.chemProto]); // Dependency on the specific array within jsonData
+      return [];
+  }, [jsonData?.chemProto]);
 
-  // Toggles the active menu
+  // Toggles the active menu (no change needed)
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
   };
 
-  // --- Memoized Menu Box Components ---
-  // Pass necessary props, including currentConfig slices and the getChemProtos function
+  // Memoized Menu Box Components (no change needed here)
   const menuComponents = useMemo(() => ({
       File: <FileMenuBox
                 ref={activeMenu === 'File' ? activeMenuBoxRef : null}
                 setJsonContent={updateJsonString}
-                getCurrentJsonData={getCurrentJsonData}
+                getCurrentJsonData={getCurrentJsonData} // Will now get compacted data
             />,
       SimOutput: <SimOutputMenuBox
                      ref={activeMenu === 'SimOutput' ? activeMenuBoxRef : null}
                      onConfigurationChange={updateJsonData}
-                     currentConfig={jsonData.files}
+                     currentConfig={jsonData.files} // Pass full data for initialization
                      getChemProtos={getChemProtos}
                  />,
       Configure: <ConfigureMenuBox ref={activeMenu === 'Configure' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ diffusionLength: jsonData.diffusionLength, randseed: jsonData.randseed, temperature: jsonData.temperature, numWaveFrames: jsonData.numWaveFrames, turnOffElec: jsonData.turnOffElec, useGssa: jsonData.useGssa, verbose: jsonData.verbose, combineSegments: jsonData.combineSegments, benchmark: jsonData.benchmark, stealCellFromLibrary: jsonData.stealCellFromLibrary, modelPath: jsonData.modelPath, odeMethod: jsonData.odeMethod }} />,
@@ -180,15 +262,14 @@ const App = () => {
                 currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }}
                 getChemProtos={getChemProtos}
             />,
-  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData, getChemProtos]); // Added getChemProtos to dependency array
+  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData, getChemProtos]);
 
 
   return (
     <>
-      {/* --- Menu Bar --- */}
+      {/* --- Menu Bar (no change needed) --- */}
       <AppBar position="static">
          <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-             {/* --- UPDATED icon sizes from 48px to 72px --- */}
              <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
              <Button color="inherit" onClick={() => toggleMenu('Configure')} style={{ flexDirection: 'column', color: activeMenu === 'Configure' ? 'orange' : 'inherit' }} > <img src={configureIcon} alt="Configure Icon" style={{ width: '72px', marginBottom: '4px' }} /> Configure </Button>
              <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
@@ -202,7 +283,6 @@ const App = () => {
              <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} > <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} /> Plots </Button>
              <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} > <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} /> 3D </Button>
              <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} > <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} /> Sim Output </Button>
-             {/* --- END UPDATED icon sizes --- */}
          </Toolbar>
       </AppBar>
 
@@ -220,9 +300,9 @@ const App = () => {
          {/* Display Window & JSON Text */}
         <Grid item xs={4}>
           <DisplayWindow />
-          {/* Pass jsonContent for display */}
+          {/* Pass compacted jsonContent string */}
           <JsonText
-             jsonString={jsonContent}
+             jsonString={jsonContent} // Now holds the compacted string
              schema={schema}
              setActiveMenu={setActiveMenu}
           />
