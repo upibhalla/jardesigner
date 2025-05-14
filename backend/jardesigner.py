@@ -1161,26 +1161,55 @@ rdesigneur.rmoogli.updateMoogliViewer()
         self.display( startIndex, block )
 
     def display( self, startIndex = 0, block=True ):
-        for i in self.plotNames:
-            plt.figure( i[2] + startIndex )
-            plt.title( i[1] )
-            plt.xlabel( "Time (s)" )
-            plt.ylabel( i[4] )
+        FIG_HT = 5
+        FIG_WID = 6
+        if len( self.plotNames ) == 0:
+            return
+        if len( self.plotNames ) <= 3:
+            nrows = len( self.plotNames )
+            ncols = 1
+        elif len( self.plotNames ) == 4:
+            nrows = 2
+            ncols = 2
+        elif len( self.plotNames ) <= 6:
+            nrows = 3
+            ncols = 2
+        else:
+            nrows = int( np.sqrt( len( self.plotNames ) -1 ) )+1
+            ncols = 1 + (len( self.plotNames ) -1) // nrows
+        
+        if len( self.plotNames ) <= 9:   
+            sx = ncols * FIG_WID
+            sy = nrows * FIG_HT
+        else:
+            sx = 3 * FIG_HT
+            sy = 3 * FIG_WID
+
+        fig, axes = plt.subplots( nrows = nrows, ncols = ncols, 
+            figsize = (sx, sy), squeeze = False )
+        #print( "NROWS=", nrows, "   NCOLS=", ncols, sx, sy )
+        for idx, i in enumerate( self.plotNames ):
+            ax = axes[idx % nrows, idx // nrows]
+            #plt.figure( i[2] + startIndex )
+            ax.set_title( i[1], fontsize = 18 )
+            ax.set_xlabel( "Time (s)", fontsize = 16 )
+            ax.set_ylabel( i[4], fontsize = 16 )
+            ax.tick_params(axis='both', which='major', labelsize=14)
             vtab = moose.vec( i[0] )
             if i[5] == 'spikeTime':
                 k = 0
                 tmax = moose.element( '/clock' ).currentTime
                 for j in vtab: # Plot a raster
                     y = [k] * len( j.vector )
-                    plt.plot( j.vector * i[3], y, linestyle = 'None', marker = '.', markersize = 10 )
-                    plt.xlim( 0, tmax )
+                    ax.plot( j.vector * i[3], y, linestyle = 'None', marker = '.', markersize = 10 )
+                    ax.set_xlim( 0, tmax )
                 
             else:
                 t = np.arange( 0, vtab[0].vector.size, 1 ) * vtab[0].dt
                 if len( t ) <=1:
                     print( "Warning: no points on plot {}. Check that your plot Dt < runtime.".format( i[1] ) )
                 for j in vtab:
-                    plt.plot( t, j.vector * i[3] )
+                    ax.plot( t, j.vector * i[3] )
             
         if hasattr( self, 'moogli' ) or len( self.wavePlotNames ) > 0:
             plt.ion()
@@ -1189,6 +1218,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
         if len( self.wavePlotNames ) > 0:
             for i in range( 3 ):
                 self.displayWavePlots()
+        plt.tight_layout()
         plt.show( block=block )
         
 
