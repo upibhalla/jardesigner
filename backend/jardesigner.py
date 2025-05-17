@@ -171,11 +171,16 @@ class rdesigneur:
     the model.
     """
     ################################################################
-    def __init__(self, jsonFile ):
+    def __init__(self, jsonFile, plotFile ):
         schemaFile = "rdesigneurSchema.json"
         if not jsonFile.endswith(".json"):
             print(f"Model file '{jsonFile}' is not a json file.")
             quit()
+        if plotFile != None:
+            if not (plotFile.endswith(".svg") or plotFile.endswith(".png") ):
+                print(f"Plot file '{plotFile}' should be svg or png.")
+                quit()
+        self.plotFile = plotFile
         with open(schemaFile) as f:
             try:
                 schema = json.load(f)
@@ -1219,7 +1224,13 @@ rdesigneur.rmoogli.updateMoogliViewer()
             for i in range( 3 ):
                 self.displayWavePlots()
         plt.tight_layout()
-        plt.show( block=block )
+        if self.plotFile == None:
+            plt.show( block=block )
+        else:
+            try:
+                plt.savefig( self.plotFile )
+            except Exception as e:
+                print(f"Error while saving jardesigner plot : {e}")
         
 
     def initWavePlots( self, startIndex ):
@@ -1955,8 +1966,9 @@ def main():
     parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
     parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
     parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
+    parser.add_argument( '-p', '--plotFile', type=str, help='Optional: Save plots to an svg file with the specified name, instead of displaying them.' )
     args = parser.parse_args()
-    rdes = rdesigneur( args.file )
+    rdes = rdesigneur( args.file, args.plotFile )
     rdes.buildModel()
     args.run = True
     if args.run:
