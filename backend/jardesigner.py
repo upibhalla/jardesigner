@@ -1153,7 +1153,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
         moose.start( dm["runtime"] )
         self._save()                                            
         rmoogli.notifySimulationEnd()
-        if dm["block"]:
+        if dm["block"] or self.plotFile != None:
             self.display( len( self.moogNames ) + 1)
         while True:
             time.sleep(1)
