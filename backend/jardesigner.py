@@ -242,17 +242,23 @@ class rdesigneur:
                 s = moose.element( j.path + '/stoich' )
                 print( "    | In {}, {} voxels X {} pools".format( j.name, j.mesh.num, s.numAllPools ) )
 
-    def buildModel( self, modelPath = '/model' ):
+    def buildModel( self, modelPath = '/model', numModels = 1, 
+            placementFunc = None, tweakFunc = None ):
         if moose.exists( modelPath ):
             print("rdesigneur::buildModel: Build failed. Model '",
                 modelPath, "' already exists.")
             return False
         self.model = moose.Neutral( modelPath )
         self.modelPath = modelPath
+        self.numModels = numModels
+        self.placementFunc = placementFunc
+        self.tweakFunc = tweakFunc
         funcs = [self.installCellFromProtos, self.buildPassiveDistrib
             , self.buildChanDistrib, self.buildSpineDistrib
+            , self.makeArrayOfModels
             , self.buildChemDistrib
-            , self._configureSolvers, self.buildAdaptors, self._buildStims
+            , self._configureChemSolvers
+            , self.buildAdaptors, self._buildStims
             , self._buildExtras
             , self._buildPlots, self._buildMoogli, self._buildFileOutput
             , self._configureHSolve
@@ -690,19 +696,18 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         self.elecid.spineDistribution = temp
 
-    def newChemDistrib( self, argList, newChemId ):
+    def newChemDistrib( self, argList, newChemId, comptDict ):
         # meshOrder = ['soma', 'dend', 'spine', 'psd', 'psd_dend', 'presyn_dend', 'presyn_spine', 'endo', 'endo_axial']
         chemSrc = argList['proto']
         elecPath = argList['path']
         meshType = argList['type']
         #chemSrc, elecPath, meshType, geom = argList[:4]
-        chemSrcObj = self.comptDict.get( chemSrc )
+        chemSrcObj = comptDict.get( chemSrc )
         if not chemSrcObj:
             raise BuildError( "newChemDistrib: Could not find chemSrcObj: " + chemSrc )
         if meshType in ['soma', 'endo_soma', 'psd_dend']:
             raise BuildError( "newChemDistrib: Can't yet handle meshType: " + meshType )
         if meshType == 'dend':
-            #diffLength = float( argList[4] )
             mesh = moose.NeuroMesh( newChemId.path + '/' + chemSrc )
             mesh.geometryPolicy = 'cylinder'
             mesh.separateSpines = 0
@@ -726,7 +731,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         self._moveCompt( chemSrcObj, mesh )
         #if meshType == 'dend': # has to be done after moveCompt
         #    mesh.diffLength = diffLength
-        self.comptDict[chemSrc] = mesh
+        comptDict[chemSrc] = mesh.path
 
     def buildSpineMesh( self, argList, newChemId ):
         chemSrc, elecPath, meshType, geom = argList[:4]
@@ -760,7 +765,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             elecList = self.elecid.compartmentsFromExpression[ pair ]
             mesh.buildOnDendrites( elecList, presynSpacing )
         else:
-            #elecList = self.elecid.spinesFromExpression[ pair ]
             elecList = self.elecid.compartmentsFromExpression[ pair ]
             mesh.buildOnSpineHeads( elecList )
         mesh.setRadiusStats( presynRadius, presynRadiusSdev )
@@ -787,25 +791,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         return mesh
 
 
-
-
-    def buildChemDistrib( self ):
-        if not hasattr( self, 'chemDistrib' ):
-            return
-        # Format [chemLibPath, elecPath, meshType, expr, ...]
-        # chemLibPath is name of a chemCompt on library. It can contain
-        # further nested compts within it, typically intended to 
-        # become endoMeshes, scaled as per original.
-
-        if len( self.chemDistrib ) == 0:
-            return
+    def _fixSpine( self ):
         # Hack to include PSD if spine is there but no PSD.
         # Needed because solvers expect it. May complain because no mol
         spineLine = [ii for ii in self.chemDistrib if ii['type']== 'spine']
         numPsd = len([ii for ii in self.chemDistrib if ii['type']== 'psd'])
         if len( spineLine ) > 0 and numPsd == 0:
-            #print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0][0] )  )
-            #quit()
             if moose.exists(self.chemid.path + '/' + spineLine[0][0]):
                 dummyParent = self.chemid.path
             elif moose.exists(self.chemid.path + '/kinetics/' + spineLine[0][0]):
@@ -815,45 +806,85 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 quit()
             psdLine = list( spineLine[0] )
             dummyPSD = moose.CubeMesh( dummyParent + "/dummyPSD" )
-            #dummyMol = moose.Pool( dummyPSD.path + "/Ca" )
-            #dummyMol.diffConst = 20e-12
             psdLine[0] = 'dummyPSD'
             psdLine[2] = 'psd'
-            #print( "PSDLINE = ", psdLine )
             self.chemDistrib.append( psdLine )
 
+    def buildChemDistrib( self ):
+        if not hasattr( self, 'chemDistrib' ):
+            return
+        if len( self.chemDistrib ) == 0:
+            return
+        self._fixSpine()
+        for model in self.modelList:
+            self._buildOneChemDistrib( model )
+
+    def _buildOneChemDistrib( self, model ):
         sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
-        self.chemid.name = 'temp_chem'
-        newChemId = moose.Neutral( self.model.path + '/chem' )
-        comptlist = self._assignComptNamesFromKkit_SBML()
-        self.comptDict = { i.name:i for i in comptlist }
-        #print( "COMPTDICT =================\n", self.comptDict )
+        oldChemId = moose.element( model.path + "/chem" )
+        oldChemId.name = 'temp_chem'
+        newChemId = moose.Neutral( model.path + '/chem' )
+        comptlist = self._assignComptNamesFromKkit_SBML( model.path )
+        comptDict = { i.name:i for i in comptlist }
+        #print( "COMPTDICT =================\n", comptDict )
         for i in sortedChemDistrib:
-            self.newChemDistrib( i, newChemId )
+            self.newChemDistrib( i, newChemId, comptDict )
         # We have to assign the compartments to neuromesh and
         # spine mesh only after they have all been connected up.
         for i in sortedChemDistrib:
-            #chemSrc, elecPath, meshType, geom = i[:4]
             chemSrc = i['proto']
             elecPath = i['path']
             meshType = i['type']
             if i['type'] == 'dend':
-                dendMesh = self.comptDict[i['proto']]
+                dendMesh = moose.element(comptDict[i['proto']])
+                print( "DendMesh path = ", dendMesh.path )
                 #pair = i['path'] + " " + geom
                 pair = i['path'] + " 1"
-                #dendMesh.diffLength = float( i[4] )
                 dendMesh.diffLength = i.get( 'diffusionLength', self.diffusionLength )
 
                 dendMesh.subTree = self.elecid.compartmentsFromExpression[ pair ]
             if i['type'] == 'endo' or i['type'] == 'endo_axial': 
                 # Should come after dend
                 mesh = self.buildEndoMesh( i, newChemId )
-                chemSrcObj = self.comptDict.get( i['proto'] )
+                chemSrcObj = comptDict.get( i['proto'] )
                 self._moveCompt( chemSrcObj, mesh )
-                self.comptDict[chemSrc] = mesh
+                comptDict[chemSrc] = mesh.path
 
-        moose.delete( self.chemid )
+        moose.delete( oldChemId )
         self.chemid = newChemId
+        if model == self.modelList[0]:
+            self.comptDict = comptDict
+
+    ################################################################
+    # Here we make copies of the model in nx and ny.
+    ################################################################
+
+    def _moveModelObj( self, obj, idx ):
+        if not self.placementFunc:
+            return
+        dx, dy, dz = self.placementFunc( self.numModels, idx )
+        for ee in moose.wildcardFind(obj.path+"/##[ISA=CompartmentBase]"):
+            ee.x += dx
+            ee.x0 += dx
+            ee.y += dy
+            ee.y0 += dy
+            ee.z += dz
+            ee.z0 += dz
+            #ee.displace( dx, dy, dz ) # Don't have it defined in pybind11
+            #print( ee.x0, ee.y0, ee.z0 )
+
+    def makeArrayOfModels( self ):
+        self.modelList = []
+        self._moveModelObj( self.model, 0 )
+        self.modelList.append(self.model)
+
+        for idx in range( 1, self.numModels ):
+            name = "{}_{}".format( self.model.name, idx )
+            dup = moose.copy( self.model, "/", name, 1 ) 
+            self._moveModelObj( dup[0], idx )
+            self.modelList.append( dup[0] ) # dup is a vec
+        # I wish I had an alias capability in MOOSE
+        #self.model.name = self.model.name = "_0_0"
 
     ################################################################
     # Here we call any extra building function supplied by user.
@@ -862,7 +893,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     def _buildExtras( self ):
         # self.extraBuildFunction( self )
-        pass
+        if not self.tweakFunc:
+            return
+        for idx, model in enumerate( self.modelList ):
+            self.tweakFunc( idx, model.path )
 
 
     ################################################################
@@ -974,6 +1008,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def _buildPlots( self ):
         if not hasattr( self, 'plots' ):
             return
+        for model in self.modelList:
+            self._buildOnePlot( model )
+
+    def _buildOnePlot( self, model ):
         knownFields = {
             'Vm':('CompartmentBase', 'getVm', 1000, 'Memb. Potential (mV)' ),
             'spikeTime':('CompartmentBase', 'getVm', 1, 'Spike Times (s)'),
@@ -995,15 +1033,16 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             'volume':('PoolBase', 'getVolume', 1e18, 'Volume (um^3)' ),
             'current':('VClamp', 'getCurrent', 1e9, 'Holding Current (nA)')
         }
-        graphs = moose.Neutral( self.modelPath + '/graphs' )
+        graphs = moose.Neutral( model.path + '/graphs' )
+        elecid = moose.element( model.path + '/elec' )
         dummy = moose.element( '/' )
         k = 0
         for i in self.plots:
             # GeomExpr removed for plots
             #pair = i['path'] + ' ' + i.geom_expr 
             pair = i['path'] + ' 1'
-            dendCompts = self.elecid.compartmentsFromExpression[ pair ]
-            #spineCompts = self.elecid.spinesFromExpression[ pair ]
+            dendCompts = elecid.compartmentsFromExpression[ pair ]
+            #spineCompts = elecid.spinesFromExpression[ pair ]
             plotObj, plotField = self._parseComptField( dendCompts, i, knownFields )
             numPlots = sum( q != dummy for q in plotObj )
             #print( "PlotList: {0}: numobj={1}, field ={2}, nd={3}, ns={4}".format( pair, numPlots, plotField, len( dendCompts ), len( spineCompts ) ) )
@@ -1372,9 +1411,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
     ################################################################
     # Here we set up the stims
     ################################################################
-    def _buildStims( self ):
-        if not hasattr( self, 'stims' ):
-            return
+    def _buildOneStim( self, model ):
         knownFields = {
                 'inject':('CompartmentBase', 'setInject'),
                 'Ca':('CaConcBase', 'setCa'),
@@ -1387,7 +1424,9 @@ rdesigneur.rmoogli.updateMoogliViewer()
                 'randsyn':('SynChan', 'addSpike'),
                 'periodicsyn':('SynChan', 'addSpike')
         }
-        stims = moose.Neutral( self.modelPath + '/stims' )
+        stims = moose.Neutral( model.path + '/stims' )
+        elecid = moose.element( model.path + '/elec' )
+        #expr = model.path[7] + "e-8*(t>0.1)*(t<0.2)" if len(model.path)>7 else "0"
         k = 0
         # rstim class has {fname, path, field, dt, flush_steps }
         for i in self.stims:
@@ -1397,7 +1436,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
             else:   # Backward compat. In the json file it is cleaner.
                 field = stimType
             pair = i['path'] + " " + i['geomExpr']
-            dendCompts = self.elecid.compartmentsFromExpression[ pair ]
+            dendCompts = elecid.compartmentsFromExpression[ pair ]
             if field == 'vclamp':
                 stimObj = self._buildVclampOnCompt( dendCompts, [] )
                 stimField = 'commandIn'
@@ -1417,19 +1456,30 @@ rdesigneur.rmoogli.updateMoogliViewer()
                 k += 1
                 func = moose.Function( funcname )
                 func.expr = i['expr']
+                #func.expr = expr
                 func.doEvalAtReinit = 1
                 for q in stimObj:
                     moose.connect( func, 'valueOut', q, stimField )
                     #print( "connecting stim: ", func.path, q.path + "[", q.dataIndex, "]." + stimField )
                 if stimField == "increment": # Has to be under Ksolve
                     moose.move( func, q )
+        #print( "Built Stim on ", model.path )
+
+    def _buildStims( self ):
+        if not hasattr( self, 'stims' ):
+            return
+        for model in self.modelList:
+            self._buildOneStim( model )
 
     ################################################################
     def _configureHSolve( self ):
         if not self.turnOffElec:
-            hsolve = moose.HSolve( self.elecid.path + '/hsolve' )
-            hsolve.dt = self.elecDt
-            hsolve.target = self.soma.path
+            for model in self.modelList:
+                elecidpath = model.path + '/elec'
+                hsolve = moose.HSolve( elecidpath + '/hsolve' )
+                hsolve.dt = self.elecDt
+                #hsolve.target = self.soma.path
+                hsolve.target = elecidpath + '/soma'
 
 # Utility function for setting up clocks.
     def _configureClocks( self ):
@@ -1508,7 +1558,7 @@ rdesigneur.rmoogli.updateMoogliViewer()
         # call it this way. Haven't updated.
         #self._buildNeuroMesh()
 
-        self._configureSolvers()
+        self._configureChemSolvers()
         for i in self.adaptors:
             #  print(i)
             assert len(i) >= 8
@@ -1652,65 +1702,81 @@ rdesigneur.rmoogli.updateMoogliViewer()
                 return True
         return False
 
-    def _assignComptNamesFromKkit_SBML( self ):
-        comptList = moose.wildcardFind( self.chemid.path + '/##[ISA=ChemCompt]' )
+    def _assignComptNamesFromKkit_SBML( self, modelpath ):
+        comptList = moose.wildcardFind( modelpath + '/temp_chem/##[ISA=ChemCompt]' )
         if len( comptList ) == 0:
-            print( "EMPTY comptlist: ", self.chemid.path , ", found kinetics" )
+            print( "EMPTY comptlist: ", modelpath, "/temp_chem, found kinetics" )
         return comptList
 
 
     #################################################################
-    def _configureSolvers( self ):
-        if not hasattr( self, 'chemid' ) or len( self.chemDistrib ) == 0:
-            return
-        fixXreacs.fixXreacs( self.chemid.path )
-        sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
-        spineMeshJunctionList = []
-        psdMeshJunctionList = []
-        endoMeshJunctionList = []
-        for line in sortedChemDistrib:
-            chemSrc = line['proto']
-            elecPath = line['path']
-            meshType = line['type']
-            #chemSrc, elecPath, meshType, geom = line[:4]
-            mesh = self.comptDict[ chemSrc ]
-            if self.useGssa and meshType != 'dend':
-                ksolve = moose.Gsolve( mesh.path + '/ksolve' )
-            else:
-                ksolve = moose.Ksolve( mesh.path + '/ksolve' )
-                ksolve.method = self.odeMethod
-            dsolve = moose.Dsolve( mesh.path + '/dsolve' )
-            stoich = moose.Stoich( mesh.path + '/stoich' )
-            stoich.compartment = mesh
-            stoich.ksolve = ksolve
-            stoich.dsolve = dsolve
-            if meshType == 'psd':
-                if len( moose.wildcardFind( mesh.path + '/##[ISA=PoolBase     ]' ) ) == 0:
-                    moose.Pool( mesh.path + '/dummy' )
-            stoich.reacSystemPath = mesh.path + "/##"
-            if meshType == 'spine':
-                spineMeshJunctionList.append( [mesh.path, line[4], dsolve])
-            if meshType == 'psd':
-                psdMeshJunctionList.append( [mesh.path, line[4], dsolve] )
-            elif meshType == 'endo':
-                # Endo mesh is easy as it explicitly defines surround.
-                endoMeshJunctionList.append( [mesh.path, line[4], dsolve] )
-        
-        for sm, pm in zip( spineMeshJunctionList, psdMeshJunctionList ):
+
+    def _buildChemLine( self, line, smjl, pmjl, emjl, comptDict  ):
+        chemSrc = line['proto']
+        elecPath = line['path']
+        meshType = line['type']
+        meshpath = comptDict[ chemSrc ]
+        if self.useGssa and meshType != 'dend':
+            ksolve = moose.Gsolve( meshpath + '/ksolve' )
+        else:
+            ksolve = moose.Ksolve( meshpath + '/ksolve' )
+            ksolve.method = self.odeMethod
+        dsolve = moose.Dsolve( meshpath + '/dsolve' )
+        stoich = moose.Stoich( meshpath + '/stoich' )
+        stoich.compartment = moose.element(meshpath)
+        stoich.ksolve = ksolve
+        stoich.dsolve = dsolve
+        if meshType == 'psd':
+            if len( moose.wildcardFind( meshpath + '/##[ISA=PoolBase     ]' ) ) == 0:
+                moose.Pool( meshpath + '/dummy' )
+        stoich.reacSystemPath = meshpath + "/##"
+        if meshType == 'spine':
+            smjl.append( [meshpath, line[4], dsolve])
+        if meshType == 'psd':
+            pmjl.append( [meshpath, line[4], dsolve] )
+        elif meshType == 'endo':
+            # Endo mesh is easy as it explicitly defines surround.
+            emjl.append( [meshpath, line[4], dsolve] )
+
+    # ComptDict was set up with respect to the original single model.
+    def _buildChemJunctions( self, smjl, pmjl, emjl, comptdict ):
+        for sm, pm in zip( smjl, pmjl ):
             # Locate associated NeuroMesh and PSD mesh
             if sm[1] == pm[1]:  # Check for same parent dend.
-                nmesh = self.comptDict[ sm[1] ]
-                dmdsolve = moose.element( nmesh.path + "/dsolve" )
+                nmeshpath = comptDict[ sm[1] ]
+                print( "NMESHPATH = ", nmeshpath )
+                dmdsolve = moose.element( nmeshpath + "/dsolve" )
                 dmdsolve.buildNeuroMeshJunctions( sm[2], pm[2] )
                 # set up the connections so that the spine volume scaling can happen
                 self.elecid.setSpineAndPsdMesh( moose.element(sm[0]), moose.element(pm[0]))
                 self.elecid.setSpineAndPsdDsolve( sm[2], pm[2] )
 
-        for em in endoMeshJunctionList:
+        for em in emjl:
             emdsolve = em[2]
-            surroundMesh = self.comptDict[ em[1] ]
-            surroundDsolve = moose.element( surroundMesh.path + "/dsolve" )
+            surroundMeshPath = comptDict[ em[1]]
+            print( "surroundMESHPATH = ", surroundMeshPath )
+            surroundDsolve = moose.element( surroundMeshpath + "/dsolve" )
             emdsolve.buildMeshJunctions( surroundDsolve )
+        print( "finished buildChemJunctions" )
+
+    def _configureChemSolvers( self ):
+        if not hasattr( self, 'chemid' ) or len( self.chemDistrib ) == 0:
+            return
+        for model in self.modelList:
+            tempComptDict = { key:val.replace( "model", model.name ) for key, val in self.comptDict.items() }
+            chempath = model.path + self.chemid.name
+            fixXreacs.fixXreacs( chempath )
+            sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
+            spineMeshJunctionList = []
+            psdMeshJunctionList = []
+            endoMeshJunctionList = []
+            for line in sortedChemDistrib:
+                self._buildChemLine( line, spineMeshJunctionList,
+                    psdMeshJunctionList, endoMeshJunctionList, 
+                    tempComptDict )
+            self._buildChemJunctions( spineMeshJunctionList,
+                    psdMeshJunctionList, endoMeshJunctionList, 
+                    tempComptDict )
 
     ################################################################
 
@@ -1961,15 +2027,31 @@ class rfile:
         else:
             raise BuildError( "rfile initialization failed" )
 
+def squareGridPlacementFunc( numModels, idx ):
+    nx = int( np.sqrt( numModels ) )
+    return 0.5e-3 * (idx // nx), 0.5e-3 * (idx % nx), 0.0
+
+def randomPlacementFunc( numModels, idx ):
+    nx = int( np.sqrt( numModels ) )
+    return np.random.random()*0.5e-3, np.random.random()*0.5e-3, 0.0
+
+
 
 def main():
     parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
     parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
     parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
     parser.add_argument( '-p', '--plotFile', type=str, help='Optional: Save plots to an svg file with the specified name, instead of displaying them.' )
+    parser.add_argument( '--placementFunc', type=str, help='Optional: Pick a builtin placement function for multiple models. Options: squareGrid, random. Default: None' )
+    parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
     args = parser.parse_args()
     rdes = rdesigneur( args.file, args.plotFile )
-    rdes.buildModel()
+    pf = None
+    if args.placementFunc == "squareGrid":
+        pf = squareGridPlacementFunc
+    elif args.placementFunc == "random":
+        pf = randomPlacementFunc
+    rdes.buildModel( numModels = args.numModels, placementFunc = pf )
     args.run = True
     if args.run:
         if not rdes._displayMoogli():
