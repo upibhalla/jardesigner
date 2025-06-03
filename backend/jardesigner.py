@@ -167,13 +167,17 @@ def dummyBuildFunction( rdes ):
 class rdesigneur:
     """The rdesigneur class is used to build models incorporating
     reaction-diffusion and electrical signaling in neurons.
-    It takes a single argument: the name of a json file which specifies
-    the model.
+    It takes two arguments: Arg 1 is model specifier which can either be
+    a string with the model as a dict, or a filename for a json file.
+    Arg 2 is the name of the output plot file and can be None.
     """
     ################################################################
-    def __init__(self, jsonFile, plotFile ):
+    def __init__(self, jsonFile = None, plotFile = None, jsonData = None ):
         schemaFile = "rdesigneurSchema.json"
-        if not jsonFile.endswith(".json"):
+        if not jsonFile and not jsonData:
+            print( "No model specified either as file or data" )
+            quit()
+        if jsonFile and not jsonFile.endswith(".json"):
             print(f"Model file '{jsonFile}' is not a json file.")
             quit()
         if plotFile != None:
@@ -188,12 +192,15 @@ class rdesigneur:
                 print(f"schema file {schemaFile} did not load")
                 print( e )
                 quit()
-        with open(jsonFile) as f:
-            try:
-                data = json.load(f)
-            except:
-                print(f"{jsonFile} did not load")
-                quit()
+        if jsonFile:
+            with open(jsonFile) as f:
+                try:
+                    data = json.load(f)
+                except:
+                    print(f"{jsonFile} did not load")
+                    quit()
+        if jsonData:
+            data = jsonData
         try:
             #jsonschema.validate(instance=data, schema=schema)
             data = addDefaultsRecursive( data, schema )
