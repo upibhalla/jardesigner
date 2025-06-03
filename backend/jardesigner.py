@@ -174,6 +174,10 @@ class rdesigneur:
     ################################################################
     def __init__(self, jsonFile = None, plotFile = None, jsonData = None ):
         schemaFile = "rdesigneurSchema.json"
+        # Construct the absolute path to the schema file
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        schemaFile_path = os.path.join(script_dir, schemaFile)
+
         if not jsonFile and not jsonData:
             print( "No model specified either as file or data" )
             quit()
@@ -185,11 +189,11 @@ class rdesigneur:
                 print(f"Plot file '{plotFile}' should be svg or png.")
                 quit()
         self.plotFile = plotFile
-        with open(schemaFile) as f:
+        with open(schemaFile_path) as f:
             try:
                 schema = json.load(f)
             except json.JSONDecodeError as e:
-                print(f"schema file {schemaFile} did not load")
+                print(f"schema file {schemaFile_path} did not load")
                 print( e )
                 quit()
         if jsonFile:
