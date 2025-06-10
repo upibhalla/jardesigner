@@ -1,0 +1,12 @@
+{
+  "main": "This section defines the passive electrical properties of the membrane, which apply uniformly to all parts of the neuron unless overridden by another distribution rule.",
+  "fields": {
+    "path": "The morphological path where these passive properties will be applied. Use 'soma', 'dend', 'axon', or a specific path like '/cell/dend[0]'. Typically, a single entry with path 'soma' is used to set global properties.",
+    "leakReversalPotential": "The reversal potential (Em) for the leak current, which is the resting membrane potential of the cell, in millivolts (mV).",
+    "initialPotential": "The initial membrane potential (initVm) of the cell at the start of the simulation, in millivolts (mV). This is usually the same as the leak reversal potential.",
+    "membraneCapacitance": "The specific membrane capacitance (CM) of the neuronal membrane. Units: Farads per square meter (F/m^2).",
+    "membraneResistivity": "The specific membrane resistance (RM) of the neuronal membrane. Units: Ohm-meters squared (Ohm.m^2).",
+    "axialResistivity": "The specific axial (or cytoplasmic) resistivity (RA) of the intracellular space. Units: Ohm-meters (Ohm.m)."
+  }
+}
+

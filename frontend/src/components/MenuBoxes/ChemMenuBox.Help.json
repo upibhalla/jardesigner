@@ -1,0 +1,18 @@
+{
+  "headings": {
+    "prototypes": "This section is for defining the different types of chemical signaling pathways to populate parts of the cell. You can create multiple 'prototypes' from built-in models, load them from SBML or kkit files, or define them in memory.",
+    "distributions": "This section is for defining the rules that place your chemical prototypes into specific subcellular locations."
+  },
+  "prototypes": {
+    "type": "Select the base model for the chemical pathway. Choosing 'SBML' or 'kkit' allows you to specify a file-based model. 'User Func' and 'In-memory' are for advanced, code-defined models.",
+    "source": "For file-based types (SBML, kkit), this is the path to the model file. For 'User Func', it's the function name. For 'In-memory', it's a unique identifier for the model defined elsewhere.",
+    "name": "A unique name for this chemical prototype. It defaults to the 'Type' but can be edited to be more descriptive."
+  },
+  "distributions": {
+    "prototype": "Select which of the defined chemical prototypes to distribute with this rule.",
+    "path": "The morphological path where this chemical model will be located (e.g., 'soma', 'dend', or a specific path like '/cell/dend[0]').",
+    "location": "The specific subcellular compartment where the model will be placed. This maps to the 'type' field in the final JSON.",
+    "diffusionLength": "Optional. Sets a specific diffusion length for this chemical model at this location, in microns (μm). This overrides the global diffusion length for this pathway."
+  }
+}
+
