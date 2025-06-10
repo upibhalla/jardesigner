@@ -870,7 +870,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     # Here we make copies of the model in nx and ny.
     ################################################################
 
-    def _moveModelObj( self, obj, idx ):
+    def _positionModelObj( self, obj, idx ):
         if not self.placementFunc:
             return
         dx, dy, dz = self.placementFunc( self.numModels, idx )
@@ -886,13 +886,14 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     def makeArrayOfModels( self ):
         self.modelList = []
-        self._moveModelObj( self.model, 0 )
+        self._positionModelObj( self.model, 0 )
         self.modelList.append(self.model)
+        parent = self.model.parent.path
 
         for idx in range( 1, self.numModels ):
             name = "{}_{}".format( self.model.name, idx )
-            dup = moose.copy( self.model, "/", name, 1 ) 
-            self._moveModelObj( dup[0], idx )
+            dup = moose.copy( self.model, parent, name, 1 )
+            self._positionModelObj( dup[0], idx )
             self.modelList.append( dup[0] ) # dup is a vec
         # I wish I had an alias capability in MOOSE
         #self.model.name = self.model.name = "_0_0"
