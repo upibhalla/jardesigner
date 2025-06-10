@@ -1,0 +1,34 @@
+{
+  "tabs": {
+    "file": "Load a morphology from an external file (e.g., SWC, HOC). This provides the most detailed and realistic cell structures.",
+    "soma": "A simple model representing only the cell body (soma) as a single cylinder. Useful for very basic simulations.",
+    "ballAndStick": "A classic simplified model consisting of a spherical soma and a single, unbranched cylindrical dendrite.",
+    "yBranch": "A model with a soma, a primary dendrite, and a single bifurcation (split) into two daughter branches."
+  },
+  "fields": {
+    "file": {
+      "source": "Click to select the morphology file from your local system. Supported formats include .swc, .hoc, etc."
+    },
+    "soma": {
+      "somaDia": "The diameter of the soma (cell body) in microns (μm).",
+      "somaLen": "The length of the soma (cell body) in microns (μm). For a sphere, this should be equal to the diameter."
+    },
+    "ballAndStick": {
+      "somaDia": "The diameter of the 'ball' (soma) in microns (μm).",
+      "somaLen": "The length of the soma cylinder in microns (μm). For a sphere, this should be equal to the diameter.",
+      "dendDia": "The diameter of the 'stick' (dendrite) in microns (μm).",
+      "dendLen": "The total length of the dendrite in microns (μm).",
+      "dendNumSeg": "The number of discrete electrical compartments to divide the dendrite into. More segments provide higher accuracy but increase computation time. You probably don't need segments shorter than 100 microns. Must be an integer ≥ 1."
+    },
+    "yBranch": {
+      "somaDia": "The diameter of the soma in microns (μm).",
+      "somaLen": "The length of the soma in microns (μm).",
+      "dendDia": "The diameter of the main dendrite trunk before it splits, in microns (μm).",
+      "dendLen": "The length of the main dendrite trunk, in microns (μm).",
+      "dendNumSeg": "The number of segments (electrical compartments) into which the main dendrite trunk is subdivided. Usually you don't need segments < 100 microns.",
+      "branchDia": "The diameter of the two identical daughter branches after the split, in microns (μm).",
+      "branchLen": "The length of each of the two daughter branches, in microns (μm).",
+      "branchNumSeg": "The number of segments for each daughter branch. Usually you don't need segments < 100 microns."
+    }
+  }
+}

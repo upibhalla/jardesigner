@@ -1,0 +1,28 @@
+{
+  "headings": {
+    "prototypes": "This section is to define a set of prototype spines which will be duplicated and spread over the cell according to the 'Distributions' section below. Completed prototypes are set in a tab with their chosen name.",
+    "distributions": "This section is for defining the rules that place your spine prototypes onto the neuron's surface."
+  },
+  "prototypes": {
+    "type": "Select the base electrical model for the spine. 'Excitatory With Ca' includes calcium dynamics, making it suitable for plasticity studies.",
+    "name": "A unique name for this spine prototype. It is auto-generated when you change the 'Type' but can be edited to be more descriptive.",
+    "source": "The underlying simulation function used to create this spine. This is determined automatically by the selected 'Type' and is not editable.",
+    "shaftDiameter": "The diameter of the spine's shaft (the part connecting to the dendrite) in microns (μm).",
+    "shaftLength": "The length of the spine's shaft in microns (μm).",
+    "headDiameter": "The diameter of the spine's head in microns (μm).",
+    "headLength": "The length of the spine's head in microns (μm).",
+    "gluRGbar": "Maximum conductance for the AMPA/Kainate (GluR) receptor on this spine. This field only applies to active spine types. Units: Siemens per square meter (S/m^2).",
+    "nmdaRGbar": "Maximum conductance for the NMDA receptor on this spine. This field only applies to active spine types. Units: Siemens per square meter (S/m^2)."
+  },
+  "distributions": {
+    "prototype": "Select which of the defined spine prototypes to distribute with this rule.",
+    "path": "The morphological path where spines will be placed (e.g., 'dend' for all dendrites, or a specific path like '/cell/dend[2]').",
+    "spacing": "The average distance between spines along the specified path, in microns (μm).",
+    "minSpacing": "The minimum allowed distance between any two spines, in microns (μm).",
+    "sizeScale": "A multiplier to scale the size of all dimensions of the selected spine prototype (e.g., 1.2 makes it 20% larger).",
+    "sizeStdDev": "The standard deviation for the size scaling, allowing for random variability in the size of each spine.",
+    "angle": "The mean angle (in radians) at which spines emerge from the dendrite, where 0 is perpendicular to the surface.",
+    "angleStdDev": "The standard deviation for the emergence angle (in radians), allowing for random variability in spine orientation."
+  }
+}
+
