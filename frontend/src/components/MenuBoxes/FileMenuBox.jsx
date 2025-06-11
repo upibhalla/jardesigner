@@ -2,15 +2,13 @@ import React, { useState, useRef } from 'react';
 import {
     Box, Typography, Button, Grid, TextField, MenuItem
 } from '@mui/material';
-import Ajv from 'ajv';
-// Schema might be needed for validation during load
-// import schema from '../../rdesigneurSchema.json'; // Adjust path if needed
 
-// Component signature includes setJsonContent and getCurrentJsonData
-const FileMenuBox = ({ setJsonContent, getCurrentJsonData }) => {
+// Component signature includes setJsonContent, getCurrentJsonData, and onClearModel
+const FileMenuBox = ({ setJsonContent, getCurrentJsonData, onClearModel }) => {
     // States for "Save Model"
     const [modelFileName, setModelFileName] = useState('model');
     const [modelFileType, setModelFileType] = useState('json'); // Currently only supports JSON
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
 
     const fileInputRef = useRef();
 
@@ -21,25 +19,6 @@ const FileMenuBox = ({ setJsonContent, getCurrentJsonData }) => {
             alert('Invalid JSON structure: Not an object.');
             return false;
         }
-        // Add schema validation if needed (requires schema import)
-        /*
-        try {
-            const ajv = new Ajv();
-            const validate = ajv.compile(schema); // Make sure schema is imported
-            const valid = validate(jsonContent);
-
-            if (!valid) {
-                console.error('Schema Validation errors:', validate.errors);
-                alert(`Invalid JSON structure:\n${ajv.errorsText(validate.errors)}`);
-                return false;
-            }
-            return true;
-        } catch (error) {
-             console.error("Error loading or compiling schema:", error);
-             alert("Could not load or compile the JSON schema for validation.");
-             return false; // Cannot validate
-        }
-        */
        return true; // Basic validation passed
     };
 
@@ -136,6 +115,13 @@ const FileMenuBox = ({ setJsonContent, getCurrentJsonData }) => {
          }
     };
 
+    const handleConfirmClear = () => {
+        if (onClearModel) {
+            onClearModel();
+        }
+        setShowClearConfirm(false); // Hide confirmation after action
+    };
+
     // --- JSX Rendering ---
     return (
         <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
@@ -170,6 +156,38 @@ const FileMenuBox = ({ setJsonContent, getCurrentJsonData }) => {
                     </Button>
                      <input type="file" accept=".json" style={{ display: 'none' }} ref={fileInputRef} onChange={handleLoadModel} />
                 </Grid>
+            </Grid>
+            
+            {/* === Clear Model Section === */}
+            <Typography variant="h6" gutterBottom>Clear Model</Typography>
+            <Grid container spacing={1.5} sx={{ p: 1.5, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Grid item xs={12}>
+                    <Button
+                        variant="contained"
+                        fullWidth
+                        sx={{ bgcolor: '#e0e0e0', color: 'black', ':hover': { bgcolor: '#bdbdbd' } }}
+                        onClick={() => setShowClearConfirm(true)}
+                    >
+                        Clear Model to Default
+                    </Button>
+                </Grid>
+                 {showClearConfirm && (
+                    <Grid item xs={12} sx={{ mt: 2, textAlign: 'center' }}>
+                        <Typography variant="subtitle1" gutterBottom>Are you sure?</Typography>
+                        <Grid container spacing={2}>
+                            <Grid item xs={6}>
+                                <Button variant="contained" color="error" fullWidth onClick={handleConfirmClear}>
+                                    Yes
+                                </Button>
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Button variant="contained" fullWidth sx={{ bgcolor: '#e0e0e0', color: 'black', ':hover': { bgcolor: '#bdbdbd' } }} onClick={() => setShowClearConfirm(false)}>
+                                    No, do not clear model
+                                </Button>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                )}
             </Grid>
         </Box>
     );

@@ -40,7 +40,7 @@ import isEqual from 'lodash/isEqual';
 
 // --- Initial State / Defaults ---
 const initialJsonData = {
-  filetype: "rdesigneur",
+  filetype: "jardesigner",
   version: "1.0",
   modelPath: "/model",
   diffusionLength: 2e-6,
@@ -81,19 +81,8 @@ const initialJsonData = {
 
 const requiredKeys = ["filetype", "version"];
 
-const App = () => {
-  const [activeMenu, setActiveMenu] = useState(null);
-  const [jsonData, setJsonData] = useState(initialJsonData);
-  const [jsonContent, setJsonContent] = useState(() => JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
-  const activeMenuBoxRef = useRef(null);
-
-  // --- State for Plot Display in GraphWindow ---
-  const [svgPlotFilename, setSvgPlotFilename] = useState(null);
-  const [isPlotReady, setIsPlotReady] = useState(false);
-  const [plotError, setPlotError] = useState(''); // Error specific to plot generation/fetching
-
-  // --- Compaction Function (remains the same) ---
-  function compactJsonData(currentData, defaultData) {
+// --- Compaction Function moved outside the component to avoid being a dependency ---
+function compactJsonData(currentData, defaultData) {
     const compacted = {};
     for (const key in currentData) {
         if (Object.hasOwnProperty.call(currentData, key)) {
@@ -130,7 +119,19 @@ const App = () => {
         }
     }
     return compacted;
-  }
+}
+
+
+const App = () => {
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [jsonData, setJsonData] = useState(initialJsonData);
+  const [jsonContent, setJsonContent] = useState(() => JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
+  const activeMenuBoxRef = useRef(null);
+
+  // --- State for Plot Display in GraphWindow ---
+  const [svgPlotFilename, setSvgPlotFilename] = useState(null);
+  const [isPlotReady, setIsPlotReady] = useState(false);
+  const [plotError, setPlotError] = useState(''); // Error specific to plot generation/fetching
 
   // --- Callbacks for JSON data (remain mostly the same) ---
   const updateJsonData = useCallback((newDataPart) => {
@@ -161,6 +162,11 @@ const App = () => {
          console.error("App.jsx: Error parsing loaded JSON string:", e);
          alert(`Failed to load model: ${e.message}`);
      }
+  }, []);
+
+  const handleClearModel = useCallback(() => {
+    setJsonData(initialJsonData);
+    setJsonContent(JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
   }, []);
 
   const getCurrentJsonData = useCallback(() => {
@@ -202,6 +208,7 @@ const App = () => {
                 ref={activeMenu === 'File' ? activeMenuBoxRef : null}
                 setJsonContent={updateJsonString}
                 getCurrentJsonData={getCurrentJsonData}
+                onClearModel={handleClearModel}
             />,
       SimOutput: <SimOutputMenuBox
                      ref={activeMenu === 'SimOutput' ? activeMenuBoxRef : null}
@@ -287,7 +294,7 @@ const App = () => {
                 getChemProtos={getChemProtos}
             />,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData, getChemProtos, handlePlotDataUpdate, clearPlotData]);
+  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel]);
 
 
   return (
@@ -335,4 +342,3 @@ const App = () => {
 };
 
 export default App;
-
