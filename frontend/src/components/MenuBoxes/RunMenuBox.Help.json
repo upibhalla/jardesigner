@@ -1,0 +1,41 @@
+{
+  "main": "This section controls the execution of the simulation and global configuration parameters.",
+  "runControls": {
+    "start": "Saves the current configuration and starts the simulation from the beginning.",
+    "pause": "Pauses the currently running simulation. Not yet implemented.",
+    "reset": "Stops the simulation and resets the simulation time to zero.",
+    "totalRuntime": "The total duration of the simulation in seconds.",
+    "currentTime": "The current elapsed time of the running simulation."
+  },
+  "clocks": {
+    "main": "Defines the time steps (dt) for different parts of the simulation engine. Smaller values increase accuracy but also increase computation time.",
+    "elecDt": "The time step for the electrical (channel) calculations.",
+    "chemDt": "The time step for the chemical signaling (pathway) calculations.",
+    "diffusionDt": "The time step for the diffusion calculations.",
+    "elecPlotDt": "The sampling interval for saving electrical data for plots.",
+    "chemPlotDt": "The sampling interval for saving chemical data for plots.",
+    "functionDt": "The time step for user-defined functions and adaptors.",
+    "statusDt": "The time interval for updating the simulation status. A value of 0 updates as frequently as possible."
+  },
+  "configuration": {
+    "main": "Global settings that affect the entire simulation model and environment.",
+    "flags": "Toggle various simulation behaviors on or off.",
+    "otherSettings": "Other numerical and path settings for the simulation."
+  },
+  "flags": {
+    "turnOffElec": "If checked, all electrical calculations (ion channels, membrane potential) are disabled. This is useful for focusing purely on chemical signaling.",
+    "useGssa": "If checked, uses the Gibson-Bruck Gillespie Stochastic Simulation Algorithm (GSSA) for chemical reactions, which is more accurate for low molecule counts.",
+    "verbose": "If checked, the simulation will print detailed status updates and debugging information to the console.",
+    "combineSegments": "If checked, the simulator will attempt to combine adjacent morphological segments with identical properties to speed up calculations.",
+    "benchmark": "If checked, the simulation will run in a benchmark mode, measuring and reporting performance metrics.",
+    "reuseLibraryCell": "If checked, the simulation will reuse a pre-compiled version of the cell from the library if available, speeding up initialization."
+  },
+  "otherSettings": {
+    "modelPath": "The path within the simulation environment where the model components (cell, channels, etc.) are located.",
+    "odeMethod": "The numerical method used for solving ordinary differential equations (ODEs) in the chemical signaling pathways.",
+    "diffusionLength": "The characteristic length for diffusion calculations, in microns (µm). This affects how far molecules spread per time step.",
+    "temperature": "The simulation temperature in degrees Celsius (°C). This affects the rates of channel gating and chemical reactions.",
+    "randSeed": "The seed for the random number generator. Using the same seed ensures that simulations with stochastic elements are reproducible.",
+    "numWaveFrames": "The number of frames to generate for animated 'wave' plots in the 3D visualization."
+  }
+}

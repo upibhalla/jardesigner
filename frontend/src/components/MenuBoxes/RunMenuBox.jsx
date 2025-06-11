@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel } from '@mui/material';
+import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+
+// By importing the JSON file, the help text is bundled with the component.
+import helpText from './RunMenuBox.Help.json';
 
 // Helper to safely convert value to string for text fields
 const safeToString = (value, defaultValue = '') => {
@@ -22,7 +26,7 @@ const defaultRunConfig = {
     diffDt: '10e-3',
     funcDt: '100e-6',
     statusDt: '0.0',
-    diffusionLength: '2e-6',
+    diffusionLength: '2e-6', // Default in meters for backend
     randseed: '1234',
     temperature: '32',
     numWaveFrames: '100',
@@ -35,6 +39,12 @@ const defaultRunConfig = {
     modelPath: '/model',
     odeMethod: 'lsoda',
 };
+
+const InfoTooltip = ({ title }) => (
+    <Tooltip title={title}>
+        <InfoOutlinedIcon sx={{ fontSize: '1.1rem', color: 'action.active', cursor: 'pointer' }} />
+    </Tooltip>
+);
 
 
 const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, onPlotDataUpdate, onClearPlotData }) => {
@@ -50,20 +60,27 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         function: safeToString(currentConfig?.funcDt, defaultRunConfig.funcDt),
         status: safeToString(currentConfig?.statusDt, defaultRunConfig.statusDt),
     }));
-    const [configSettings, setConfigSettings] = useState(() => ({
-        diffusionLen: safeToString(currentConfig?.diffusionLength, defaultRunConfig.diffusionLength),
-        randSeed: safeToString(currentConfig?.randseed, defaultRunConfig.randseed),
-        temperature: safeToString(currentConfig?.temperature, defaultRunConfig.temperature),
-        numWaveFrames: safeToString(currentConfig?.numWaveFrames, defaultRunConfig.numWaveFrames),
-        modelPath: safeToString(currentConfig?.modelPath, defaultRunConfig.modelPath),
-        odeMethod: safeToString(currentConfig?.odeMethod, defaultRunConfig.odeMethod),
-        turnOffElec: currentConfig?.turnOffElec ?? defaultRunConfig.turnOffElec,
-        useGssa: currentConfig?.useGssa ?? defaultRunConfig.useGssa,
-        verbose: currentConfig?.verbose ?? defaultRunConfig.verbose,
-        combineSegments: currentConfig?.combineSegments ?? defaultRunConfig.combineSegments,
-        benchmark: currentConfig?.benchmark ?? defaultRunConfig.benchmark,
-        reuseLibraryCell: currentConfig?.stealCellFromLibrary ?? defaultRunConfig.stealCellFromLibrary,
-    }));
+    const [configSettings, setConfigSettings] = useState(() => {
+        // Convert meters from config to microns for UI display. Default to 2µm.
+        const initialDiffusionLenMicrons = currentConfig?.diffusionLength
+            ? String(parseFloat(currentConfig.diffusionLength) * 1e6)
+            : '2';
+
+        return {
+            diffusionLen: initialDiffusionLenMicrons,
+            randSeed: safeToString(currentConfig?.randseed, defaultRunConfig.randseed),
+            temperature: safeToString(currentConfig?.temperature, defaultRunConfig.temperature),
+            numWaveFrames: safeToString(currentConfig?.numWaveFrames, defaultRunConfig.numWaveFrames),
+            modelPath: safeToString(currentConfig?.modelPath, defaultRunConfig.modelPath),
+            odeMethod: safeToString(currentConfig?.odeMethod, defaultRunConfig.odeMethod),
+            turnOffElec: currentConfig?.turnOffElec ?? defaultRunConfig.turnOffElec,
+            useGssa: currentConfig?.useGssa ?? defaultRunConfig.useGssa,
+            verbose: currentConfig?.verbose ?? defaultRunConfig.verbose,
+            combineSegments: currentConfig?.combineSegments ?? defaultRunConfig.combineSegments,
+            benchmark: currentConfig?.benchmark ?? defaultRunConfig.benchmark,
+            reuseLibraryCell: currentConfig?.stealCellFromLibrary ?? defaultRunConfig.stealCellFromLibrary,
+        };
+    });
     
     // --- Other local state for simulation status ---
     const [currentTime, setCurrentTime] = useState(0.0);
@@ -100,6 +117,11 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
     const buildConfigPayload = useCallback((currentRuntimeStr, currentClocksObj, currentConfigObj) => {
         const getOrDefaultNumeric = (valStr, defaultValStr) => parseFloat(valStr) || parseFloat(defaultValStr);
         const getOrDefaultInt = (valStr, defaultValStr) => parseInt(valStr, 10) || parseInt(defaultValStr, 10);
+        
+        // Convert diffusion length from microns (UI) to meters (backend)
+        const diffusionLenInMicrons = getOrDefaultNumeric(currentConfigObj.diffusionLen, '2');
+        const diffusionLenInMeters = diffusionLenInMicrons * 1e-6;
+
         return {
             runtime: getOrDefaultNumeric(currentRuntimeStr, defaultRunConfig.runtime),
             elecDt: getOrDefaultNumeric(currentClocksObj.elec, defaultRunConfig.elecDt),
@@ -109,7 +131,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
             diffDt: getOrDefaultNumeric(currentClocksObj.diffusion, defaultRunConfig.diffDt),
             funcDt: getOrDefaultNumeric(currentClocksObj.function, defaultRunConfig.funcDt),
             statusDt: getOrDefaultNumeric(currentClocksObj.status, defaultRunConfig.statusDt),
-            diffusionLength: getOrDefaultNumeric(currentConfigObj.diffusionLen, defaultRunConfig.diffusionLength),
+            diffusionLength: diffusionLenInMeters,
             randseed: getOrDefaultInt(currentConfigObj.randSeed, defaultRunConfig.randseed),
             temperature: getOrDefaultNumeric(currentConfigObj.temperature, defaultRunConfig.temperature),
             numWaveFrames: getOrDefaultInt(currentConfigObj.numWaveFrames, defaultRunConfig.numWaveFrames),
@@ -125,13 +147,10 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
     }, []);
 
   // --- useEffect for cleanup on unmount ---
-  // This is where onConfigurationChange is called when the menu box closes.
   useEffect(() => {
     return () => {
       if (onConfigurationChangeRef.current) {
-        // Use refs to get the most current local state values at the time of unmount
         console.log("RunMenuBox: Unmounting, calling onConfigurationChange.");
-        // FIX: Pass the configSettingsRef.current as the third argument
         onConfigurationChangeRef.current(buildConfigPayload(runtimeRef.current, clocksRef.current, configSettingsRef.current));
       }
       if (pollingIntervalRef.current) {
@@ -139,9 +158,9 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildConfigPayload]); // buildConfigPayload is stable
+  }, [buildConfigPayload]);
 
-  // --- Simulation Polling Logic (remains the same) ---
+  // --- Simulation Polling Logic ---
   const pollSimulationStatus = useCallback(async (pid) => {
     if (!pid) return;
     try {
@@ -165,7 +184,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         } else if (result.status === 'running') {
            setStatusMessage({ type: 'info', text: `Simulation (PID: ${pid}) is running... Plot not yet ready.` });
            onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: null });
-        } else { // Other backend status issues
+        } else {
             clearInterval(pollingIntervalRef.current);
             pollingIntervalRef.current = null;
             setIsLoading(false);
@@ -173,7 +192,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
             setStatusMessage({ type: 'error', text: errorMsg });
             onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: errorMsg });
         }
-      } else { // HTTP error
+      } else {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
         setIsLoading(false);
@@ -181,7 +200,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         setStatusMessage({ type: 'error', text: errorMsg });
         onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: errorMsg });
       }
-    } catch (error) { // Network error
+    } catch (error) {
       console.error("RunMenuBox: Polling error:", error);
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
@@ -204,30 +223,17 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         pollingIntervalRef.current = null;
     }
 
-    // --- CRITICAL: Update App.jsx's jsonData with current local state BEFORE fetching it ---
 	if (onConfigurationChangeRef.current) {
          console.log("RunMenuBox: Calling onConfigurationChange before starting simulation.");
-         // FIX: Pass the 'configSettings' state as the third argument
-         onConfigurationChangeRef.current(buildConfigPayload(runtime, clocks, configSettings)); // Use direct state here
+         onConfigurationChangeRef.current(buildConfigPayload(runtime, clocks, configSettings));
     }
 
     if (!getCurrentJsonData) {
       setStatusMessage({ type: 'error', text: 'Internal Error: getCurrentJsonData function not provided.' });
       return;
     }
-
-    // It's generally better to ensure state updates propagate before proceeding.
-    // However, since onConfigurationChange likely involves a setState in App.jsx,
-    // and getCurrentJsonData reads that state, there could be a race condition
-    // if getCurrentJsonData is called in the same synchronous execution block
-    // immediately after the setState call that onConfigurationChange triggers.
-    // A common pattern is to pass the data directly or use a callback.
-    // For now, we rely on App.jsx's `updateJsonData` to be quick.
-    // A more robust solution might involve `getCurrentJsonData` accepting the latest payload
-    // or `handleStart` waiting for a callback after `onConfigurationChange` completes.
-    // For simplicity, we'll proceed, assuming App.jsx updates its state reasonably fast.
-
-    const currentJsonConfig = getCurrentJsonData(); // This now gets the (hopefully) updated data from App.jsx
+    
+    const currentJsonConfig = getCurrentJsonData();
     if (!currentJsonConfig) {
       setStatusMessage({ type: 'error', text: 'Error: No configuration data available to start simulation.' });
       return;
@@ -314,53 +320,91 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
             {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
 
             <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                <Grid item xs={6}><TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} /></Grid>
-                <Grid item xs={6}><TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" /></Grid>
-            </Grid>
-
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Simulation Time Steps (Clocks)</Typography>
-            <Grid container spacing={1.5} sx={{mb: 2}}>
-                <Grid item xs={12} sm={6}>
-                    <TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} />
+                <Grid item xs={6}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} />
+                        <InfoTooltip title={helpText.runControls.totalRuntime} />
+                    </Box>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                    <TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} />
+                <Grid item xs={6}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" />
+                        <InfoTooltip title={helpText.runControls.currentTime} />
+                    </Box>
+                </Grid>
+            </Grid>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Simulation Time Steps (Clocks)</Typography>
+                <InfoTooltip title={helpText.clocks.main} />
+            </Box>
+
+            <Grid container spacing={1.5} sx={{mb: 2}}>
+                <Grid item xs={12} sm={6} container spacing={1.5}>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} /><InfoTooltip title={helpText.clocks.chemDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} /><InfoTooltip title={helpText.clocks.diffusionDt} /></Box></Grid>
+                </Grid>
+                <Grid item xs={12} sm={6} container spacing={1.5}>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} /><InfoTooltip title={helpText.clocks.chemPlotDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} /><InfoTooltip title={helpText.clocks.functionDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} /><InfoTooltip title={helpText.clocks.statusDt} /></Box></Grid>
                 </Grid>
             </Grid>
 
             <Divider sx={{ my: 2 }} />
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Configuration Settings</Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Configuration Settings</Typography>
+                <InfoTooltip title={helpText.configuration.main} />
+            </Box>
             
             <Typography variant="body2" gutterBottom sx={{ mt: 1, fontWeight: 'medium' }}>Flags</Typography>
-            <Grid container spacing={1}>
-                <Grid item xs={12} sm={6}>
-                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" />
-                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => updateConfigSetting('useGssa', !configSettings.useGssa)} /> } label="Use GSSA" />
-                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.verbose} onChange={() => updateConfigSetting('verbose', !configSettings.verbose)} /> } label="Verbose" />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => updateConfigSetting('combineSegments', !configSettings.combineSegments)} /> } label="Combine Segments" />
-                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.benchmark} onChange={() => updateConfigSetting('benchmark', !configSettings.benchmark)} /> } label="Benchmark" />
-                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => updateConfigSetting('reuseLibraryCell', !configSettings.reuseLibraryCell)} /> } label="Reuse Library Cell" />
-                </Grid>
+            <Grid container spacing={1} rowSpacing={0}>
+                <Grid item xs={6}><Tooltip title={helpText.flags.turnOffElec}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.combineSegments}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => updateConfigSetting('combineSegments', !configSettings.combineSegments)} /> } label="Combine Segments" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.useGssa}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => updateConfigSetting('useGssa', !configSettings.useGssa)} /> } label="Use GSSA" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.benchmark}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.benchmark} onChange={() => updateConfigSetting('benchmark', !configSettings.benchmark)} /> } label="Benchmark" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.verbose}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.verbose} onChange={() => updateConfigSetting('verbose', !configSettings.verbose)} /> } label="Verbose" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.reuseLibraryCell}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => updateConfigSetting('reuseLibraryCell', !configSettings.reuseLibraryCell)} /> } label="Reuse Library Cell" /></Tooltip></Grid>
             </Grid>
 
             <Typography variant="body2" gutterBottom sx={{ mt: 2, fontWeight: 'medium' }}>Other Settings</Typography>
             <Grid container spacing={1.5}>
                 <Grid item xs={12} sm={6}>
-                    <TextField fullWidth size="small" label="Model Path" value={configSettings.modelPath} onChange={(e) => updateConfigSetting('modelPath', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="ODE Method" value={configSettings.odeMethod} onChange={(e) => updateConfigSetting('odeMethod', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Diffusion Length (m)" type="text" value={configSettings.diffusionLen} onChange={(e) => updateConfigSetting('diffusionLen', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <TextField fullWidth size="small" label="Model Path" value={configSettings.modelPath} onChange={(e) => updateConfigSetting('modelPath', e.target.value)} />
+                        <InfoTooltip title={helpText.otherSettings.modelPath} />
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <TextField fullWidth size="small" label="ODE Method" value={configSettings.odeMethod} onChange={(e) => updateConfigSetting('odeMethod', e.target.value)} />
+                        <InfoTooltip title={helpText.otherSettings.odeMethod} />
+                    </Box>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                    <TextField fullWidth size="small" label="Rand Seed" type="number" value={configSettings.randSeed} onChange={(e) => updateConfigSetting('randSeed', e.target.value)} sx={{ mb: 1 }}/>
-                    <TextField fullWidth size="small" label="Num Wave Frames" type="number" value={configSettings.numWaveFrames} onChange={(e) => updateConfigSetting('numWaveFrames', e.target.value)} />
+                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <TextField fullWidth size="small" label="Rand Seed" type="number" value={configSettings.randSeed} onChange={(e) => updateConfigSetting('randSeed', e.target.value)} />
+                        <InfoTooltip title={helpText.otherSettings.randSeed} />
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <TextField fullWidth size="small" label="Num Wave Frames" type="number" value={configSettings.numWaveFrames} onChange={(e) => updateConfigSetting('numWaveFrames', e.target.value)} />
+                        <InfoTooltip title={helpText.otherSettings.numWaveFrames} />
+                    </Box>
+                </Grid>
+                 <Grid item xs={12} container spacing={1.5}>
+                    <Grid item xs={12} sm={6}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextField fullWidth size="small" label="Diffusion Length (µm)" type="text" value={configSettings.diffusionLen} onChange={(e) => updateConfigSetting('diffusionLen', e.target.value)} />
+                            <InfoTooltip title={helpText.otherSettings.diffusionLength} />
+                        </Box>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} />
+                            <InfoTooltip title={helpText.otherSettings.temperature} />
+                        </Box>
+                    </Grid>
                 </Grid>
             </Grid>
         </Box>
