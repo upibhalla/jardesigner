@@ -173,7 +173,7 @@ class rdesigneur:
     """
     ################################################################
     def __init__(self, jsonFile = None, plotFile = None, jsonData = None ):
-        schemaFile = "rdesigneurSchema.json"
+        schemaFile = "jardesignerSchema.json"
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
