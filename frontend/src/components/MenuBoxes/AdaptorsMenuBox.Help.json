@@ -1,0 +1,12 @@
+{
+  "main": "Adaptors create a dynamic link between two properties in the model. The value of the 'Source Field' is read, linearly transformed (y = slope * x + baseline), and then written to the 'Destination Field' on every time step. This allows for complex interactions and feedback loops.",
+  "fields": {
+    "source": "The full path to the source object in the model (e.g., a specific channel or chemical pool). Example: '/model/soma/Na_HH'.",
+    "sourceField": "The specific variable or field to read from the source object.",
+    "destination": "The full path to the destination object that will be modified by this adaptor. Example: '/model/dend/K_A'.",
+    "destinationField": "The specific variable or field on the destination object to write the transformed value to.",
+    "baseline": "The baseline value (y-intercept) added to the source value after it has been multiplied by the slope. This is the 'b' in the equation y = mx + b.",
+    "slope": "The slope (m) used to multiply the source value. This is the 'm' in the equation y = mx + b."
+  }
+}
+

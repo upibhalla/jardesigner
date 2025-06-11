@@ -1,0 +1,31 @@
+{
+  "main": "This section configures the 3D visualization of the model over time, powered by Moogli. You can define multiple data sources to overlay on the morphology and control the global display settings.",
+  "headings": {
+    "dataSources": "Define the specific variables to visualize on the 3D model. Each source will be represented by a color map on the neuron's surface.",
+    "globalSettings": "Control the overall appearance and behavior of the 3D animation window."
+  },
+  "dataSources": {
+    "path": "The primary morphological path for this visualization (e.g., 'soma', 'dend', '/cell/dend[0]').",
+    "field": "The specific variable to visualize with color on the 3D model (e.g., 'Vm' for membrane potential).",
+    "chemProto": "For visualizing chemical variables, select the chemical prototype this data source refers to. For non-chemical variables, this should be '.'.",
+    "childPath": "A relative path from the main 'Path'. For chemical fields, this specifies the target object within the chemical model. For other fields, this can point to a child object like a specific channel.",
+    "title": "An optional custom title for this specific data visualization overlay.",
+    "diameterScale": "An optional multiplier to scale the diameter of the morphology based on the value of the 'Field'. A value of 1 means no scaling.",
+    "min": "The value of the 'Field' that will be mapped to the low end of the colormap. Set to 0 for auto-scaling.",
+    "max": "The value of the 'Field' that will be mapped to the high end of the colormap. Set to 0 for auto-scaling."
+  },
+  "globalSettings": {
+    "runtime": "The total duration of the 3D animation to be played, in seconds.",
+    "dt": "The time step between consecutive frames in the 3D animation, in seconds. A smaller value results in a smoother animation.",
+    "rotation": "The rate at which the model automatically rotates around its vertical axis, in radians per display step. Use 0 for no rotation.",
+    "azimuth": "The initial horizontal viewing angle of the camera, in degrees.",
+    "elevation": "The initial vertical viewing angle of the camera, in degrees.",
+    "colormap": "The color map used to represent the range of values for the visualized 'Field'.",
+    "background": "The background color of the 3D visualization window.",
+    "center": "The [x, y, z] coordinates in meters for the center of the camera's rotation. Must be a valid JSON array, e.g., [0, 0, 0].",
+    "mergeDisplays": "If checked, all data sources are combined into a single 3D display window. If unchecked, each source opens in a separate window.",
+    "fullScreen": "If checked, the 3D display window will open in fullscreen mode.",
+    "block": "If checked, the main process will wait for the 3D window to be closed before continuing. If unchecked, the simulation can run in the background."
+  }
+}
+

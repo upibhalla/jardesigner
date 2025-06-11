@@ -1,0 +1,13 @@
+{
+  "main": "This section defines the files that will be generated to save the simulation data. Each entry specifies a data source and the format and location for the output file.",
+  "fields": {
+    "file": "The name of the output file where the data will be saved (e.g., 'soma_vm.h5', 'calcium_levels.csv').",
+    "type": "The format for the output file. NSDF and HDF5 are efficient binary formats suitable for large datasets. TSV and CSV are plain text, human-readable formats.",
+    "path": "The primary morphological path where the variable to be saved is located (e.g., 'soma', 'dend', '/cell/dend[2]').",
+    "field": "The specific variable or field to be saved (e.g., 'Vm' for membrane potential, 'Ca' for calcium concentration).",
+    "dt": "The sampling interval (time step) for saving data, in seconds. A smaller value results in higher temporal resolution but a larger file size.",
+    "chemProto": "For saving chemical data (when 'Field' is 'conc', 'n', etc.), select the chemical prototype this data belongs to. For non-chemical variables, this should be '.'.",
+    "childPath": "A relative path from the main 'Path'. For chemical fields, this specifies the target object within the chemical model. For other fields, this can point to a child object like a specific channel instance.",
+    "flushSteps": "Optional. The number of time steps after which data is written (flushed) from memory to the file. A smaller number is safer against crashes but may be slightly slower."
+  }
+}

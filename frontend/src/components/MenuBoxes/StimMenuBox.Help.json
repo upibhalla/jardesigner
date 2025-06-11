@@ -1,0 +1,13 @@
+{
+  "main": "This section defines external stimuli applied to the model. Stimuli can be used to inject current, change concentrations, or modulate any field in the model using a mathematical expression.",
+  "fields": {
+    "path": "The primary morphological path where the stimulus will be applied (e.g., 'soma', 'dend', '/cell/dend[2]').",
+    "type": "The category of stimulus: 'Field' applies the expression directly. 'Periodic Synapse' and 'Random Synapse' apply the expression at specific time points based on synaptic event schedules.",
+    "field": "The specific variable or field to be modified by the stimulus (e.g., 'inject' for current, or 'conc' for a chemical concentration).",
+    "weight": "A multiplier for synaptic events. This field is only used for 'Periodic Synapse' and 'Random Synapse' types.",
+    "chemProto": "For chemical stimuli (when 'Field' is set to 'conc', 'n', etc.), select the chemical prototype this stimulus belongs to. For non-chemical stimuli, this should be '.'.",
+    "childPath": "A relative path from the main 'Path'. For chemical fields, this specifies the target object within the chemical model. For other fields, this can point to a child object like a specific channel instance (e.g., 'Na_HH').",
+    "geometryExpression": "An optional mathematical expression that can scale the stimulus based on the geometry of the target compartment (e.g., using 'area' or 'volume'). Defaults to 1 if empty.",
+    "stimulusExpression": "The core mathematical expression defining the stimulus waveform over time. Use 't' as the variable for time in seconds."
+  }
+}
