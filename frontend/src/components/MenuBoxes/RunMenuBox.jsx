@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert } from '@mui/material';
+import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
@@ -12,94 +12,117 @@ const safeToString = (value, defaultValue = '') => {
     return String(value);
 };
 
-// Default values
+// Default values for all settings managed by this component
 const defaultRunConfig = {
     runtime: '0.3',
-    elec: '50e-6',
-    elecPlot: '100e-6',
-    chem: '0.1',
-    chemPlot: '1.0', // This is >= 1e-06, so it's a valid default
-    diffusion: '10e-3',
-    function: '100e-6',
-    status: '0.0',
+    elecDt: '50e-6',
+    elecPlotDt: '100e-6',
+    chemDt: '0.1',
+    chemPlotDt: '1.0',
+    diffDt: '10e-3',
+    funcDt: '100e-6',
+    statusDt: '0.0',
+    diffusionLength: '2e-6',
+    randseed: '1234',
+    temperature: '32',
+    numWaveFrames: '100',
+    turnOffElec: false,
+    useGssa: false,
+    verbose: false,
+    combineSegments: true,
+    benchmark: false,
+    stealCellFromLibrary: false,
+    modelPath: '/model',
+    odeMethod: 'lsoda',
 };
 
-const RunMenuBox = ({
-    onConfigurationChange,
-    getCurrentJsonData,
-    currentConfig,
-    onPlotDataUpdate,
-    onClearPlotData
-}) => {
-  // --- Local state for UI elements, initialized from props ---
-  const [runtime, setRuntime] = useState(() =>
-    safeToString(currentConfig?.runtime, defaultRunConfig.runtime)
-  );
-  const [clocks, setClocks] = useState(() => ({
-    elec: safeToString(currentConfig?.elecDt, defaultRunConfig.elec),
-    elecPlot: safeToString(currentConfig?.elecPlotDt, defaultRunConfig.elecPlot),
-    chem: safeToString(currentConfig?.chemDt, defaultRunConfig.chem),
-    chemPlotDt: safeToString(currentConfig?.chemPlotDt, defaultRunConfig.chemPlot),
-    diffusion: safeToString(currentConfig?.diffDt, defaultRunConfig.diffusion),
-    function: safeToString(currentConfig?.funcDt, defaultRunConfig.function),
-    status: safeToString(currentConfig?.statusDt, defaultRunConfig.status),
-  }));
 
-  // --- Other local state ---
-  const [currentTime, setCurrentTime] = useState(0.0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
-  const [simulationPid, setSimulationPid] = useState(null);
+const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, onPlotDataUpdate, onClearPlotData }) => {
 
-  // --- Refs for props and local state to use in callbacks/cleanup ---
-  const pollingIntervalRef = useRef(null);
-  const onConfigurationChangeRef = useRef(onConfigurationChange);
-  const onPlotDataUpdateRef = useRef(onPlotDataUpdate);
-  const onClearPlotDataRef = useRef(onClearPlotData);
-  const runtimeRef = useRef(runtime); // To get the latest value in unmount cleanup
-  const clocksRef = useRef(clocks);   // To get the latest value in unmount cleanup
+    // --- Local state for UI elements, initialized from props ---
+    const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
+    const [clocks, setClocks] = useState(() => ({
+        elec: safeToString(currentConfig?.elecDt, defaultRunConfig.elecDt),
+        elecPlot: safeToString(currentConfig?.elecPlotDt, defaultRunConfig.elecPlotDt),
+        chem: safeToString(currentConfig?.chemDt, defaultRunConfig.chemDt),
+        chemPlotDt: safeToString(currentConfig?.chemPlotDt, defaultRunConfig.chemPlotDt),
+        diffusion: safeToString(currentConfig?.diffDt, defaultRunConfig.diffDt),
+        function: safeToString(currentConfig?.funcDt, defaultRunConfig.funcDt),
+        status: safeToString(currentConfig?.statusDt, defaultRunConfig.statusDt),
+    }));
+    const [configSettings, setConfigSettings] = useState(() => ({
+        diffusionLen: safeToString(currentConfig?.diffusionLength, defaultRunConfig.diffusionLength),
+        randSeed: safeToString(currentConfig?.randseed, defaultRunConfig.randseed),
+        temperature: safeToString(currentConfig?.temperature, defaultRunConfig.temperature),
+        numWaveFrames: safeToString(currentConfig?.numWaveFrames, defaultRunConfig.numWaveFrames),
+        modelPath: safeToString(currentConfig?.modelPath, defaultRunConfig.modelPath),
+        odeMethod: safeToString(currentConfig?.odeMethod, defaultRunConfig.odeMethod),
+        turnOffElec: currentConfig?.turnOffElec ?? defaultRunConfig.turnOffElec,
+        useGssa: currentConfig?.useGssa ?? defaultRunConfig.useGssa,
+        verbose: currentConfig?.verbose ?? defaultRunConfig.verbose,
+        combineSegments: currentConfig?.combineSegments ?? defaultRunConfig.combineSegments,
+        benchmark: currentConfig?.benchmark ?? defaultRunConfig.benchmark,
+        reuseLibraryCell: currentConfig?.stealCellFromLibrary ?? defaultRunConfig.stealCellFromLibrary,
+    }));
+    
+    // --- Other local state for simulation status ---
+    const [currentTime, setCurrentTime] = useState(0.0);
+    const [isLoading, setIsLoading] = useState(false);
+    const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
+    const [simulationPid, setSimulationPid] = useState(null);
 
-  // --- Update refs when props/state change ---
-  useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
-  useEffect(() => { onPlotDataUpdateRef.current = onPlotDataUpdate; }, [onPlotDataUpdate]);
-  useEffect(() => { onClearPlotDataRef.current = onClearPlotData; }, [onClearPlotData]);
-  useEffect(() => { runtimeRef.current = runtime; }, [runtime]);
-  useEffect(() => { clocksRef.current = clocks; }, [clocks]);
+    // --- Refs for props and local state ---
+    const pollingIntervalRef = useRef(null);
+    const onConfigurationChangeRef = useRef(onConfigurationChange);
+    const onPlotDataUpdateRef = useRef(onPlotDataUpdate);
+    const onClearPlotDataRef = useRef(onClearPlotData);
+    const runtimeRef = useRef(runtime);
+    const clocksRef = useRef(clocks);
+    const configSettingsRef = useRef(configSettings);
 
-  // --- Local state updaters ---
-  const handleRuntimeChange = (value) => setRuntime(value);
-  const updateClock = (field, value) => {
-    setClocks((prev) => ({ ...prev, [field]: value }));
-  };
+    // --- Update refs when props/state change ---
+    useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
+    useEffect(() => { runtimeRef.current = runtime; }, [runtime]);
+    useEffect(() => { clocksRef.current = clocks; }, [clocks]);
+    useEffect(() => { configSettingsRef.current = configSettings; }, [configSettings]);
 
-  // --- Helper function to build the configuration payload for App.jsx ---
-  // This function converts local string states to numbers and applies defaults.
-  const buildConfigPayload = useCallback((currentRuntimeStr, currentClocksObj) => {
-    const getOrDefaultNumeric = (valStr, defaultValStr) => {
-        const num = parseFloat(valStr);
-        return isNaN(num) ? parseFloat(defaultValStr) : num;
+    // --- Local state updaters ---
+    const handleRuntimeChange = (value) => setRuntime(value);
+    const updateClock = (field, value) => setClocks((prev) => ({ ...prev, [field]: value }));
+    const updateConfigSetting = (field, value) => setConfigSettings((prev) => ({ ...prev, [field]: value }));
+
+    const handleTurnOffElecChange = () => {
+        const isTurningOff = !configSettings.turnOffElec;
+        setConfigSettings(prev => ({ ...prev, turnOffElec: isTurningOff }));
+        setRuntime(isTurningOff ? '100' : '0.3');
     };
 
-    let chemPlotDtValue = getOrDefaultNumeric(currentClocksObj.chemPlotDt, defaultRunConfig.chemPlot);
-    if (chemPlotDtValue < 1e-06) { // Ensure chemPlotDt meets schema minimum
-        const defaultChemPlotNum = parseFloat(defaultRunConfig.chemPlot);
-        chemPlotDtValue = (defaultChemPlotNum >= 1e-06) ? defaultChemPlotNum : 1e-06;
-    }
-
-    return {
-        runtime: getOrDefaultNumeric(currentRuntimeStr, defaultRunConfig.runtime),
-        elecDt: getOrDefaultNumeric(currentClocksObj.elec, defaultRunConfig.elec),
-        elecPlotDt: getOrDefaultNumeric(currentClocksObj.elecPlot, defaultRunConfig.elecPlot),
-        chemDt: getOrDefaultNumeric(currentClocksObj.chem, defaultRunConfig.chem),
-        chemPlotDt: chemPlotDtValue,
-        diffDt: getOrDefaultNumeric(currentClocksObj.diffusion, defaultRunConfig.diffusion),
-        funcDt: getOrDefaultNumeric(currentClocksObj.function, defaultRunConfig.function),
-        statusDt: getOrDefaultNumeric(currentClocksObj.status, defaultRunConfig.status),
-    };
-  }, []); // defaultRunConfig is stable
-
-  // --- REMOVED: useEffect that called onConfigurationChange on local state changes ---
-  // The parent (App.jsx) will now only be updated on unmount or explicitly before 'Start'.
+    const buildConfigPayload = useCallback((currentRuntimeStr, currentClocksObj, currentConfigObj) => {
+        const getOrDefaultNumeric = (valStr, defaultValStr) => parseFloat(valStr) || parseFloat(defaultValStr);
+        const getOrDefaultInt = (valStr, defaultValStr) => parseInt(valStr, 10) || parseInt(defaultValStr, 10);
+        return {
+            runtime: getOrDefaultNumeric(currentRuntimeStr, defaultRunConfig.runtime),
+            elecDt: getOrDefaultNumeric(currentClocksObj.elec, defaultRunConfig.elecDt),
+            elecPlotDt: getOrDefaultNumeric(currentClocksObj.elecPlot, defaultRunConfig.elecPlotDt),
+            chemDt: getOrDefaultNumeric(currentClocksObj.chem, defaultRunConfig.chemDt),
+            chemPlotDt: getOrDefaultNumeric(currentClocksObj.chemPlotDt, defaultRunConfig.chemPlotDt),
+            diffDt: getOrDefaultNumeric(currentClocksObj.diffusion, defaultRunConfig.diffDt),
+            funcDt: getOrDefaultNumeric(currentClocksObj.function, defaultRunConfig.funcDt),
+            statusDt: getOrDefaultNumeric(currentClocksObj.status, defaultRunConfig.statusDt),
+            diffusionLength: getOrDefaultNumeric(currentConfigObj.diffusionLen, defaultRunConfig.diffusionLength),
+            randseed: getOrDefaultInt(currentConfigObj.randSeed, defaultRunConfig.randseed),
+            temperature: getOrDefaultNumeric(currentConfigObj.temperature, defaultRunConfig.temperature),
+            numWaveFrames: getOrDefaultInt(currentConfigObj.numWaveFrames, defaultRunConfig.numWaveFrames),
+            turnOffElec: currentConfigObj.turnOffElec,
+            useGssa: currentConfigObj.useGssa,
+            verbose: currentConfigObj.verbose,
+            combineSegments: currentConfigObj.combineSegments,
+            benchmark: currentConfigObj.benchmark,
+            stealCellFromLibrary: currentConfigObj.reuseLibraryCell,
+            modelPath: currentConfigObj.modelPath,
+            odeMethod: currentConfigObj.odeMethod,
+        };
+    }, []);
 
   // --- useEffect for cleanup on unmount ---
   // This is where onConfigurationChange is called when the menu box closes.
@@ -108,7 +131,8 @@ const RunMenuBox = ({
       if (onConfigurationChangeRef.current) {
         // Use refs to get the most current local state values at the time of unmount
         console.log("RunMenuBox: Unmounting, calling onConfigurationChange.");
-        onConfigurationChangeRef.current(buildConfigPayload(runtimeRef.current, clocksRef.current));
+        // FIX: Pass the configSettingsRef.current as the third argument
+        onConfigurationChangeRef.current(buildConfigPayload(runtimeRef.current, clocksRef.current, configSettingsRef.current));
       }
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -181,9 +205,10 @@ const RunMenuBox = ({
     }
 
     // --- CRITICAL: Update App.jsx's jsonData with current local state BEFORE fetching it ---
-    if (onConfigurationChangeRef.current) {
+	if (onConfigurationChangeRef.current) {
          console.log("RunMenuBox: Calling onConfigurationChange before starting simulation.");
-         onConfigurationChangeRef.current(buildConfigPayload(runtime, clocks)); // Use direct state here
+         // FIX: Pass the 'configSettings' state as the third argument
+         onConfigurationChangeRef.current(buildConfigPayload(runtime, clocks, configSettings)); // Use direct state here
     }
 
     if (!getCurrentJsonData) {
@@ -277,68 +302,69 @@ const RunMenuBox = ({
     }
   };
 
-  // --- JSX Rendering (remains the same) ---
-  return (
-    <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
-      <Grid container spacing={1} sx={{ mb: 2 }}>
-        <Grid item xs={4}>
-          <Button
-            variant="contained"
-            fullWidth
-            startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
-            sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}
-            onClick={handleStart}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Running...' : 'Start'}
-          </Button>
-        </Grid>
-        <Grid item xs={4}>
-          <Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!simulationPid || isLoading}>
-            Pause
-          </Button>
-        </Grid>
-        <Grid item xs={4}>
-          <Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset} disabled={!simulationPid && !isLoading}>
-            Reset
-          </Button>
-        </Grid>
-      </Grid>
 
-      {statusMessage.text && (
-        <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-          {statusMessage.text}
-        </Alert>
-      )}
+    return (
+        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+            <Grid container spacing={1} sx={{ mb: 2 }}>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isLoading}>Start</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!simulationPid}>Pause</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset}>Reset</Button></Grid>
+            </Grid>
+            
+            {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
 
-      <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        <Grid item xs={6}>
-          <TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} />
-        </Grid>
-        <Grid item xs={6}>
-          <TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime} InputProps={{ readOnly: true }} variant="filled" />
-        </Grid>
-      </Grid>
+            <Grid container spacing={1.5} sx={{ mb: 2 }}>
+                <Grid item xs={6}><TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} /></Grid>
+                <Grid item xs={6}><TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" /></Grid>
+            </Grid>
 
-      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
-        Simulation Time Steps (Clocks)
-      </Typography>
-      <Grid container spacing={1.5} sx={{mb: 2}}>
-        <Grid item xs={12} sm={6}>
-          <TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} sx={{ mb: 1 }}/>
-          <TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} sx={{ mb: 1 }}/>
-          <TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} />
-        </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} sx={{ mb: 1 }}/>
-          <TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} sx={{ mb: 1 }}/>
-          <TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} sx={{ mb: 1 }}/>
-          <TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} />
-        </Grid>
-      </Grid>
-    </Box>
-  );
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Simulation Time Steps (Clocks)</Typography>
+            <Grid container spacing={1.5} sx={{mb: 2}}>
+                <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} />
+                </Grid>
+            </Grid>
+
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Configuration Settings</Typography>
+            
+            <Typography variant="body2" gutterBottom sx={{ mt: 1, fontWeight: 'medium' }}>Flags</Typography>
+            <Grid container spacing={1}>
+                <Grid item xs={12} sm={6}>
+                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" />
+                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => updateConfigSetting('useGssa', !configSettings.useGssa)} /> } label="Use GSSA" />
+                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.verbose} onChange={() => updateConfigSetting('verbose', !configSettings.verbose)} /> } label="Verbose" />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => updateConfigSetting('combineSegments', !configSettings.combineSegments)} /> } label="Combine Segments" />
+                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.benchmark} onChange={() => updateConfigSetting('benchmark', !configSettings.benchmark)} /> } label="Benchmark" />
+                    <FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => updateConfigSetting('reuseLibraryCell', !configSettings.reuseLibraryCell)} /> } label="Reuse Library Cell" />
+                </Grid>
+            </Grid>
+
+            <Typography variant="body2" gutterBottom sx={{ mt: 2, fontWeight: 'medium' }}>Other Settings</Typography>
+            <Grid container spacing={1.5}>
+                <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Model Path" value={configSettings.modelPath} onChange={(e) => updateConfigSetting('modelPath', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="ODE Method" value={configSettings.odeMethod} onChange={(e) => updateConfigSetting('odeMethod', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Diffusion Length (m)" type="text" value={configSettings.diffusionLen} onChange={(e) => updateConfigSetting('diffusionLen', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Rand Seed" type="number" value={configSettings.randSeed} onChange={(e) => updateConfigSetting('randSeed', e.target.value)} sx={{ mb: 1 }}/>
+                    <TextField fullWidth size="small" label="Num Wave Frames" type="number" value={configSettings.numWaveFrames} onChange={(e) => updateConfigSetting('numWaveFrames', e.target.value)} />
+                </Grid>
+            </Grid>
+        </Box>
+    );
 };
 
 export default RunMenuBox;
-

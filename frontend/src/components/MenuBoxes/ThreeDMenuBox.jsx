@@ -12,32 +12,30 @@ import {
     Divider,
     Checkbox,
     FormControlLabel,
-    FormHelperText
+    Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import helpText from './ThreeDMenuBox.Help.json';
+import { formatFloat } from '../../utils/formatters.js';
 
-// Helper to safely convert value to string, handling potential null/undefined
-const safeToString = (value, defaultValue = '') => {
-    if (value === undefined || value === null) {
-        return defaultValue;
-    }
-    return String(value);
-};
-
-// Field Options
+// --- Define options outside component ---
 const fieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
     'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
     'modulation', 'psdArea', 'nInit'
 ];
-
 const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
-// Added background options
 const backgroundOptions = ['default', 'white', 'black', 'grey', 'beige'];
 
-// Default state creators
+// --- Helper to safely convert value to string ---
+const safeToString = (value, defaultValue = '') => {
+    return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// --- Default state creators ---
 const createDefaultMoogliEntry = () => ({
     path: '',
     field: fieldOptions[0],
@@ -58,21 +56,34 @@ const createDefaultGlobalSettings = () => ({
     mergeDisplays: false,
     fullScreen: false,
     colormap: 'jet',
-    background: 'default', // Default background
+    background: 'default',
     center: '[0,0,0]',
     block: true,
 });
 
+// --- Reusable HelpField Component ---
+const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullWidth = true, ...props }) => {
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+            <TextField {...props} fullWidth={fullWidth} size="small" label={label} variant="outlined" type={type}
+                value={value} onChange={(e) => onChange(id, e.target.value)} />
+            <Tooltip title={props.helptext} placement="right">
+                <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
+            </Tooltip>
+        </Box>
+    );
+});
+
+
+// --- Main Component ---
 const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) => {
     const [tabs, setTabs] = useState(() => {
-        console.log("ThreeDMenuBox: Initializing tabs (moogli) from props", currentConfig?.moogli);
         const defaults = createDefaultMoogliEntry();
         const initialTabs = currentConfig?.moogli?.map(m => {
             const field = m.field || fieldOptions[0];
             const isChemField = chemFields.includes(field);
             let initialChemProto = '.';
             let initialChildPath = '';
-
             if (isChemField) {
                 const relpath = m.relpath || '';
                 const slashIndex = relpath.indexOf('/');
@@ -80,42 +91,39 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                     initialChemProto = relpath.substring(0, slashIndex);
                     initialChildPath = relpath.substring(slashIndex + 1);
                 } else {
-                    console.warn(`ThreeDMenuBox Init: Chem field '${field}' found but relpath '${relpath}' missing '/' separator. Assigning to Child Path.`);
                     initialChemProto = '';
                     initialChildPath = relpath;
                 }
             } else {
                 initialChildPath = m.relpath || '';
             }
-
             return {
                 path: m.path || '',
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
                 title: m.title || '',
-                diameterScale: safeToString(m.diaScale, defaults.diameterScale),
-                min: safeToString(m.ymin, defaults.min),
-                max: safeToString(m.ymax, defaults.max),
+                diameterScale: formatFloat(m.diaScale) || defaults.diameterScale,
+                min: formatFloat(m.ymin) || defaults.min,
+                max: formatFloat(m.ymax) || defaults.max,
             };
         }) || [];
         return initialTabs.length > 0 ? initialTabs : [createDefaultMoogliEntry()];
     });
 
     const [globalSettings, setGlobalSettings] = useState(() => {
-        console.log("ThreeDMenuBox: Initializing globalSettings (displayMoogli) from props", currentConfig?.displayMoogli);
         const initialDisplay = currentConfig?.displayMoogli || {};
         const defaults = createDefaultGlobalSettings();
         return {
-            runtime: safeToString(initialDisplay.runtime, defaults.runtime),
-            dt: safeToString(initialDisplay.dt, defaults.dt),
-            rotation: safeToString(initialDisplay.rotation, defaults.rotation),
-            azimuth: safeToString(initialDisplay.azim, defaults.azimuth),
-            elevation: safeToString(initialDisplay.elev, defaults.elevation),
+            runtime: formatFloat(initialDisplay.runtime) || defaults.runtime,
+            dt: formatFloat(initialDisplay.dt) || defaults.dt,
+            rotation: formatFloat(initialDisplay.rotation) || defaults.rotation,
+            azimuth: formatFloat(initialDisplay.azim) || defaults.azimuth,
+            elevation: formatFloat(initialDisplay.elev) || defaults.elevation,
             mergeDisplays: initialDisplay.mergeDisplays ?? defaults.mergeDisplays,
             fullScreen: initialDisplay.fullscreen ?? defaults.fullScreen,
             colormap: initialDisplay.colormap || defaults.colormap,
-            background: backgroundOptions.includes(initialDisplay.bg) ? initialDisplay.bg : defaults.background, // Ensure valid background
+            background: backgroundOptions.includes(initialDisplay.bg) ? initialDisplay.bg : defaults.background,
             center: JSON.stringify(initialDisplay.center || JSON.parse(defaults.center)),
             block: initialDisplay.block ?? defaults.block,
         };
@@ -143,7 +151,6 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
     }, []);
 
     const updateTab = useCallback((index, key, value) => {
-        console.log(`ThreeDMenuBox Tab: Local state change - Index ${index}, Key ${key}: ${value}`);
         setTabs((prevTabs) =>
             prevTabs.map((tab, i) => {
                 if (i === index) {
@@ -151,11 +158,8 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                     if (key === 'field') {
                         const isNowChem = chemFields.includes(value);
                         const wasChem = chemFields.includes(tab.field);
-                        if (wasChem && !isNowChem) {
-                            updatedTab.chemProto = '.';
-                        } else if (!wasChem && isNowChem) {
-                            updatedTab.chemProto = '';
-                        }
+                        if (wasChem && !isNowChem) updatedTab.chemProto = '.';
+                        else if (!wasChem && isNowChem) updatedTab.chemProto = '';
                     }
                     return updatedTab;
                 }
@@ -166,324 +170,143 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
 
     const updateGlobalSetting = useCallback((key, value) => {
         const actualValue = (typeof value === 'boolean') ? value : value;
-        console.log(`ThreeDMenuBox Global: Local state change - Key ${key}: ${actualValue}`);
         setGlobalSettings((prev) => ({ ...prev, [key]: actualValue }));
     }, []);
 
-    const handleTabChange = (event, newValue) => {
-        setActiveTab(newValue);
-    };
-
-    const getThreeDDataForUnmount = () => {
-        const currentTabs = tabsRef.current;
-        const currentGlobalSettings = globalSettingsRef.current;
-        console.log("ThreeDMenuBox: Formatting final local state for push:", { tabs: currentTabs, globalSettings: currentGlobalSettings });
-
-        const moogliData = currentTabs.map(tabState => {
-            if (!tabState.path || !tabState.field) {
-                console.warn("Skipping 3D source due to missing path or field:", tabState);
-                return null;
-            }
-            const diaScaleNum = parseFloat(tabState.diameterScale);
-            const minNum = parseFloat(tabState.min);
-            const maxNum = parseFloat(tabState.max);
-            const defaultsMoogli = createDefaultMoogliEntry();
-
-            const isChemField = chemFields.includes(tabState.field);
-            let relpathValue = undefined;
-
-            if (isChemField) {
-                if (tabState.chemProto && tabState.childPath) {
-                    relpathValue = `${tabState.chemProto}/${tabState.childPath}`;
-                } else {
-                    console.warn(`Skipping 3D source with chem field '${tabState.field}' due to missing Chem Prototype or Child Object Path:`, tabState);
-                    return null;
-                }
-            } else {
-                if (tabState.childPath && tabState.childPath !== '') {
-                    relpathValue = tabState.childPath;
-                }
-                if (tabState.chemProto !== '.') {
-                    console.warn(`ThreeDMenuBox Save: Non-chemical field '${tabState.field}' unexpectedly has chemProto '${tabState.chemProto}'. Ignoring proto.`);
-                }
-            }
-
-            const moogliSchemaItem = {
-                path: tabState.path,
-                field: tabState.field,
-            };
-
-            if (relpathValue !== undefined) {
-                moogliSchemaItem.relpath = relpathValue;
-            }
-            if (tabState.title) {
-                moogliSchemaItem.title = tabState.title;
-            }
-            if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaultsMoogli.diameterScale) {
-                moogliSchemaItem.diaScale = diaScaleNum;
-            }
-            if (!isNaN(minNum) && safeToString(minNum) !== defaultsMoogli.min) {
-                moogliSchemaItem.ymin = minNum;
-            }
-            if (!isNaN(maxNum) && safeToString(maxNum) !== defaultsMoogli.max) {
-                moogliSchemaItem.ymax = maxNum;
-            }
-
-            return moogliSchemaItem;
-        }).filter(item => item !== null);
-
-        let centerArray = JSON.parse(createDefaultGlobalSettings().center);
-        try {
-            const parsedCenter = JSON.parse(currentGlobalSettings.center);
-            if (Array.isArray(parsedCenter) && parsedCenter.length === 3 && parsedCenter.every(n => typeof n === 'number')) {
-                centerArray = parsedCenter;
-            } else {
-                console.warn("Invalid format for Center coordinates, using default [0,0,0]. Input:", currentGlobalSettings.center);
-            }
-        } catch (e) {
-            console.warn("Error parsing Center coordinates, using default [0,0,0]. Input:", currentGlobalSettings.center, "Error:", e);
-        }
-
-        const defaultsGlobal = createDefaultGlobalSettings();
-        const displayMoogliData = {
-            runtime: parseFloat(currentGlobalSettings.runtime) || parseFloat(defaultsGlobal.runtime),
-            dt: parseFloat(currentGlobalSettings.dt) || parseFloat(defaultsGlobal.dt),
-            rotation: parseFloat(currentGlobalSettings.rotation) || parseFloat(defaultsGlobal.rotation),
-            azim: parseFloat(currentGlobalSettings.azimuth) || parseFloat(defaultsGlobal.azimuth),
-            elev: parseFloat(currentGlobalSettings.elevation) || parseFloat(defaultsGlobal.elevation),
-            colormap: currentGlobalSettings.colormap || defaultsGlobal.colormap,
-            bg: currentGlobalSettings.background || defaultsGlobal.background,
-            center: centerArray,
-            block: currentGlobalSettings.block,
-            ...(currentGlobalSettings.mergeDisplays !== defaultsGlobal.mergeDisplays && { mergeDisplays: currentGlobalSettings.mergeDisplays }),
-            ...(currentGlobalSettings.fullScreen !== defaultsGlobal.fullScreen && { fullscreen: currentGlobalSettings.fullScreen }),
-        };
-
-        return { moogli: moogliData, displayMoogli: displayMoogliData };
-    };
+    const handleTabChange = (event, newValue) => setActiveTab(newValue);
 
     useEffect(() => {
-        console.log("ThreeDMenuBox: Mounted, setting up unmount cleanup.");
-        const initialConfigString = JSON.stringify({
-             moogli: currentConfig?.moogli || [],
-             displayMoogli: currentConfig?.displayMoogli || {}
-        });
+        const getThreeDDataForUnmount = () => {
+            const moogliData = tabsRef.current.map(tabState => {
+                if (!tabState.path || !tabState.field) return null;
+                const diaScaleNum = parseFloat(tabState.diameterScale);
+                const minNum = parseFloat(tabState.min);
+                const maxNum = parseFloat(tabState.max);
+                const defaultsMoogli = createDefaultMoogliEntry();
+                const isChemField = chemFields.includes(tabState.field);
+                let relpathValue = undefined;
+
+                if (isChemField) {
+                    if (tabState.chemProto && tabState.childPath) {
+                        relpathValue = `${tabState.chemProto}/${tabState.childPath}`;
+                    } else { return null; }
+                } else {
+                    if (tabState.childPath && tabState.childPath !== '') relpathValue = tabState.childPath;
+                }
+
+                const moogliSchemaItem = { path: tabState.path, field: tabState.field };
+                if (relpathValue !== undefined) moogliSchemaItem.relpath = relpathValue;
+                if (tabState.title) moogliSchemaItem.title = tabState.title;
+                if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaultsMoogli.diameterScale) moogliSchemaItem.diaScale = diaScaleNum;
+                if (!isNaN(minNum) && safeToString(minNum) !== defaultsMoogli.min) moogliSchemaItem.ymin = minNum;
+                if (!isNaN(maxNum) && safeToString(maxNum) !== defaultsMoogli.max) moogliSchemaItem.ymax = maxNum;
+                return moogliSchemaItem;
+
+            }).filter(item => item !== null);
+
+            let centerArray;
+            try {
+                const parsedCenter = JSON.parse(globalSettingsRef.current.center);
+                centerArray = (Array.isArray(parsedCenter) && parsedCenter.length === 3 && parsedCenter.every(n => typeof n === 'number')) ? parsedCenter : JSON.parse(createDefaultGlobalSettings().center);
+            } catch (e) {
+                centerArray = JSON.parse(createDefaultGlobalSettings().center);
+            }
+            const defaultsGlobal = createDefaultGlobalSettings();
+            const displayMoogliData = {
+                runtime: parseFloat(globalSettingsRef.current.runtime) || parseFloat(defaultsGlobal.runtime),
+                dt: parseFloat(globalSettingsRef.current.dt) || parseFloat(defaultsGlobal.dt),
+                rotation: parseFloat(globalSettingsRef.current.rotation) || parseFloat(defaultsGlobal.rotation),
+                azim: parseFloat(globalSettingsRef.current.azimuth) || parseFloat(defaultsGlobal.azimuth),
+                elev: parseFloat(globalSettingsRef.current.elevation) || parseFloat(defaultsGlobal.elevation),
+                colormap: globalSettingsRef.current.colormap || defaultsGlobal.colormap,
+                bg: globalSettingsRef.current.background || defaultsGlobal.background,
+                center: centerArray,
+                block: globalSettingsRef.current.block,
+                ...(globalSettingsRef.current.mergeDisplays !== defaultsGlobal.mergeDisplays && { mergeDisplays: globalSettingsRef.current.mergeDisplays }),
+                ...(globalSettingsRef.current.fullScreen !== defaultsGlobal.fullScreen && { fullscreen: globalSettingsRef.current.fullScreen }),
+            };
+            return { moogli: moogliData, displayMoogli: displayMoogliData };
+        };
 
         return () => {
-            const latestOnConfigurationChange = onConfigurationChangeRef.current;
-            if (latestOnConfigurationChange) {
-                console.log("ThreeDMenuBox: Unmounting, checking for changes before push.");
-                const finalConfigData = getThreeDDataForUnmount();
-                const finalConfigString = JSON.stringify(finalConfigData);
-
-                if (finalConfigString !== initialConfigString) {
-                    console.log("ThreeDMenuBox: Changes detected or structure modified, pushing final state up.");
-                    latestOnConfigurationChange(finalConfigData);
-                } else {
-                    console.log("ThreeDMenuBox: No changes detected, skipping push on unmount.");
-                }
-            } else {
-                console.warn("ThreeDMenuBox: onConfigurationChange not available on unmount.");
+            if (onConfigurationChangeRef.current) {
+                const configData = getThreeDDataForUnmount();
+                onConfigurationChangeRef.current(configData);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const availableChemProtos = getChemProtosRef.current ? getChemProtosRef.current() : [];
+    const activeTabData = tabs[activeTab];
+    const isChemField = activeTabData && chemFields.includes(activeTabData.field);
+    const showChemProtoWarning = isChemField && !availableChemProtos.length;
 
     return (
-        <Box style={{ padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
-            <Typography variant="h6" gutterBottom>3D Visualization (Moogli)</Typography>
-
-            {/* === Moogli Array Section (Tabs) === */}
-            <Typography variant="subtitle1" gutterBottom sx={{ mt: 1, fontWeight: 'bold' }}>Data Sources</Typography>
+        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>3D Visualization (Moogli)</Typography>
+                <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+            </Box>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Data Sources</Typography>
+                <Tooltip title={helpText.headings.dataSources} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+            </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto" aria-label="Moogli data sources">
-                    {tabs.map((tab, index) => (
-                        <Tab key={index} label={`${tab.field || 'New'} @ ${tab.path || '?'}`} />
-                    ))}
-                    <IconButton onClick={addTab} sx={{ alignSelf: 'center', marginLeft: '10px' }}><AddIcon /></IconButton>
+                <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
+                    {tabs.map((tab, index) => <Tab key={index} label={`${tab.field || 'New'} @ ${tab.path || '?'}`} />)}
+                    <IconButton onClick={addTab} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
-            {tabs.length > 0 && activeTab >= 0 && activeTab < tabs.length && tabs[activeTab] && (() => {
-                const currentTab = tabs[activeTab];
-                const isChemField = chemFields.includes(currentTab.field);
-                const chemProtosAvailable = availableChemProtos.length > 0;
-                const showChemProtoWarning = isChemField && !chemProtosAvailable;
-
-                return (
-                    <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-                        <Grid container spacing={1.5}>
-                            {/* Row 1: Path, Field */}
-                            <Grid item xs={12} sm={6}>
-                                <TextField fullWidth size="small" label="Path" required value={currentTab.path}
-                                    onChange={(e) => updateTab(activeTab, 'path', e.target.value)} />
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <TextField select fullWidth size="small" label="Field" required value={currentTab.field}
-                                    onChange={(e) => updateTab(activeTab, 'field', e.target.value)}>
-                                    <MenuItem value=""><em>Select Field...</em></MenuItem>
-                                    {fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-                                </TextField>
-                            </Grid>
-
-                            {isChemField ? (
-                                <>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            select fullWidth size="small" label="Chem Prototype" required
-                                            value={currentTab.chemProto}
-                                            onChange={(e) => updateTab(activeTab, 'chemProto', e.target.value)}
-                                            error={showChemProtoWarning || !currentTab.chemProto}
-                                            helperText={showChemProtoWarning ? "Warning: No Chem Prototypes defined in Signaling." : (!currentTab.chemProto ? "Required" : "")}
-                                        >
-                                            <MenuItem value=""><em>Select Prototype...</em></MenuItem>
-                                            {availableChemProtos.map(protoName => (
-                                                <MenuItem key={protoName} value={protoName}>{protoName}</MenuItem>
-                                            ))}
-                                        </TextField>
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth size="small" label="Child Object Path" required
-                                            value={currentTab.childPath}
-                                            onChange={(e) => updateTab(activeTab, 'childPath', e.target.value)}
-                                            error={!currentTab.childPath}
-                                            helperText={!currentTab.childPath ? "Required" : ""}
-                                        />
-                                    </Grid>
-                                </>
-                            ) : (
-                                <>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            select fullWidth disabled size="small" label="Chem Prototype"
-                                            value={currentTab.chemProto} // Should be '.'
-                                        >
-                                            <MenuItem value=".">.</MenuItem>
-                                        </TextField>
-                                    </Grid>
-                                    <Grid item xs={12} sm={6}>
-                                        <TextField
-                                            fullWidth size="small" label="Relative Path (Optional)"
-                                            value={currentTab.childPath}
-                                            onChange={(e) => updateTab(activeTab, 'childPath', e.target.value)}
-                                        />
-                                    </Grid>
-                                </>
-                            )}
-
-                            <Grid item xs={12} sm={6}>
-                                <TextField fullWidth size="small" label="Title (Optional)" value={currentTab.title}
-                                    onChange={(e) => updateTab(activeTab, 'title', e.target.value)} />
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <TextField fullWidth size="small" label="Diameter Scale (Optional)" type="number" value={currentTab.diameterScale}
-                                    onChange={(e) => updateTab(activeTab, 'diameterScale', e.target.value)} InputProps={{ inputProps: { step: 0.1 } }} />
-                            </Grid>
-
-                            <Grid item xs={12} sm={6}>
-                                <TextField
-                                    fullWidth size="small" label="Min (ymin)" type="number"
-                                    value={currentTab.min} onChange={(e) => updateTab(activeTab, 'min', e.target.value)}
-                                    InputProps={{ inputProps: { step: 'any' } }} helperText="Optional (Default: 0)"
-                                />
-                            </Grid>
-                            <Grid item xs={12} sm={6}>
-                                <TextField
-                                    fullWidth size="small" label="Max (ymax)" type="number"
-                                    value={currentTab.max} onChange={(e) => updateTab(activeTab, 'max', e.target.value)}
-                                    InputProps={{ inputProps: { step: 'any' } }} helperText="Optional (Default: 0)"
-                                />
-                            </Grid>
-                        </Grid>
-                        <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ marginTop: '16px' }}>
-                            Remove Data Source {activeTab + 1}
-                        </Button>
-                    </Box>
-                );
-            })()}
-            {tabs.length === 0 && <Typography sx={{ mt: 1, fontStyle: 'italic' }}>No 3D data sources defined.</Typography>}
-
-            <Divider style={{ margin: '24px 0' }} />
-            <Typography variant="subtitle1" gutterBottom sx={{ mt: 1, fontWeight: 'bold' }}>Global Display Settings</Typography>
-            <Box sx={{ marginTop: '16px', padding: '10px', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-                <Grid container spacing={2} alignItems="center"> {/* Increased spacing for clarity */}
-                    {/* Row 1: Runtime, Display dt, Rotation */}
-                    <Grid item xs={12} sm={6} md={4}>
-                        <TextField fullWidth size="small" label="Runtime (s)" type="number" InputProps={{ inputProps: { min: 1e-3, step: 0.1 } }}
-                            value={globalSettings.runtime} onChange={(e) => updateGlobalSetting('runtime', e.target.value)} />
+            {activeTabData && (
+                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}><HelpField id="path" label="Path" required value={activeTabData.path} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.path} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="field" label="Field" required select value={activeTabData.field} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.field}>{fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                        {isChemField ? (
+                             <>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="chemProto" label="Chem Prototype" select required value={activeTabData.chemProto} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.chemProto} error={showChemProtoWarning || !activeTabData.chemProto}>
+                                         <MenuItem value=""><em>Select...</em></MenuItem>
+                                         {availableChemProtos.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+                                     </HelpField>
+                                 </Grid>
+                                 <Grid item xs={12} sm={6}><HelpField id="childPath" label="Child Object Path" required value={activeTabData.childPath} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.childPath} /></Grid>
+                             </>
+                         ) : (
+                             <>
+                                 <Grid item xs={12} sm={6}><HelpField id="chemProto" label="Chem Prototype" select disabled value={activeTabData.chemProto} onChange={()=>{}} helptext={helpText.dataSources.chemProto}><MenuItem value=".">.</MenuItem></HelpField></Grid>
+                                 <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeTabData.childPath} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.childPath}/></Grid>
+                             </>
+                         )}
+                        <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} /></Grid>
                     </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
-                        <TextField
-                            fullWidth
-                            size="small"
-                            label="Display dt (s)"
-                            type="number"
-                            value={globalSettings.dt}
-                            onChange={(e) => updateGlobalSetting('dt', e.target.value)}
-                            InputProps={{ inputProps: { min: 1e-5, step: 0.01 } }}
-                            // helperText removed
-                        />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
-                        <TextField fullWidth size="small" label="Rotation (rad/step)" type="number" InputProps={{ inputProps: { step: 0.001 } }}
-                            value={globalSettings.rotation} onChange={(e) => updateGlobalSetting('rotation', e.target.value)} />
-                    </Grid>
+                    <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>Remove Data Source</Button>
+                </Box>
+            )}
 
-                    {/* Row 2: Azimuth, Elevation */}
-                    <Grid item xs={12} sm={6} md={4}> {/* md={4} or md={6} depending on preference */}
-                        <TextField fullWidth size="small" label="Azimuth (azim)" type="number" InputProps={{ inputProps: { step: 0.1 } }}
-                            value={globalSettings.azimuth} onChange={(e) => updateGlobalSetting('azimuth', e.target.value)} />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={4}> {/* md={4} or md={6} */}
-                        <TextField fullWidth size="small" label="Elevation (elev)" type="number" InputProps={{ inputProps: { step: 0.1 } }}
-                            value={globalSettings.elevation} onChange={(e) => updateGlobalSetting('elevation', e.target.value)} />
-                    </Grid>
-                     {/* Empty item to push next row or adjust md values above if 2 items per row is desired */}
-                    <Grid item md={4} sx={{ display: { xs: 'none', md: 'block' } }} />
-
-
-                    {/* Row 3: Colormap, Background */}
-                    <Grid item xs={12} sm={6} md={4}>
-                        <TextField select fullWidth size="small" label="Colormap" value={globalSettings.colormap}
-                            onChange={(e) => updateGlobalSetting('colormap', e.target.value)}>
-                            {colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-                        </TextField>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={4}>
-                        <TextField
-                            select
-                            fullWidth
-                            size="small"
-                            label="Background (bg)"
-                            value={globalSettings.background}
-                            onChange={(e) => updateGlobalSetting('background', e.target.value)}
-                        >
-                            {backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-                        </TextField>
-                    </Grid>
-                    <Grid item md={4} sx={{ display: { xs: 'none', md: 'block' } }} />
-
-
-                    {/* Row 4: Center */}
-                    <Grid item xs={12}> {/* Full width for center */}
-                        <TextField fullWidth size="small" label="Center [x,y,z] (JSON array)" value={globalSettings.center}
-                            onChange={(e) => updateGlobalSetting('center', e.target.value)}
-                            placeholder="e.g., [1.5e-5, 0, -2e-5]" />
-                    </Grid>
-
-                    {/* Checkboxes in their own row */}
+            <Divider sx={{ my: 3 }} />
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Global Display Settings</Typography>
+                <Tooltip title={helpText.headings.globalSettings} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+            </Box>
+            <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="runtime" label="Runtime (s)" type="number" value={globalSettings.runtime} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.runtime} /></Grid>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="dt" label="Display dt (s)" type="number" value={globalSettings.dt} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.dt} /></Grid>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="rotation" label="Rotation (rad/step)" type="number" value={globalSettings.rotation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.rotation} /></Grid>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="azimuth" label="Azimuth (azim)" type="number" value={globalSettings.azimuth} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.azimuth} /></Grid>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                    <Grid item xs={12} sm={6} md={4}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                    <Grid item xs={12} sm={8}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} /></Grid>
                     <Grid item xs={12} container spacing={1} sx={{ mt: 1 }}>
-                        <Grid item xs={12} sm={4} md="auto">
-                            <FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" sx={{ whiteSpace: 'nowrap' }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4} md="auto">
-                            <FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" sx={{ whiteSpace: 'nowrap' }} />
-                        </Grid>
-                        <Grid item xs={12} sm={4} md="auto">
-                            <FormControlLabel control={<Checkbox checked={Boolean(globalSettings.block)} onChange={(e) => updateGlobalSetting('block', e.target.checked)} />} label="Block Thread" sx={{ whiteSpace: 'nowrap' }} />
-                        </Grid>
+                        <Grid item xs="auto"><Tooltip title={helpText.globalSettings.mergeDisplays}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" /></Tooltip></Grid>
+                        <Grid item xs="auto"><Tooltip title={helpText.globalSettings.fullScreen}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" /></Tooltip></Grid>
+                        <Grid item xs="auto"><Tooltip title={helpText.globalSettings.block}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.block)} onChange={(e) => updateGlobalSetting('block', e.target.checked)} />} label="Block Thread" /></Tooltip></Grid>
                     </Grid>
                 </Grid>
             </Box>
@@ -492,4 +315,3 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
 };
 
 export default ThreeDMenuBox;
-

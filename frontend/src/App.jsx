@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { AppBar, Toolbar, Button, Grid } from '@mui/material';
 // --- Import Icons ---
-import configureIcon from './assets/configure-icon.png';
+// import configureIcon from './assets/configure-icon.png';
 import runIcon from './assets/run.png';
 import morphoIcon from './assets/morpho.png';
 import spinesIcon from './assets/spines.png';
@@ -18,7 +18,7 @@ import simOutputIcon from './assets/simOutput.png';
 // --- Import Menu Boxes ---
 import FileMenuBox from './components/MenuBoxes/FileMenuBox';
 import SimOutputMenuBox from './components/MenuBoxes/SimOutputMenuBox';
-import ConfigureMenuBox from './components/MenuBoxes/ConfigureMenuBox';
+// import ConfigureMenuBox from './components/MenuBoxes/ConfigureMenuBox';
 import RunMenuBox from './components/MenuBoxes/RunMenuBox';
 import MorphoMenuBox from './components/MenuBoxes/MorphoMenuBox';
 import SpineMenuBox from './components/MenuBoxes/SpineMenuBox';
@@ -209,14 +209,53 @@ const App = () => {
                      currentConfig={jsonData.files}
                      getChemProtos={getChemProtos}
                  />,
-      Configure: <ConfigureMenuBox ref={activeMenu === 'Configure' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ diffusionLength: jsonData.diffusionLength, randseed: jsonData.randseed, temperature: jsonData.temperature, numWaveFrames: jsonData.numWaveFrames, turnOffElec: jsonData.turnOffElec, useGssa: jsonData.useGssa, verbose: jsonData.verbose, combineSegments: jsonData.combineSegments, benchmark: jsonData.benchmark, stealCellFromLibrary: jsonData.stealCellFromLibrary, modelPath: jsonData.modelPath, odeMethod: jsonData.odeMethod }} />,
+	  /*
+      Configure: <ConfigureMenuBox
+                     ref={activeMenu === 'Configure' ? activeMenuBoxRef : null}
+                     onConfigurationChange={updateJsonData} 
+                     currentConfig={{ 
+                         diffusionLength: jsonData.diffusionLength, 
+                         randseed: jsonData.randseed, 
+						temperature: jsonData.temperature, 
+						numWaveFrames: jsonData.numWaveFrames, 
+						turnOffElec: jsonData.turnOffElec, 
+						useGssa: jsonData.useGssa, 
+						verbose: jsonData.verbose, 
+						combineSegments: jsonData.combineSegments, 
+						benchmark: jsonData.benchmark, 
+						stealCellFromLibrary: jsonData.stealCellFromLibrary, 
+						modelPath: jsonData.modelPath, 
+						odeMethod: jsonData.odeMethod }} 
+		          />,
+	  */
       Run: <RunMenuBox
              ref={activeMenu === 'Run' ? activeMenuBoxRef : null}
              onConfigurationChange={updateJsonData}
              getCurrentJsonData={getCurrentJsonData}
-             currentConfig={{ runtime: jsonData.runtime, elecDt: jsonData.elecDt, elecPlotDt: jsonData.elecPlotDt, chemDt: jsonData.chemDt, chemPlotDt: jsonData.chemPlotDt, diffDt: jsonData.diffDt, funcDt: jsonData.funcDt, statusDt: jsonData.statusDt }}
-             onPlotDataUpdate={handlePlotDataUpdate} // Pass the callback to update plot state
-             onClearPlotData={clearPlotData} // Pass callback to clear plot data on reset
+             currentConfig={{
+                runtime: jsonData.runtime,
+                elecDt: jsonData.elecDt,
+                elecPlotDt: jsonData.elecPlotDt,
+                chemDt: jsonData.chemDt,
+                chemPlotDt: jsonData.chemPlotDt,
+                diffDt: jsonData.diffDt,
+                funcDt: jsonData.funcDt,
+                statusDt: jsonData.statusDt,
+                diffusionLength: jsonData.diffusionLength,
+                randseed: jsonData.randseed,
+                temperature: jsonData.temperature,
+                numWaveFrames: jsonData.numWaveFrames,
+                turnOffElec: jsonData.turnOffElec,
+                useGssa: jsonData.useGssa,
+                verbose: jsonData.verbose,
+                combineSegments: jsonData.combineSegments,
+                benchmark: jsonData.benchmark,
+                stealCellFromLibrary: jsonData.stealCellFromLibrary,
+                modelPath: jsonData.modelPath,
+                odeMethod: jsonData.odeMethod
+             }}
+             onPlotDataUpdate={handlePlotDataUpdate}
+             onClearPlotData={clearPlotData}
             />,
       Morphology: <MorphoMenuBox ref={activeMenu === 'Morphology' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} />,
       Spines: <SpineMenuBox ref={activeMenu === 'Spines' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
@@ -256,7 +295,6 @@ const App = () => {
       <AppBar position="static">
          <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
              <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Configure')} style={{ flexDirection: 'column', color: activeMenu === 'Configure' ? 'orange' : 'inherit' }} > <img src={configureIcon} alt="Configure Icon" style={{ width: '72px', marginBottom: '4px' }} /> Configure </Button>
              <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
              <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology </Button>
              <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines </Button>
