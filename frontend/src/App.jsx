@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { AppBar, Toolbar, Button, Grid } from '@mui/material';
 // --- Import Icons ---
-// import configureIcon from './assets/configure-icon.png';
 import runIcon from './assets/run.png';
 import morphoIcon from './assets/morpho.png';
 import spinesIcon from './assets/spines.png';
@@ -18,7 +17,6 @@ import simOutputIcon from './assets/simOutput.png';
 // --- Import Menu Boxes ---
 import FileMenuBox from './components/MenuBoxes/FileMenuBox';
 import SimOutputMenuBox from './components/MenuBoxes/SimOutputMenuBox';
-// import ConfigureMenuBox from './components/MenuBoxes/ConfigureMenuBox';
 import RunMenuBox from './components/MenuBoxes/RunMenuBox';
 import MorphoMenuBox from './components/MenuBoxes/MorphoMenuBox';
 import SpineMenuBox from './components/MenuBoxes/SpineMenuBox';
@@ -42,6 +40,11 @@ import isEqual from 'lodash/isEqual';
 const initialJsonData = {
   filetype: "jardesigner",
   version: "1.0",
+  fileinfo: {
+      creator: "",
+      modelNotes: "",
+      licence: "CC BY"
+  },
   modelPath: "/model",
   diffusionLength: 2e-6,
   turnOffElec: false,
@@ -151,7 +154,8 @@ const App = () => {
                 ...initialJsonData,
                 ...parsedData,
                 filetype: parsedData.filetype || initialJsonData.filetype,
-                version: parsedData.version || initialJsonData.version
+                version: parsedData.version || initialJsonData.version,
+                fileinfo: { ...initialJsonData.fileinfo, ...(parsedData.fileinfo || {}) }
              };
              setJsonData(mergedData);
              setJsonContent(JSON.stringify(compactJsonData(mergedData, initialJsonData), null, 2));
@@ -169,6 +173,42 @@ const App = () => {
     setJsonContent(JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
   }, []);
 
+  const handleSaveModel = useCallback(async (fileInfoFromMenu) => {
+      const fullFileInfo = {
+          ...fileInfoFromMenu,
+          dateTime: new Date().toISOString(),
+          userid: 'anonymous', // NOTE: Browser security prevents accessing local user ID
+      };
+
+      const dataToSave = { ...jsonData, fileinfo: fullFileInfo };
+      const finalJsonToSave = compactJsonData(dataToSave, initialJsonData);
+      const jsonDataString = JSON.stringify(finalJsonToSave, null, 2);
+      const suggestedName = 'model.json';
+      const blob = new Blob([jsonDataString], { type: 'application/json' });
+
+      if (window.showSaveFilePicker) {
+          try {
+              const fileHandle = await window.showSaveFilePicker({
+                  suggestedName,
+                  types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+              });
+              const writableStream = await fileHandle.createWritable();
+              await writableStream.write(blob);
+              await writableStream.close();
+          } catch (err) {
+              if (err.name !== 'AbortError') console.error('Error saving file:', err);
+          }
+      } else {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = suggestedName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(link.href), 100);
+      }
+  }, [jsonData]);
+
   const getCurrentJsonData = useCallback(() => {
     return compactJsonData(jsonData, initialJsonData);
   }, [jsonData]);
@@ -179,7 +219,7 @@ const App = () => {
           return protos.map(proto => proto?.name).filter(name => name && typeof name === 'string' && name.trim() !== '');
       }
       return [];
-  }, [jsonData?.chemProto]); // Corrected dependency: jsonData.chemProto
+  }, [jsonData?.chemProto]);
 
   // --- Callback for RunMenuBox to update plot data ---
   const handlePlotDataUpdate = useCallback(({ filename, ready, error }) => {
@@ -207,8 +247,9 @@ const App = () => {
       File: <FileMenuBox
                 ref={activeMenu === 'File' ? activeMenuBoxRef : null}
                 setJsonContent={updateJsonString}
-                getCurrentJsonData={getCurrentJsonData}
                 onClearModel={handleClearModel}
+                onSaveModel={handleSaveModel}
+                currentConfig={jsonData.fileinfo}
             />,
       SimOutput: <SimOutputMenuBox
                      ref={activeMenu === 'SimOutput' ? activeMenuBoxRef : null}
@@ -216,50 +257,12 @@ const App = () => {
                      currentConfig={jsonData.files}
                      getChemProtos={getChemProtos}
                  />,
-	  /*
-      Configure: <ConfigureMenuBox
-                     ref={activeMenu === 'Configure' ? activeMenuBoxRef : null}
-                     onConfigurationChange={updateJsonData} 
-                     currentConfig={{ 
-                         diffusionLength: jsonData.diffusionLength, 
-                         randseed: jsonData.randseed, 
-						temperature: jsonData.temperature, 
-						numWaveFrames: jsonData.numWaveFrames, 
-						turnOffElec: jsonData.turnOffElec, 
-						useGssa: jsonData.useGssa, 
-						verbose: jsonData.verbose, 
-						combineSegments: jsonData.combineSegments, 
-						benchmark: jsonData.benchmark, 
-						stealCellFromLibrary: jsonData.stealCellFromLibrary, 
-						modelPath: jsonData.modelPath, 
-						odeMethod: jsonData.odeMethod }} 
-		          />,
-	  */
       Run: <RunMenuBox
              ref={activeMenu === 'Run' ? activeMenuBoxRef : null}
              onConfigurationChange={updateJsonData}
              getCurrentJsonData={getCurrentJsonData}
              currentConfig={{
-                runtime: jsonData.runtime,
-                elecDt: jsonData.elecDt,
-                elecPlotDt: jsonData.elecPlotDt,
-                chemDt: jsonData.chemDt,
-                chemPlotDt: jsonData.chemPlotDt,
-                diffDt: jsonData.diffDt,
-                funcDt: jsonData.funcDt,
-                statusDt: jsonData.statusDt,
-                diffusionLength: jsonData.diffusionLength,
-                randseed: jsonData.randseed,
-                temperature: jsonData.temperature,
-                numWaveFrames: jsonData.numWaveFrames,
-                turnOffElec: jsonData.turnOffElec,
-                useGssa: jsonData.useGssa,
-                verbose: jsonData.verbose,
-                combineSegments: jsonData.combineSegments,
-                benchmark: jsonData.benchmark,
-                stealCellFromLibrary: jsonData.stealCellFromLibrary,
-                modelPath: jsonData.modelPath,
-                odeMethod: jsonData.odeMethod
+                ...jsonData
              }}
              onPlotDataUpdate={handlePlotDataUpdate}
              onClearPlotData={clearPlotData}
@@ -294,7 +297,7 @@ const App = () => {
                 getChemProtos={getChemProtos}
             />,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [activeMenu, jsonData, updateJsonData, updateJsonString, getCurrentJsonData, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel]);
+  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData]);
 
 
   return (
@@ -321,7 +324,6 @@ const App = () => {
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
         <Grid item xs={4}>
-          {/* Pass plot data to GraphWindow */}
           <GraphWindow
             svgPlotFilename={svgPlotFilename}
             isPlotReady={isPlotReady}
