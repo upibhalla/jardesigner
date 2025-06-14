@@ -30,7 +30,6 @@ import StimMenuBox from './components/MenuBoxes/StimMenuBox';
 // --- Import Other Components ---
 import GraphWindow from './components/GraphWindow';
 import DisplayWindow from './components/DisplayWindow';
-import JsonText from './components/JsonText';
 // --- Import Schema ---
 import schema from './schema.json'; // Adjust path if necessary
 // --- Utility for deep comparison ---
@@ -319,20 +318,20 @@ const App = () => {
          </Toolbar>
       </AppBar>
 
-      <Grid container spacing={2} style={{ padding: '16px' }}>
-        <Grid item xs={4}>
+      <Grid container spacing={2} style={{ padding: '16px', height: 'calc(100vh - 64px)' }}>
+        <Grid item xs={4} style={{ height: '100%' }}>
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
-        <Grid item xs={4}>
+        <Grid item xs={4} style={{ height: '100%' }}>
           <GraphWindow
             svgPlotFilename={svgPlotFilename}
             isPlotReady={isPlotReady}
             plotError={plotError}
           />
         </Grid>
-        <Grid item xs={4}>
-          <DisplayWindow />
-          <JsonText
+        {/* ----- MODIFIED: This is the cleaned-up rightmost panel ----- */}
+        <Grid item xs={4} style={{ height: '100%' }}>
+          <DisplayWindow
              jsonString={jsonContent}
              schema={schema}
              setActiveMenu={setActiveMenu}
