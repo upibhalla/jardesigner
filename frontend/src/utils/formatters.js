@@ -3,7 +3,7 @@
  */
 export const formatFloat = (num) => {
     if (num == null) return '';
-    const preciseNum = parseFloat(Number(num).toPrecision(15));
+    const preciseNum = parseFloat(Number(num).toPrecision(12));
     return String(preciseNum);
 };
 
