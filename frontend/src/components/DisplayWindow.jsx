@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Tabs, Tab } from '@mui/material';
 import JsonText from './JsonText'; // We will render JsonText inside this component
-import MarkdownText from './MarkdownText'; // The new markdown component
+import MarkdownText from './MarkdownText'; // Markdown rendered here 
 
 // The component now accepts props to pass down to JsonText
 const DisplayWindow = ({ jsonString, schema, setActiveMenu }) => {
@@ -23,35 +23,22 @@ const DisplayWindow = ({ jsonString, schema, setActiveMenu }) => {
     }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabIndex} onChange={handleTabChange} aria-label="display window tabs">
-          <Tab label="Model JSON" id="tab-0" />
-          <Tab label="Documentation" id="tab-1" />
+          <Tab label="Model JSON" />
+          <Tab label="Documentation" />
         </Tabs>
       </Box>
 
-      {/* Panel for "Model JSON" */}
-      <Box
-        role="tabpanel"
-        hidden={tabIndex !== 0}
-        id="tabpanel-0"
-        sx={{ flexGrow: 1, overflowY: 'auto' }} // Allow panel to grow and scroll
-      >
-        {tabIndex === 0 && (
-          <JsonText
-            jsonString={jsonString}
-            schema={schema}
-            setActiveMenu={setActiveMenu}
-          />
-        )}
+      {/* Use CSS 'display' property to hide the inactive panel instead of unmounting */}
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 0 ? 'block' : 'none' }}>
+        <JsonText
+          jsonString={jsonString}
+          schema={schema}
+          setActiveMenu={setActiveMenu}
+        />
       </Box>
 
-      {/* Panel for "Documentation" */}
-      <Box
-        role="tabpanel"
-        hidden={tabIndex !== 1}
-        id="tabpanel-1"
-        sx={{ flexGrow: 1, overflowY: 'auto' }} // Allow panel to grow and scroll
-      >
-        {tabIndex === 1 && <MarkdownText />}
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
+        <MarkdownText />
       </Box>
     </Box>
   );

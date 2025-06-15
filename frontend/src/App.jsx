@@ -247,7 +247,8 @@ const App = () => {
                 ref={activeMenu === 'File' ? activeMenuBoxRef : null}
                 setJsonContent={updateJsonString}
                 onClearModel={handleClearModel}
-                onSaveModel={handleSaveModel}
+		  		// onSaveModel={handleSaveModel}
+                getCurrentJsonData={getCurrentJsonData}
                 currentConfig={jsonData.fileinfo}
             />,
       SimOutput: <SimOutputMenuBox

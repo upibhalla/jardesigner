@@ -1,0 +1,143 @@
+{
+  "filetype": "jardesigner",
+  "version": "1.0",
+  "runtime": 50,
+  "cellProto": {
+    "type": "branchedCell",
+    "somaDia": 0.00001,
+    "somaLen": 0.00001,
+    "dendDia": 0.000005,
+    "dendLen": 0.00005,
+    "dendNumSeg": 1,
+    "branchDia": 0.0000025,
+    "branchLen": 0.00015,
+    "branchNumSeg": 1
+  },
+  "spineProto": [
+    {
+      "type": "builtin",
+      "source": "makeExcSpine()",
+      "name": "exc",
+      "shaftDia": 2e-7,
+      "shaftLen": 0.000001,
+      "headDia": 5e-7,
+      "headLen": 5e-7
+    }
+  ],
+  "spineDistrib": [
+    {
+      "proto": "exc",
+      "path": "#",
+      "spacing": 0.00001,
+      "minSpacing": 0.000001,
+      "sizeScale": 1,
+      "sizeSdev": 0.5,
+      "angle": 0,
+      "angleSdev": 6.2832
+    }
+  ],
+  "chanProto": [
+    {
+      "type": "builtin",
+      "source": "make_Na()",
+      "name": "Na"
+    },
+    {
+      "type": "builtin",
+      "source": "make_K_DR()",
+      "name": "KDR"
+    }
+  ],
+  "chanDistrib": [
+    {
+      "proto": "Na",
+      "path": "soma",
+      "Gbar": 1000
+    },
+    {
+      "proto": "KDR",
+      "path": "soma",
+      "Gbar": 1400
+    }
+  ],
+  "chemProto": [
+    {
+      "type": "builtin",
+      "source": "makeChemOscillator()",
+      "name": "Oscillator"
+    }
+  ],
+  "chemDistrib": [
+    {
+      "proto": "Oscillator",
+      "path": "dend#",
+      "type": "dend",
+      "diffusionLength": 0.000002
+    }
+  ],
+  "adaptors": [
+    {
+      "source": "Oscillator/a",
+      "sourceField": "conc",
+      "dest": ".",
+      "destField": "inject",
+      "baseline": 0,
+      "slope": 1.5e-10
+    }
+  ],
+  "plots": [
+    {
+      "path": "dend#",
+      "field": "conc",
+      "relpath": "Oscillator/a[]"
+    },
+    {
+      "path": "soma",
+      "field": "Vm"
+    }
+  ],
+  "moogli": [
+    {
+      "path": "#",
+      "field": "conc",
+      "relpath": "Oscillator/a",
+      "diaScale": 1,
+      "ymax": 300
+    }
+  ],
+  "displayMoogli": {
+    "runtime": 50,
+    "dt": 1,
+    "rotation": 0,
+    "azim": 0,
+    "elev": 0,
+    "colormap": "jet",
+    "bg": "default",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "block": true
+  },
+  "stims": [
+    {
+      "type": "field",
+      "path": "soma",
+      "expr": "0.1e-9*(t>0.1)*(t<0.2)",
+      "field": "inject"
+    },
+    {
+      "type": "field",
+      "path": "dend#",
+      "relpath": "Oscillator/a[0]",
+      "expr": "2*(t<1)",
+      "field": "conc"
+    }
+  ],
+  "fileinfo": {
+    "creator": "Upinder S. Bhalla",
+    "licence": "CC BY",
+    "modelNotes": "This version of the multiscale model has a bit of everything: Y morphology, spines, voltage gated channels, a wave-propagating signaling pathway, plots and a 3-D view."
+  }
+}
