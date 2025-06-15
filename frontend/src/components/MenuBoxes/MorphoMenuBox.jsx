@@ -68,9 +68,12 @@ const formatFloat = (num) => {
 
 
 // --- Unit Conversion Helpers ---
-const toMeters = (microns) => (parseFloat(microns*1e-6) || 0);
+const toMeters = (microns) => {
+    const meterValue = (parseFloat(microns) * 1e-6 || 0);
+    return formatFloat(meterValue);
+};
 const toMicrons = (meters) => {
-    const micronValue = (parseFloat(meters) || 0) / 1e-6;
+    const micronValue = (parseFloat(meters) || 0) * 1e6;
     return formatFloat(micronValue);
 };
 const safeToString = (value, defaultValue = '') => (value != null ? String(value) : defaultValue);

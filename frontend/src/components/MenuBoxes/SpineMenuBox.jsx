@@ -35,6 +35,15 @@ const getComponentTypeFromSchema = (schemaType, schemaSource) => {
     if (schemaSource === 'makePassiveSpine()') return 'Passive';
     return schemaSource || 'Excitatory';
 };
+// --- Unit Conversion Helpers ---
+const toMeters = (microns) => {
+    const meterValue = (parseFloat(microns) * 1e-6 || 0);
+    return formatFloat(meterValue);
+};
+const toMicrons = (meters) => {
+    const micronValue = (parseFloat(meters) || 0) * 1e6;
+    return formatFloat(micronValue);
+};
 
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
@@ -75,10 +84,10 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 type: componentType,
                 name: p.name,
                 source: p.source,
-                shaftDiameter: formatFloat(p.shaftDia * 1e6) || createDefaultPrototype().shaftDiameter,
-                shaftLength: formatFloat(p.shaftLen * 1e6) || createDefaultPrototype().shaftLength,
-                headDiameter: formatFloat(p.headDia * 1e6) || createDefaultPrototype().headDiameter,
-                headLength: formatFloat(p.headLen * 1e6) || createDefaultPrototype().headLength,
+                shaftDiameter: toMicrons(p.shaftDia) || createDefaultPrototype().shaftDiameter,
+                shaftLength: toMicrons(p.shaftLen) || createDefaultPrototype().shaftLength,
+                headDiameter: toMicrons(p.headDia) || createDefaultPrototype().headDiameter,
+                headLength: toMicrons(p.headLen) || createDefaultPrototype().headLength,
                 gluRGbar: safeToString(p.gluGbar, createDefaultPrototype().gluRGbar),
                 nmdaRGbar: safeToString(p.nmdaGbar, createDefaultPrototype().nmdaRGbar),
                 gluRTau1: createDefaultPrototype().gluRTau1,
@@ -94,8 +103,8 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
         const initialDists = currentConfig?.spineDistrib?.map(d => ({
             prototype: d.proto,
             path: d.path,
-            spacing: formatFloat(d.spacing * 1e6) || createDefaultDistribution().spacing,
-            minSpacing: formatFloat(d.minSpacing * 1e6) || createDefaultDistribution().minSpacing,
+            spacing: toMicrons(d.spacing) || createDefaultDistribution().spacing,
+            minSpacing: toMicrons(d.minSpacing) || createDefaultDistribution().minSpacing,
             sizeScale: safeToString(d.sizeScale, createDefaultDistribution().sizeScale),
             sizeStdDev: safeToString(d.sizeSdev, createDefaultDistribution().sizeStdDev),
             angle: safeToString(d.angle, createDefaultDistribution().angle),
@@ -183,10 +192,10 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      type: schemaType,
                      source: schemaSource,
                      name: protoState.name || getNameFromType(protoState.type),
-                     shaftDia: (parseFloat(protoState.shaftDiameter) || 0) * 1e-6,
-                     shaftLen: (parseFloat(protoState.shaftLength) || 0) * 1e-6,
-                     headDia: (parseFloat(protoState.headDiameter) || 0) * 1e-6,
-                     headLen: (parseFloat(protoState.headLength) || 0) * 1e-6,
+                     shaftDia: (toMeters(protoState.shaftDiameter) || 0),
+                     shaftLen: (toMeters(protoState.shaftLength) || 0),
+                     headDia: (toMeters(protoState.headDiameter) || 0),
+                     headLen: (toMeters(protoState.headLength) || 0),
                  };
 
                  if (schemaSource === 'makeActiveSpine()') {
@@ -204,8 +213,8 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                  return {
                      proto: distState.prototype,
                      path: distState.path,
-                     spacing: (parseFloat(distState.spacing) || 0) * 1e-6,
-                     minSpacing: (parseFloat(distState.minSpacing) || 0) * 1e-6,
+                     spacing: (toMeters(distState.spacing) || 0),
+                     minSpacing: (toMeters(distState.minSpacing) || 0),
                      sizeScale: parseFloat(distState.sizeScale) || 1,
                      sizeSdev: parseFloat(distState.sizeStdDev) || 0.5,
                      angle: parseFloat(distState.angle) || 0,
