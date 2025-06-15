@@ -70,7 +70,7 @@ const formatFloat = (num) => {
 // --- Unit Conversion Helpers ---
 const toMeters = (microns) => {
     const meterValue = (parseFloat(microns) * 1e-6 || 0);
-    return formatFloat(meterValue);
+    return Number(formatFloat(meterValue));
 };
 const toMicrons = (meters) => {
     const micronValue = (parseFloat(meters) || 0) * 1e6;
