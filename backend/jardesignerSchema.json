@@ -384,22 +384,68 @@
 	"chemDistrib": {
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "proto": {
-            "type": "string"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "proto": { "type": "string" },
+              "path": { "type": "string" },
+              "type": { "const": "dend" },
+              "diffusionLength": { "type": "number", "minimum": 0, "default": 2.0e-6 }
+            },
+            "required": ["proto", "path", "type"],
+            "additionalProperties": false
           },
-          "path": {
-            "type": "string"
+          {
+            "type": "object",
+            "properties": {
+              "proto": { "type": "string" },
+              "path": { "type": "string" },
+              "type": { "enum": ["spine", "psd"] },
+              "parent": { "type": "string", "default": "dend" }
+            },
+            "required": ["proto", "path", "type"],
+            "additionalProperties": false
           },
-          "type": {
-            "type": "string", "enum": ["presyn_spine", "presyn_dend", "dend", "spine", "psd", "endo"]
+          {
+            "type": "object",
+            "properties": {
+              "proto": { "type": "string" },
+              "path": { "type": "string" },
+              "type": { "const": "presyn_spine" },
+              "radius": { "type": "number", "default": 0.5e-6 },
+              "radiusSdev": { "type": "number", "default": 0 }
+            },
+            "required": ["proto", "path", "type"],
+            "additionalProperties": false
           },
-          "diffusionLength": {
-            "type": "number", "minimum": 0, "default": 2.0e-6
+          {
+            "type": "object",
+            "properties": {
+              "proto": { "type": "string" },
+              "path": { "type": "string" },
+              "type": { "const": "presyn_dend" },
+              "radius": { "type": "number", "default": 0.5e-6 },
+              "radiusSdev": { "type": "number", "default": 0 },
+              "spacing": { "type": "number", "default": 10e-6 }
+            },
+            "required": ["proto", "path", "type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "proto": { "type": "string" },
+              "path": { "type": "string" },
+              "type": { "const": "endo" },
+              "parent": { "type": "string", "default": "dend" },
+              "radiusRatio": { "type": "number", "default": 0.5 },
+              "spacing": { "type": "number", "default": 10e-6 }
+            },
+            "required": ["proto", "path", "type", "radiusRatio"],
+            "additionalProperties": false
           }
-        },
-        "required": ["proto", "path", "type"]
+        ]
       }
     },
 	"adaptors": {
@@ -557,3 +603,4 @@
   "required": ["filetype", "version"],
   "additionalProperties": false
 }
+

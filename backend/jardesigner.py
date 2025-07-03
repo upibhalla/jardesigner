@@ -727,9 +727,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             #self.cellPortionElist = self.elecid.compartmentsFromExpression[ elecPath + " " + geom ]
             #mesh.subTree = self.cellPortionElist
         elif meshType == 'spine':
-            mesh = self.buildSpineMesh( argList, newChemId )
+            mesh = self.buildSpineMesh( argList, newChemId, comptDict )
         elif meshType == 'psd':
-            mesh = self.buildPsdMesh( argList, newChemId )
+            mesh = self.buildPsdMesh( argList, newChemId, comptDict )
         elif meshType == 'presyn_dend' or meshType == 'presyn_spine':
             mesh = self.buildPresynMesh( argList, newChemId )
         elif meshType == 'endo' or meshType == 'endo_axial':
@@ -744,21 +744,22 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         #    mesh.diffLength = diffLength
         comptDict[chemSrc] = mesh.path
 
-    def buildSpineMesh( self, argList, newChemId ):
-        chemSrc, elecPath, meshType, geom = argList[:4]
-        dendMeshName = argList[4]
-        dendMesh = self.comptDict.get( dendMeshName )
+    def buildSpineMesh( self, argList, newChemId, comptDict ):
+        chemSrc = argList['proto']
+        dendMeshName = argList["parent"]
+        dendMesh = comptDict.get( dendMeshName )
         if not dendMesh:
             raise( "Error: newChemDistrib: Missing parent NeuroMesh '{}' for spine '{}'".format( dendMeshName, chemSrc ) )
-        dendMesh.separateSpines = 1
+        #print( "COMPT DICT ============", comptDict )
+        moose.element(dendMesh).separateSpines = 1
         mesh = moose.SpineMesh( newChemId.path + '/' + chemSrc )
         moose.connect( dendMesh, 'spineListOut', mesh, 'spineList' )
         return mesh
 
-    def buildPsdMesh( self, argList, newChemId ):
-        chemSrc, elecPath, meshType, geom = argList[:4]
-        dendMeshName = argList[4]
-        dendMesh = self.comptDict.get( dendMeshName )
+    def buildPsdMesh( self, argList, newChemId, comptDict ):
+        chemSrc = argList['proto']
+        dendMeshName = argList["parent"]
+        dendMesh = comptDict.get( dendMeshName )
         if not dendMesh:
             raise( "Error: newChemDistrib: Missing parent NeuroMesh '{}' for psd '{}'".format( dendMeshName, chemSrc ) )
         mesh = moose.PsdMesh( newChemId.path + '/' + chemSrc )
@@ -766,13 +767,15 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         return mesh
             
     def buildPresynMesh( self, argList, newChemId ):
-        chemSrc, elecPath, meshType, geom = argList[:4]
+        chemSrc = argList['proto']
+        elecPath = argList['path']
+        meshType = argList['type']
         mesh = moose.PresynMesh( newChemId.path + '/' + chemSrc )
-        presynRadius = float( argList[4] )
-        presynRadiusSdev = float( argList[5] )
+        presynRadius = float( argList["radius"] )
+        presynRadiusSdev = float( argList["radiusSdev"] )
         pair = elecPath + " " + geom
         if meshType == 'presyn_dend':
-            presynSpacing = float( argList[6] )
+            presynSpacing = float( argList["spacing"] )
             elecList = self.elecid.compartmentsFromExpression[ pair ]
             mesh.buildOnDendrites( elecList, presynSpacing )
         else:
@@ -782,10 +785,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         return mesh
 
     def buildEndoMesh( self, argList, newChemId ):
-        chemSrc, elecPath, meshType, geom = argList[:4]
+        chemSrc = argList['proto']
+        elecPath = argList['path']
+        meshType = argList['type']
         mesh = moose.EndoMesh( newChemId.path + '/' + chemSrc )
-        surroundName = argList[4]
-        radiusRatio = float( argList[5] )
+        surroundName = argList["parent"]
+        radiusRatio = float( argList["radiusRatio"] )
         surroundMesh = self.comptDict.get( surroundName )
         if not surroundMesh:
             raise( "Error: newChemDistrib: Could not find surround '{}' for endo '{}'".format( surroundName, chemSrc ) )
@@ -808,17 +813,17 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         spineLine = [ii for ii in self.chemDistrib if ii['type']== 'spine']
         numPsd = len([ii for ii in self.chemDistrib if ii['type']== 'psd'])
         if len( spineLine ) > 0 and numPsd == 0:
-            if moose.exists(self.chemid.path + '/' + spineLine[0][0]):
+            if moose.exists(self.chemid.path + '/' + spineLine[0]['proto']):
                 dummyParent = self.chemid.path
-            elif moose.exists(self.chemid.path + '/kinetics/' + spineLine[0][0]):
+            elif moose.exists(self.chemid.path + '/kinetics/' + spineLine[0]['proto']):
                 dummyParent = self.chemid.path + '/kinetics'
             else:
-                print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0][0] )  )
+                print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0]['proto'] )  )
                 quit()
-            psdLine = list( spineLine[0] )
+            psdLine = dict( spineLine[0] )
             dummyPSD = moose.CubeMesh( dummyParent + "/dummyPSD" )
-            psdLine[0] = 'dummyPSD'
-            psdLine[2] = 'psd'
+            psdLine['proto'] = 'dummyPSD'
+            psdLine['type'] = 'psd'
             self.chemDistrib.append( psdLine )
 
     def buildChemDistrib( self ):
@@ -837,7 +842,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         newChemId = moose.Neutral( model.path + '/chem' )
         comptlist = self._assignComptNamesFromKkit_SBML( model.path )
         comptDict = { i.name:i for i in comptlist }
-        #print( "COMPTDICT =================\n", comptDict )
+        print( "COMPTDICT =================\n", comptDict )
         for i in sortedChemDistrib:
             self.newChemDistrib( i, newChemId, comptDict )
         # We have to assign the compartments to neuromesh and
