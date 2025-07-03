@@ -21,7 +21,7 @@ import helpText from './StimMenuBox.Help.json';
 const fieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
     'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
-    'modulation', 'psdArea', 'nInit'
+    'modulation', 'vclamp', 'psdArea', 'nInit'
 ];
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
 const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
