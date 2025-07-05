@@ -1,0 +1,38 @@
+
+file: jardesigner
+
+	/etc/nginx/sites-available/jardesigner
+Soft linked to 
+	/etc/nginx/sites-enabled/jardesigner
+
+.........................................................................
+
+Make the build version by going into jardesigner/frontend and typing
+
+	npm run build
+
+Make a directory 
+	/var/www/html/jardesigner
+
+Then copy the build directory contents:
+	sudo cp -r build/* /var/www/html/jardesigner/
+
+Set file permissions:
+	sudo chown -R www-data:www-data /var/www/html
+	sudo find /var/www/html -type d -exec chmod 755 {} \;
+	sudo find /var/www/html -type f -exec chmod 644 {} \;
+
+.........................................................................
+file: index.html
+
+Make another directory
+	/var/www/html/jardesigner_launcher
+
+Put in index.html there.
+
+.........................................................................
+
+Set up nginx to run using:
+
+sudo nginx -t
+sudo systemctl restart nginx
