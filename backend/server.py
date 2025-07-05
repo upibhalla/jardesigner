@@ -278,5 +278,5 @@ if __name__ == '__main__':
     print(f"MOOSE Script Path: {MOOSE_SCRIPT_PATH}")
     print(f"Plot Output Directory (absolute): {os.path.abspath(PLOT_OUTPUT_DIR)}")
     print(f"Temporary Config Directory (absolute): {os.path.abspath(TEMP_CONFIG_DIR)}")
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', debug=False, port=5000)
 

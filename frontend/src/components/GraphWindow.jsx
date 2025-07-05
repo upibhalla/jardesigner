@@ -53,7 +53,7 @@ const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
             <CardMedia
               component="img"
               alt="Simulation Plot"
-              image={`http://localhost:5000/plots/${svgPlotFilename}?t=${new Date().getTime()}`} // Cache buster
+              image={`/api/plots/${svgPlotFilename}?t=${new Date().getTime()}`} // Cache buster
               sx={{
                 objectFit: 'contain', // Key for preserving aspect ratio and fitting within bounds
                 maxWidth: '100%',   // Ensure image does not exceed card width
@@ -70,7 +70,7 @@ const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
               <Button
                 variant="outlined"
                 size="small"
-                href={`http://localhost:5000/plots/${svgPlotFilename}`}
+                href={`/api/plots/${svgPlotFilename}`}
                 download={svgPlotFilename}
                 target="_blank"
               >

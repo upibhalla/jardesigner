@@ -9,7 +9,9 @@ const MarkdownText = () => {
 
   useEffect(() => {
     // Fetch the markdown file from the public folder
-    fetch('/documentation.md')
+	// Note that this does not use the /api/ prefix as it is a static
+	// frontend asset. It lives in the public folder.
+    fetch('documentation.md')
       .then(response => response.text())
       .then(text => {
         setMarkdown(text);

@@ -164,7 +164,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
   const pollSimulationStatus = useCallback(async (pid) => {
     if (!pid) return;
     try {
-      const response = await fetch(`http://localhost:5000/simulation_status/${pid}`);
+      const response = await fetch(`/api/simulation_status/${pid}`);
       const result = await response.json();
       if (response.ok) {
         if (result.status === 'completed' || result.status === 'completed_error') {
@@ -242,7 +242,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/launch_simulation', {
+      const response = await fetch('/api/launch_simulation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(currentJsonConfig),
@@ -285,7 +285,7 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
 
     if (simulationPid) {
         try {
-            const response = await fetch(`http://localhost:5000/reset_simulation`, {
+            const response = await fetch(`/api/reset_simulation`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pid: simulationPid })
