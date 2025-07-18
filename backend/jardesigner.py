@@ -712,6 +712,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = argList['proto']
         elecPath = argList['path']
         meshType = argList['type']
+        print( "chemSrc={}, elecPath={}, meshType = {}".format( chemSrc, elecPath, meshType ) )
         #chemSrc, elecPath, meshType, geom = argList[:4]
         chemSrcObj = comptDict.get( chemSrc )
         if not chemSrcObj:
@@ -1747,16 +1748,19 @@ rdesigneur.rmoogli.updateMoogliViewer()
             if len( moose.wildcardFind( meshpath + '/##[ISA=PoolBase     ]' ) ) == 0:
                 moose.Pool( meshpath + '/dummy' )
         stoich.reacSystemPath = meshpath + "/##"
+        # The middle arg in these cases used to be the geom. Not relevant.
+        # The middle arg line[4] Now looks like it is the parent compt.
         if meshType == 'spine':
-            smjl.append( [meshpath, line[4], dsolve])
+
+            smjl.append( [meshpath, line['parent'], dsolve])
         if meshType == 'psd':
-            pmjl.append( [meshpath, line[4], dsolve] )
+            pmjl.append( [meshpath, line['parent'], dsolve] )
         elif meshType == 'endo':
             # Endo mesh is easy as it explicitly defines surround.
-            emjl.append( [meshpath, line[4], dsolve] )
+            emjl.append( [meshpath, line['parent'], dsolve] )
 
     # ComptDict was set up with respect to the original single model.
-    def _buildChemJunctions( self, smjl, pmjl, emjl, comptdict ):
+    def _buildChemJunctions( self, smjl, pmjl, emjl, comptDict ):
         for sm, pm in zip( smjl, pmjl ):
             # Locate associated NeuroMesh and PSD mesh
             if sm[1] == pm[1]:  # Check for same parent dend.
