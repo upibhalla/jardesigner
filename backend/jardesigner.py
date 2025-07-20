@@ -172,8 +172,10 @@ class rdesigneur:
     Arg 2 is the name of the output plot file and can be None.
     """
     ################################################################
-    def __init__(self, jsonFile = None, plotFile = None, jsonData = None ):
+    def __init__(self, jsonFile = None, plotFile = None, jsonData = None,
+            verbose = False):
         schemaFile = "jardesignerSchema.json"
+        self.verbose = verbose
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -215,6 +217,9 @@ class rdesigneur:
         #### Now we load in all the fields of the rdesigneur class
         for key, value in data.items():
             setattr(self, key, value)
+        #### Check for command line overrides of content in json file.
+        if verbose:
+            self.verbose = True
         #### Some internal fields
         self._endos = []
         self._finishedSaving = False
@@ -245,7 +250,7 @@ class rdesigneur:
         print("Rdesigneur: Elec model has",
             self.elecid.numCompartments, "compartments and",
             self.elecid.numSpines, "spines on",
-            len( self.cellPortionElist ), "compartments.")
+            len( self.comptDict ), "compartments.")
         if hasattr( self , 'chemid') and len( self.chemDistrib ) > 0:
             #  dmstoich = moose.element( self.dendCompt.path + '/stoich' )
             print("    Chem part of model has the following compartments: ")
@@ -632,11 +637,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         return stimObj
 
     def _buildSynInputOnCompt( self, dendCompts, spineCompts, stimInfo, doPeriodic = False ):
-        # stimInfo = [path, geomExpr, relPath, field, expr_string]
-        # Here we hack geomExpr to use it for the syn weight. We assume it
-        # is just a number. In due course
-        # it should be possible to actually evaluate it according to geom.
-        synWeight = float( stimInfo['geomExpr'] )
+        synWeight = stimInfo['weight']
         stimObj = []
         for i in dendCompts + spineCompts:
             path = i.path + '/' + stimInfo['relpath'] + '/sh/synapse[0]'
@@ -712,7 +713,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = argList['proto']
         elecPath = argList['path']
         meshType = argList['type']
-        print( "chemSrc={}, elecPath={}, meshType = {}".format( chemSrc, elecPath, meshType ) )
+        #print( "chemSrc={}, elecPath={}, meshType = {}".format( chemSrc, elecPath, meshType ) )
         #chemSrc, elecPath, meshType, geom = argList[:4]
         chemSrcObj = comptDict.get( chemSrc )
         if not chemSrcObj:
@@ -843,7 +844,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         newChemId = moose.Neutral( model.path + '/chem' )
         comptlist = self._assignComptNamesFromKkit_SBML( model.path )
         comptDict = { i.name:i for i in comptlist }
-        print( "COMPTDICT =================\n", comptDict )
         for i in sortedChemDistrib:
             self.newChemDistrib( i, newChemId, comptDict )
         # We have to assign the compartments to neuromesh and
@@ -854,7 +854,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             meshType = i['type']
             if i['type'] == 'dend':
                 dendMesh = moose.element(comptDict[i['proto']])
-                print( "DendMesh path = ", dendMesh.path )
+                if self.verbose:
+                    print( "DendMesh path = ", dendMesh.path )
                 #pair = i['path'] + " " + geom
                 pair = i['path'] + " 1"
                 dendMesh.diffLength = i.get( 'diffusionLength', self.diffusionLength )
@@ -1765,7 +1766,8 @@ rdesigneur.rmoogli.updateMoogliViewer()
             # Locate associated NeuroMesh and PSD mesh
             if sm[1] == pm[1]:  # Check for same parent dend.
                 nmeshpath = comptDict[ sm[1] ]
-                print( "NMESHPATH = ", nmeshpath )
+                if self.verbose:
+                    print( "NeuroMeshPath = ", nmeshpath )
                 dmdsolve = moose.element( nmeshpath + "/dsolve" )
                 dmdsolve.buildNeuroMeshJunctions( sm[2], pm[2] )
                 # set up the connections so that the spine volume scaling can happen
@@ -1775,10 +1777,10 @@ rdesigneur.rmoogli.updateMoogliViewer()
         for em in emjl:
             emdsolve = em[2]
             surroundMeshPath = comptDict[ em[1]]
-            print( "surroundMESHPATH = ", surroundMeshPath )
+            if self.verbose:
+                print( "surroundMESHPATH = ", surroundMeshPath )
             surroundDsolve = moose.element( surroundMeshpath + "/dsolve" )
             emdsolve.buildMeshJunctions( surroundDsolve )
-        print( "finished buildChemJunctions" )
 
     def _configureChemSolvers( self ):
         if not hasattr( self, 'chemid' ) or len( self.chemDistrib ) == 0:
@@ -2065,8 +2067,10 @@ def main():
     parser.add_argument( '-p', '--plotFile', type=str, help='Optional: Save plots to an svg file with the specified name, instead of displaying them.' )
     parser.add_argument( '--placementFunc', type=str, help='Optional: Pick a builtin placement function for multiple models. Options: squareGrid, random. Default: None' )
     parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
+    parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
     args = parser.parse_args()
-    rdes = rdesigneur( args.file, args.plotFile )
+    rdes = rdesigneur( args.file, args.plotFile, jsonData = None, 
+        verbose = args.verbose )
     pf = None
     if args.placementFunc == "squareGrid":
         pf = squareGridPlacementFunc
