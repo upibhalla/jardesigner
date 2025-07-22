@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { AppBar, Toolbar, Button, Grid } from '@mui/material';
 // --- Import Icons ---
 import runIcon from './assets/run.png';
@@ -28,10 +28,9 @@ import PlotMenuBox from './components/MenuBoxes/PlotMenuBox';
 import ThreeDMenuBox from './components/MenuBoxes/ThreeDMenuBox';
 import StimMenuBox from './components/MenuBoxes/StimMenuBox';
 // --- Import Other Components ---
-import GraphWindow from './components/GraphWindow';
 import DisplayWindow from './components/DisplayWindow';
 // --- Import Schema ---
-import schema from './schema.json'; // Adjust path if necessary
+import schema from './schema.json';
 // --- Utility for deep comparison ---
 import isEqual from 'lodash/isEqual';
 
@@ -83,7 +82,14 @@ const initialJsonData = {
 
 const requiredKeys = ["filetype", "version"];
 
-// --- Compaction Function moved outside the component to avoid being a dependency ---
+// --- Helper Functions ---
+
+// Helper to check if two selection tuples are the same
+const isSameSelection = (selA, selB) => {
+    if (!selA || !selB) return false;
+    return selA.entityName === selB.entityName && selA.shapeIndex === selB.shapeIndex;
+};
+
 function compactJsonData(currentData, defaultData) {
     const compacted = {};
     for (const key in currentData) {
@@ -97,45 +103,144 @@ function compactJsonData(currentData, defaultData) {
             if (typeof currentValue === 'object' && currentValue !== null && !Array.isArray(currentValue)) {
                 const compactedValue = compactJsonData(currentValue, defaultValue);
                 if (Object.keys(compactedValue).length > 0) {
-                     if (!isEqual(compactedValue, defaultValue)) {
-                        compacted[key] = compactedValue;
-                     }
+                     if (!isEqual(compactedValue, defaultValue)) compacted[key] = compactedValue;
                 } else if (defaultValue && typeof defaultValue === 'object' && Object.keys(defaultValue).length === 0) {
-                     if (!isEqual(compactedValue, defaultValue)) {
-                         compacted[key] = compactedValue;
-                     }
+                     if (!isEqual(compactedValue, defaultValue)) compacted[key] = compactedValue;
                 }
-            }
-            else if (Array.isArray(currentValue)) {
+            } else if (Array.isArray(currentValue)) {
                 if (currentValue.length > 0) {
-                     if (!isEqual(currentValue, defaultValue)) {
-                        compacted[key] = currentValue;
-                     }
+                     if (!isEqual(currentValue, defaultValue)) compacted[key] = currentValue;
                 }
-            }
-            else {
-                if (!isEqual(currentValue, defaultValue)) {
-                    compacted[key] = currentValue;
-                }
+            } else {
+                if (!isEqual(currentValue, defaultValue)) compacted[key] = currentValue;
             }
         }
     }
     return compacted;
 }
 
+// This function derives the 3D config from the main jsonData ---
+const generateThreeDConfig = (sourceJsonData) => {
+    const { cellProto, displayMoogli: displaySettings } = sourceJsonData;
+
+    if (!cellProto || !cellProto.type || cellProto.type === 'file') {
+        // If there's no valid morphology, use the raw moogli data if it exists
+        if (sourceJsonData.moogli && sourceJsonData.moogli.length > 0) {
+            return {
+                moogli: sourceJsonData.moogli,
+                displayMoogli: sourceJsonData.displayMoogli || {}
+            };
+        }
+        return null; // Otherwise, nothing to display
+    }
+
+    // Start with default or existing display settings
+    const displayMoogli = {
+        frameDt: 0.1, runtime: 0.3, colormap: "jet", center: [0, 0, 0], bg: '#FFFFFF',
+        ...(displaySettings || {})
+    };
+
+    const moogli = [{
+        name: 'cell', vmin: -0.08, vmax: 0.04, dt: 0.1, transparency: 0.5, shape: []
+    }];
+
+    switch (cellProto.type) {
+        case 'soma':
+            moogli[0].shape.push({ type: 'sphere', C: [0, 0, 0], diameter: cellProto.somaDia, value: 0 });
+            displayMoogli.center = [0, 0, 0];
+            break;
+        case 'ballAndStick': {
+            const { somaDia, dendLen, dendDia, dendNumSeg = 1 } = cellProto;
+            moogli[0].shape.push({ type: 'sphere', C: [0, 0, 0], diameter: somaDia, value: 0 });
+
+            const segLen = dendLen / dendNumSeg;
+            for (let i = 0; i < dendNumSeg; i++) {
+                moogli[0].shape.push({
+                    type: 'cylinder',
+                    C: [i * segLen, 0, 0],
+                    C2: [(i + 1) * segLen, 0, 0],
+                    diameter: dendDia,
+                    value: 0
+                });
+            }
+            displayMoogli.center = [dendLen / 2, 0, 0];
+            break;
+        }
+        case 'branchedCell': {
+            const { somaDia, dendLen, dendDia, dendNumSeg = 1, branchLen, branchDia, branchNumSeg = 1 } = cellProto;
+            moogli[0].shape.push({ type: 'sphere', C: [0, 0, 0], diameter: somaDia, value: 0 });
+
+            // Subdivide trunk
+            const trunkSegLen = dendLen / dendNumSeg;
+            for (let i = 0; i < dendNumSeg; i++) {
+                moogli[0].shape.push({ type: 'cylinder', C: [i * trunkSegLen, 0, 0], C2: [(i + 1) * trunkSegLen, 0, 0], diameter: dendDia, value: 0 });
+            }
+
+            // Define branch vectors
+            const trunkEnd = [dendLen, 0, 0];
+            const angle = Math.PI / 4;
+            const branch1End = [trunkEnd[0] + branchLen * Math.cos(angle), trunkEnd[1] + branchLen * Math.sin(angle), 0];
+            const branch2End = [trunkEnd[0] + branchLen * Math.cos(-angle), trunkEnd[1] + branchLen * Math.sin(-angle), 0];
+            const branch1Vec = [branch1End[0] - trunkEnd[0], branch1End[1] - trunkEnd[1], 0];
+            const branch2Vec = [branch2End[0] - trunkEnd[0], branch2End[1] - trunkEnd[1], 0];
+
+            // Subdivide branches
+            for (let i = 0; i < branchNumSeg; i++) {
+                const frac_start = i / branchNumSeg;
+                const frac_end = (i + 1) / branchNumSeg;
+                
+                // Branch 1 segments
+                const seg1Start = [trunkEnd[0] + branch1Vec[0] * frac_start, trunkEnd[1] + branch1Vec[1] * frac_start, 0];
+                const seg1End = [trunkEnd[0] + branch1Vec[0] * frac_end, trunkEnd[1] + branch1Vec[1] * frac_end, 0];
+                moogli[0].shape.push({ type: 'cylinder', C: seg1Start, C2: seg1End, diameter: branchDia, value: 0 });
+
+                // Branch 2 segments
+                const seg2Start = [trunkEnd[0] + branch2Vec[0] * frac_start, trunkEnd[1] + branch2Vec[1] * frac_start, 0];
+                const seg2End = [trunkEnd[0] + branch2Vec[0] * frac_end, trunkEnd[1] + branch2Vec[1] * frac_end, 0];
+                moogli[0].shape.push({ type: 'cylinder', C: seg2Start, C2: seg2End, diameter: branchDia, value: 0 });
+            }
+            displayMoogli.center = [dendLen / 2, 0, 0];
+            break;
+        }
+        default: return null;
+    }
+    return { moogli, displayMoogli };
+};
 
 const App = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [jsonData, setJsonData] = useState(initialJsonData);
   const [jsonContent, setJsonContent] = useState(() => JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
   const activeMenuBoxRef = useRef(null);
-
-  // --- State for Plot Display in GraphWindow ---
+  const [threeDConfig, setThreeDConfig] = useState(null);
   const [svgPlotFilename, setSvgPlotFilename] = useState(null);
   const [isPlotReady, setIsPlotReady] = useState(false);
-  const [plotError, setPlotError] = useState(''); // Error specific to plot generation/fetching
+  const [plotError, setPlotError] = useState('');
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [clickSelected, setClickSelected] = useState([]);
 
-  // --- Callbacks for JSON data (remain mostly the same) ---
+  const handleSelectionChange = useCallback((selection, isCtrlClick) => {
+    setClickSelected(prevSelected => {
+        if (isCtrlClick) {
+            // Control-click: Toggle selection
+            const isAlreadySelected = prevSelected.some(item => isSameSelection(item, selection));
+            if (isAlreadySelected) {
+                return prevSelected.filter(item => !isSameSelection(item, selection));
+            } else {
+                return [...prevSelected, selection];
+            }
+        } else {
+            // Regular click: Single selection logic
+            if (prevSelected.length === 1 && isSameSelection(prevSelected[0], selection)) {
+                return []; // Deselect if clicking the same one again
+            } else {
+                return [selection]; // Select the new one
+            }
+        }
+    });
+  }, []);
+
+  // updateJsonData simply updates the main jsonData state.
   const updateJsonData = useCallback((newDataPart) => {
     setJsonData(prevData => {
         const updatedData = { ...prevData, ...newDataPart };
@@ -144,18 +249,18 @@ const App = () => {
     });
   }, []);
 
+  // This useEffect hook watches jsonData and derives threeDConfig from it.
+  useEffect(() => {
+      const newThreeDConfig = generateThreeDConfig(jsonData);
+      setThreeDConfig(newThreeDConfig);
+  }, [jsonData]);
+
   const updateJsonString = useCallback((newJsonString) => {
      setJsonContent(newJsonString);
      try {
          const parsedData = JSON.parse(newJsonString);
          if (typeof parsedData === 'object' && parsedData !== null) {
-             const mergedData = {
-                ...initialJsonData,
-                ...parsedData,
-                filetype: parsedData.filetype || initialJsonData.filetype,
-                version: parsedData.version || initialJsonData.version,
-                fileinfo: { ...initialJsonData.fileinfo, ...(parsedData.fileinfo || {}) }
-             };
+             const mergedData = { ...initialJsonData, ...parsedData, filetype: parsedData.filetype || initialJsonData.filetype, version: parsedData.version || initialJsonData.version, fileinfo: { ...initialJsonData.fileinfo, ...(parsedData.fileinfo || {}) } };
              setJsonData(mergedData);
              setJsonContent(JSON.stringify(compactJsonData(mergedData, initialJsonData), null, 2));
          } else {
@@ -173,24 +278,15 @@ const App = () => {
   }, []);
 
   const handleSaveModel = useCallback(async (fileInfoFromMenu) => {
-      const fullFileInfo = {
-          ...fileInfoFromMenu,
-          dateTime: new Date().toISOString(),
-          userid: 'anonymous', // NOTE: Browser security prevents accessing local user ID
-      };
-
+      const fullFileInfo = { ...fileInfoFromMenu, dateTime: new Date().toISOString(), userid: 'anonymous' };
       const dataToSave = { ...jsonData, fileinfo: fullFileInfo };
       const finalJsonToSave = compactJsonData(dataToSave, initialJsonData);
       const jsonDataString = JSON.stringify(finalJsonToSave, null, 2);
       const suggestedName = 'model.json';
       const blob = new Blob([jsonDataString], { type: 'application/json' });
-
       if (window.showSaveFilePicker) {
           try {
-              const fileHandle = await window.showSaveFilePicker({
-                  suggestedName,
-                  types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
-              });
+              const fileHandle = await window.showSaveFilePicker({ suggestedName, types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }] });
               const writableStream = await fileHandle.createWritable();
               await writableStream.write(blob);
               await writableStream.close();
@@ -208,9 +304,7 @@ const App = () => {
       }
   }, [jsonData]);
 
-  const getCurrentJsonData = useCallback(() => {
-    return compactJsonData(jsonData, initialJsonData);
-  }, [jsonData]);
+  const getCurrentJsonData = useCallback(() => compactJsonData(jsonData, initialJsonData), [jsonData]);
 
   const getChemProtos = useCallback(() => {
       const protos = jsonData?.chemProto;
@@ -220,15 +314,13 @@ const App = () => {
       return [];
   }, [jsonData?.chemProto]);
 
-  // --- Callback for RunMenuBox to update plot data ---
   const handlePlotDataUpdate = useCallback(({ filename, ready, error }) => {
     console.log("App.jsx: handlePlotDataUpdate called with:", { filename, ready, error });
     setSvgPlotFilename(filename);
     setIsPlotReady(ready);
-    setPlotError(error || ''); // Set error or clear it
+    setPlotError(error || '');
   }, []);
 
-  // --- Callback to clear plot data (e.g., on reset) ---
   const clearPlotData = useCallback(() => {
     console.log("App.jsx: clearPlotData called");
     setSvgPlotFilename(null);
@@ -236,69 +328,25 @@ const App = () => {
     setPlotError('');
   }, []);
 
-
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
   };
 
-  // Memoized Menu Box Components
+  // --- Memoized Menu Box Components (remains the same) ---
   const menuComponents = useMemo(() => ({
-      File: <FileMenuBox
-                ref={activeMenu === 'File' ? activeMenuBoxRef : null}
-                setJsonContent={updateJsonString}
-                onClearModel={handleClearModel}
-		  		// onSaveModel={handleSaveModel}
-                getCurrentJsonData={getCurrentJsonData}
-                currentConfig={jsonData.fileinfo}
-            />,
-      SimOutput: <SimOutputMenuBox
-                     ref={activeMenu === 'SimOutput' ? activeMenuBoxRef : null}
-                     onConfigurationChange={updateJsonData}
-                     currentConfig={jsonData.files}
-                     getChemProtos={getChemProtos}
-                 />,
-      Run: <RunMenuBox
-             ref={activeMenu === 'Run' ? activeMenuBoxRef : null}
-             onConfigurationChange={updateJsonData}
-             getCurrentJsonData={getCurrentJsonData}
-             currentConfig={{
-                ...jsonData
-             }}
-             onPlotDataUpdate={handlePlotDataUpdate}
-             onClearPlotData={clearPlotData}
-            />,
+      File: <FileMenuBox ref={activeMenu === 'File' ? activeMenuBoxRef : null} setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
+      SimOutput: <SimOutputMenuBox ref={activeMenu === 'SimOutput' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
+      Run: <RunMenuBox ref={activeMenu === 'Run' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} getCurrentJsonData={getCurrentJsonData} currentConfig={{...jsonData}} onPlotDataUpdate={handlePlotDataUpdate} onClearPlotData={clearPlotData} />,
       Morphology: <MorphoMenuBox ref={activeMenu === 'Morphology' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} />,
       Spines: <SpineMenuBox ref={activeMenu === 'Spines' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
       Channels: <ElecMenuBox ref={activeMenu === 'Channels' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
       Passive: <PassiveMenuBox ref={activeMenu === 'Passive' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
-      Signaling: <ChemMenuBox
-                     ref={activeMenu === 'Signaling' ? activeMenuBoxRef : null}
-                     onConfigurationChange={updateJsonData}
-                     currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }}
-                     getChemProtos={getChemProtos}
-                 />,
+      Signaling: <ChemMenuBox ref={activeMenu === 'Signaling' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} getChemProtos={getChemProtos} />,
       Adaptors: <AdaptorsMenuBox ref={activeMenu === 'Adaptors' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
-      Stimuli: <StimMenuBox
-                   ref={activeMenu === 'Stimuli' ? activeMenuBoxRef : null}
-                   onConfigurationChange={updateJsonData}
-                   currentConfig={jsonData.stims}
-                   getChemProtos={getChemProtos}
-               />,
-      Plots: <PlotMenuBox
-                 ref={activeMenu === 'Plots' ? activeMenuBoxRef : null}
-                 onConfigurationChange={updateJsonData}
-                 currentConfig={jsonData.plots}
-                 getChemProtos={getChemProtos}
-             />,
-      '3D': <ThreeDMenuBox
-                ref={activeMenu === '3D' ? activeMenuBoxRef : null}
-                onConfigurationChange={updateJsonData}
-                currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }}
-                getChemProtos={getChemProtos}
-            />,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      Stimuli: <StimMenuBox ref={activeMenu === 'Stimuli' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
+      Plots: <PlotMenuBox ref={activeMenu === 'Plots' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
+      '3D': <ThreeDMenuBox ref={activeMenu === '3D' ? activeMenuBoxRef : null} onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
   }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData]);
-
 
   return (
     <>
@@ -323,19 +371,19 @@ const App = () => {
         <Grid item xs={4} style={{ height: '100%' }}>
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
-        <Grid item xs={4} style={{ height: '100%' }}>
-          <GraphWindow
-            svgPlotFilename={svgPlotFilename}
-            isPlotReady={isPlotReady}
-            plotError={plotError}
-          />
-        </Grid>
-        {/* ----- MODIFIED: This is the cleaned-up rightmost panel ----- */}
-        <Grid item xs={4} style={{ height: '100%' }}>
+        
+        <Grid item xs={8} style={{ height: '100%' }}>
           <DisplayWindow
              jsonString={jsonContent}
              schema={schema}
              setActiveMenu={setActiveMenu}
+             svgPlotFilename={svgPlotFilename}
+             isPlotReady={isPlotReady}
+             plotError={plotError}
+             isSimulating={isSimulating}
+             threeDConfig={threeDConfig}
+             clickSelected={clickSelected}
+             onSelectionChange={handleSelectionChange}
           />
         </Grid>
        </Grid>

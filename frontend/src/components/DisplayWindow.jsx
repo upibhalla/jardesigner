@@ -1,10 +1,25 @@
+// src/components/DisplayWindow.jsx
+
 import React, { useState } from 'react';
 import { Box, Tabs, Tab } from '@mui/material';
-import JsonText from './JsonText'; // We will render JsonText inside this component
-import MarkdownText from './MarkdownText'; // Markdown rendered here 
+import GraphWindow from './GraphWindow';
+import JsonText from './JsonText';
+import MarkdownText from './MarkdownText';
+import ThreeDViewer from './ThreeDViewer';
 
-// The component now accepts props to pass down to JsonText
-const DisplayWindow = ({ jsonString, schema, setActiveMenu }) => {
+const DisplayWindow = ({
+  jsonString,
+  schema,
+  setActiveMenu,
+  svgPlotFilename,
+  isPlotReady,
+  plotError,
+  isSimulating,
+  threeDConfig,
+  // --- NEW: Receive selection props ---
+  clickSelected,
+  onSelectionChange
+}) => {
   const [tabIndex, setTabIndex] = useState(0);
 
   const handleTabChange = (event, newValue) => {
@@ -12,33 +27,45 @@ const DisplayWindow = ({ jsonString, schema, setActiveMenu }) => {
   };
 
   return (
-    // The outer box acts as the container for the tabs and their content
-    <Box sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%', // Ensure it takes up the full height of its grid cell
-        background: '#f5f5f5',
-        borderRadius: '8px',
-        overflow: 'hidden' // Hide overflow from child components
-    }}>
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f5', borderRadius: '8px', overflow: 'hidden' }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
         <Tabs value={tabIndex} onChange={handleTabChange} aria-label="display window tabs">
+          <Tab label="Graph" />
           <Tab label="Model JSON" />
           <Tab label="Documentation" />
+          <Tab label="3D" />
         </Tabs>
       </Box>
 
-      {/* Use CSS 'display' property to hide the inactive panel instead of unmounting */}
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 0 ? 'block' : 'none' }}>
-        <JsonText
-          jsonString={jsonString}
-          schema={schema}
-          setActiveMenu={setActiveMenu}
-        />
+      {/* Graph Panel */}
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1, display: tabIndex === 0 ? 'flex' : 'none' }}>
+        <GraphWindow svgPlotFilename={svgPlotFilename} isPlotReady={isPlotReady} plotError={plotError} />
       </Box>
 
+      {/* JSON Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
+        {/* MODIFIED: No longer passing threeDConfig */}
+        <JsonText 
+          jsonString={jsonString} 
+          setActiveMenu={setActiveMenu} 
+        />
+      </Box>
+      
+      {/* Markdown Panel */}
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 2 ? 'block' : 'none' }}>
         <MarkdownText />
+      </Box>
+
+      {/* 3D Viewer Panel */}
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>
+        <ThreeDViewer
+            isSimulating={isSimulating}
+            threeDConfig={threeDConfig}
+            setActiveMenu={setActiveMenu}
+		    // --- NEW: Pass selection props down ---
+            clickSelected={clickSelected}
+            onSelectionChange={onSelectionChange}
+        />
       </Box>
     </Box>
   );
