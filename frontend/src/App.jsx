@@ -33,7 +33,7 @@ import DisplayWindow from './components/DisplayWindow';
 import schema from './schema.json';
 // --- Utility for deep comparison ---
 import isEqual from 'lodash/isEqual';
-// --- MODIFIED: Import the 3D generation utility ---
+// --- Import the 3D generation utility ---
 import { generateThreeDConfig } from './utils/threeDUtils';
 
 
@@ -120,8 +120,6 @@ function compactJsonData(currentData, defaultData) {
     return compacted;
 }
 
-// --- REMOVED: The generateThreeDConfig function has been moved to utils/threeDUtils.js ---
-
 const App = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [jsonData, setJsonData] = useState(initialJsonData);
@@ -132,6 +130,12 @@ const App = () => {
   const [plotError, setPlotError] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
   const [clickSelected, setClickSelected] = useState([]);
+
+  // ==================== NEW STATE ====================
+  // This state holds the SWC file content as a string for rendering/processing.
+  // It is kept separate from the serializable jsonData.
+  const [transientSwcData, setTransientSwcData] = useState(null);
+  // ===============================================
 
   const handleSelectionChange = useCallback((selection, isCtrlClick) => {
     setClickSelected(prevSelected => {
@@ -159,11 +163,30 @@ const App = () => {
         return updatedData;
     });
   }, []);
+  
+  // ==================== NEW HANDLER ====================
+  // This function is called by MorphoMenuBox when a file is selected and read.
+  const handleMorphologyFileChange = useCallback(({ filename, content }) => {
+      // 1. Update the main jsonData with the filename STRING for serialization.
+      updateJsonData({
+          cellProto: {
+              type: 'file',
+              source: filename // Keep only the name in the serializable state
+          }
+      });
+      // 2. Update the transient state with the file content STRING for rendering.
+      setTransientSwcData(content);
+  }, [updateJsonData]);
+  // ===============================================
 
   useEffect(() => {
-      const newThreeDConfig = generateThreeDConfig(jsonData);
-      setThreeDConfig(newThreeDConfig);
-  }, [jsonData]);
+      const generateConfig = async () => {
+          // Pass both jsonData and the transient SWC data string to the utility.
+          const newThreeDConfig = await generateThreeDConfig(jsonData, transientSwcData);
+          setThreeDConfig(newThreeDConfig);
+      };
+      generateConfig();
+  }, [jsonData, transientSwcData]); // Rerun when either changes.
 
   const updateJsonString = useCallback((newJsonString) => {
      setJsonContent(newJsonString);
@@ -173,6 +196,8 @@ const App = () => {
              const mergedData = { ...initialJsonData, ...parsedData, filetype: parsedData.filetype || initialJsonData.filetype, version: parsedData.version || initialJsonData.version, fileinfo: { ...initialJsonData.fileinfo, ...(parsedData.fileinfo || {}) } };
              setJsonData(mergedData);
              setJsonContent(JSON.stringify(compactJsonData(mergedData, initialJsonData), null, 2));
+             // When loading from JSON, we lose the file content. Clear the transient state.
+             setTransientSwcData(null);
          } else {
             throw new Error("Loaded content is not a valid JSON object.");
          }
@@ -185,6 +210,7 @@ const App = () => {
   const handleClearModel = useCallback(() => {
     setJsonData(initialJsonData);
     setJsonContent(JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
+    setTransientSwcData(null);
   }, []);
 
   const handleSaveModel = useCallback(async (fileInfoFromMenu) => {
@@ -243,7 +269,9 @@ const App = () => {
       File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
       SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
       Run: <RunMenuBox onConfigurationChange={updateJsonData} getCurrentJsonData={getCurrentJsonData} currentConfig={{...jsonData}} onPlotDataUpdate={handlePlotDataUpdate} onClearPlotData={clearPlotData} />,
-      Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} />,
+      // ==================== UPDATED PROP ====================
+      Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
+      // ======================================================
       Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
       Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
       Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
@@ -252,7 +280,7 @@ const App = () => {
       Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
       Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
       '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
-  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData]);
+  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData, handleMorphologyFileChange]);
 
   return (
     <>
