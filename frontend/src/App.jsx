@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { io } from "socket.io-client";
 import { AppBar, Toolbar, Button, Grid } from '@mui/material';
 // --- Import Icons ---
 import runIcon from './assets/run.png';
@@ -33,19 +34,13 @@ import DisplayWindow from './components/DisplayWindow';
 import schema from './schema.json';
 // --- Utility for deep comparison ---
 import isEqual from 'lodash/isEqual';
-// --- Import the 3D generation utility ---
-import { generateThreeDConfig } from './utils/threeDUtils';
 
 
 // --- Initial State / Defaults ---
 const initialJsonData = {
   filetype: "jardesigner",
   version: "1.0",
-  fileinfo: {
-      creator: "",
-      modelNotes: "",
-      licence: "CC BY"
-  },
+  fileinfo: { creator: "", modelNotes: "", licence: "CC BY" },
   modelPath: "/model",
   diffusionLength: 2e-6,
   turnOffElec: false,
@@ -85,7 +80,10 @@ const initialJsonData = {
 
 const requiredKeys = ["filetype", "version"];
 
-// --- Helper Functions ---
+// --- CONSTANTS ---
+const API_BASE_URL = 'http://localhost:5000';
+
+
 const isSameSelection = (selA, selB) => {
     if (!selA || !selB) return false;
     return selA.entityName === selB.entityName && selA.shapeIndex === selB.shapeIndex;
@@ -130,12 +128,126 @@ const App = () => {
   const [plotError, setPlotError] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
   const [clickSelected, setClickSelected] = useState([]);
+  
+  const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null });
+  const [liveFrameData, setLiveFrameData] = useState(null);
+  const socketRef = useRef(null);
 
-  // ==================== NEW STATE ====================
-  // This state holds the SWC file content as a string for rendering/processing.
-  // It is kept separate from the serializable jsonData.
+  const handleSimulationEnded = useCallback(() => {
+      setIsSimulating(false);
+  }, []);
+
+  const buildModelOnServer = useCallback(async (newJsonData) => {
+    if (activeSim.pid) {
+        console.log(`Resetting previous simulation (PID: ${activeSim.pid}) before building new one.`);
+        try {
+            // --- FIXED: Added full URL ---
+            await fetch(`${API_BASE_URL}/reset_simulation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pid: activeSim.pid })
+            });
+        } catch (error) {
+            console.error("Failed to reset previous simulation:", error);
+        }
+    }
+    
+    if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+    }
+
+    try {
+        console.log("Sending new model configuration to server to build...");
+        // --- FIXED: Added full URL ---
+        const response = await fetch(`${API_BASE_URL}/launch_simulation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newJsonData),
+        });
+
+        if (!response.ok) {
+            // Handle HTTP errors like 404, 500 etc.
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+
+        if (result.status === 'success' && result.pid && result.data_channel_id) {
+            console.log(`New simulation process created (PID: ${result.pid}). Ready to run.`);
+            setActiveSim({ pid: result.pid, data_channel_id: result.data_channel_id });
+
+            const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
+            socketRef.current = socket;
+
+            socket.on('connect', () => {
+                console.log('Socket.IO connected, joining channel:', result.data_channel_id);
+                socket.emit('join_sim_channel', { data_channel_id: result.data_channel_id });
+            });
+
+            socket.on('simulation_data', (data) => {
+                if (data?.type === 'scene_init') {
+                    setThreeDConfig(data.scene);
+                } else if (data?.filetype === 'jardesignerDataFrame') {
+                    setLiveFrameData(data);
+                } else if (data?.type === 'sim_end') {
+                    console.log("Received simulation end signal from server.");
+                    handleSimulationEnded();
+                }
+            });
+            
+            socket.on('disconnect', (reason) => {
+                console.log(`Socket.IO disconnected. Reason: "${reason}"`);
+            });
+
+        } else {
+            throw new Error(result.message || 'Failed to launch new simulation process.');
+        }
+    } catch (err) {
+        console.error("Error during model build:", err);
+        setActiveSim({ pid: null, data_channel_id: null });
+    }
+  }, [activeSim.pid, handleSimulationEnded]);
+
+  const updateJsonData = useCallback((newDataPart) => {
+    const updatedData = { ...initialJsonData, ...jsonData, ...newDataPart };
+    const compactedData = compactJsonData(updatedData, initialJsonData);
+    
+    setJsonData(updatedData);
+    setJsonContent(JSON.stringify(compactedData, null, 2));
+
+    buildModelOnServer(compactedData);
+  }, [jsonData, buildModelOnServer]);
+
+  const handleStartRun = useCallback((runParams) => {
+      if (!activeSim.pid || !socketRef.current || !socketRef.current.connected) {
+          console.error("Cannot start run: No active simulation process or socket connection.");
+          return;
+      }
+      
+      console.log(`Sending 'start' command to PID ${activeSim.pid} with runtime: ${runParams.runtime}`);
+      setIsSimulating(true);
+      setLiveFrameData(null);
+      setThreeDConfig(null);
+
+      socketRef.current.emit('sim_command', {
+          command: 'start',
+          pid: activeSim.pid,
+          params: {
+              runtime: runParams.runtime
+          }
+      });
+  }, [activeSim.pid]);
+  
+  const handleResetRun = useCallback(async () => {
+      setIsSimulating(false);
+      if (activeSim.pid) {
+          console.log(`User requested reset for PID: ${activeSim.pid}`);
+          await buildModelOnServer(compactJsonData(jsonData, initialJsonData));
+      }
+  }, [activeSim.pid, jsonData, buildModelOnServer]);
+
   const [transientSwcData, setTransientSwcData] = useState(null);
-  // ===============================================
 
   const handleSelectionChange = useCallback((selection, isCtrlClick) => {
     setClickSelected(prevSelected => {
@@ -155,38 +267,16 @@ const App = () => {
         }
     });
   }, []);
-
-  const updateJsonData = useCallback((newDataPart) => {
-    setJsonData(prevData => {
-        const updatedData = { ...prevData, ...newDataPart };
-        setJsonContent(JSON.stringify(compactJsonData(updatedData, initialJsonData), null, 2));
-        return updatedData;
-    });
-  }, []);
   
-  // ==================== NEW HANDLER ====================
-  // This function is called by MorphoMenuBox when a file is selected and read.
   const handleMorphologyFileChange = useCallback(({ filename, content }) => {
-      // 1. Update the main jsonData with the filename STRING for serialization.
       updateJsonData({
           cellProto: {
               type: 'file',
-              source: filename // Keep only the name in the serializable state
+              source: filename
           }
       });
-      // 2. Update the transient state with the file content STRING for rendering.
       setTransientSwcData(content);
   }, [updateJsonData]);
-  // ===============================================
-
-  useEffect(() => {
-      const generateConfig = async () => {
-          // Pass both jsonData and the transient SWC data string to the utility.
-          const newThreeDConfig = await generateThreeDConfig(jsonData, transientSwcData);
-          setThreeDConfig(newThreeDConfig);
-      };
-      generateConfig();
-  }, [jsonData, transientSwcData]); // Rerun when either changes.
 
   const updateJsonString = useCallback((newJsonString) => {
      setJsonContent(newJsonString);
@@ -194,10 +284,12 @@ const App = () => {
          const parsedData = JSON.parse(newJsonString);
          if (typeof parsedData === 'object' && parsedData !== null) {
              const mergedData = { ...initialJsonData, ...parsedData, filetype: parsedData.filetype || initialJsonData.filetype, version: parsedData.version || initialJsonData.version, fileinfo: { ...initialJsonData.fileinfo, ...(parsedData.fileinfo || {}) } };
+             const compacted = compactJsonData(mergedData, initialJsonData);
              setJsonData(mergedData);
-             setJsonContent(JSON.stringify(compactJsonData(mergedData, initialJsonData), null, 2));
-             // When loading from JSON, we lose the file content. Clear the transient state.
+             setJsonContent(JSON.stringify(compacted, null, 2));
              setTransientSwcData(null);
+             setThreeDConfig(null);
+             buildModelOnServer(compacted);
          } else {
             throw new Error("Loaded content is not a valid JSON object.");
          }
@@ -205,13 +297,16 @@ const App = () => {
          console.error("App.jsx: Error parsing loaded JSON string:", e);
          alert(`Failed to load model: ${e.message}`);
      }
-  }, []);
+  }, [buildModelOnServer]);
 
   const handleClearModel = useCallback(() => {
+    const compacted = compactJsonData(initialJsonData, initialJsonData);
     setJsonData(initialJsonData);
-    setJsonContent(JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
+    setJsonContent(JSON.stringify(compacted, null, 2));
     setTransientSwcData(null);
-  }, []);
+    setThreeDConfig(null);
+    buildModelOnServer(compacted);
+  }, [buildModelOnServer]);
 
   const handleSaveModel = useCallback(async (fileInfoFromMenu) => {
       const fullFileInfo = { ...fileInfoFromMenu, dateTime: new Date().toISOString(), userid: 'anonymous' };
@@ -253,7 +348,10 @@ const App = () => {
     setSvgPlotFilename(filename);
     setIsPlotReady(ready);
     setPlotError(error || '');
-  }, []);
+    if (ready || error) {
+        handleSimulationEnded();
+    }
+  }, [handleSimulationEnded]);
 
   const clearPlotData = useCallback(() => {
     setSvgPlotFilename(null);
@@ -268,10 +366,16 @@ const App = () => {
   const menuComponents = useMemo(() => ({
       File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
       SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
-      Run: <RunMenuBox onConfigurationChange={updateJsonData} getCurrentJsonData={getCurrentJsonData} currentConfig={{...jsonData}} onPlotDataUpdate={handlePlotDataUpdate} onClearPlotData={clearPlotData} />,
-      // ==================== UPDATED PROP ====================
+      Run: <RunMenuBox 
+             onConfigurationChange={updateJsonData}
+             currentConfig={{...jsonData}} 
+             onStartRun={handleStartRun}
+             onResetRun={handleResetRun}
+             isSimulating={isSimulating}
+             activeSimPid={activeSim.pid}
+             liveFrameData={liveFrameData}
+           />,
       Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
-      // ======================================================
       Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
       Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
       Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
@@ -280,24 +384,24 @@ const App = () => {
       Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
       Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
       '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
-  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData, handleMorphologyFileChange]);
+  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData, handleMorphologyFileChange, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData]);
 
   return (
     <>
       <AppBar position="static">
          <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-             <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} > <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} /> Channels </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} > <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} /> Passive </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} > <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} /> Signaling </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} > <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} /> Adaptors </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} > <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} /> Stimuli </Button>
-             <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} > <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} /> Plots </Button>
-             <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} > <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} /> 3D </Button>
-             <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} > <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} /> Sim Output </Button>
+            <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} > <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} /> Channels </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} > <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} /> Passive </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} > <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} /> Signaling </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} > <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} /> Adaptors </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} > <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} /> Stimuli </Button>
+            <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} > <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} /> Plots </Button>
+            <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} > <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} /> 3D </Button>
+            <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} > <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} /> Sim Output </Button>
          </Toolbar>
       </AppBar>
 
@@ -316,6 +420,7 @@ const App = () => {
              plotError={plotError}
              isSimulating={isSimulating}
              threeDConfig={threeDConfig}
+             liveFrameData={liveFrameData}
              clickSelected={clickSelected}
              onSelectionChange={handleSelectionChange}
           />

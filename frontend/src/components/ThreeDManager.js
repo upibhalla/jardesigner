@@ -5,7 +5,7 @@ import { getColor } from './colormap';
 export default class ThreeDManager {
   constructor(container, onSelectionChange) {
     this.container = container;
-    this.onSelectionChange = onSelectionChange; // Store the callback
+    this.onSelectionChange = onSelectionChange;
     
     this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -16,9 +16,8 @@ export default class ThreeDManager {
     this.boundingBox = new THREE.Box3();
     this.diameterScale = 1.0;
     this.sceneMeshes = [];
-    this.entityConfigs = new Map(); // Store entity color info
+    this.entityConfigs = new Map();
 
-    // Setup for raycasting
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     
@@ -27,13 +26,12 @@ export default class ThreeDManager {
     dirLight.position.set(5, 5, 5);
     this.scene.add(dirLight);
 
-    // Bind event handlers
     this.onWindowResize = this.onWindowResize.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
-    this.handleClick = this.handleClick.bind(this); // Bind click handler
+    this.handleClick = this.handleClick.bind(this);
     window.addEventListener('resize', this.onWindowResize);
     window.addEventListener('keydown', this.handleKeyDown);
-    this.renderer.domElement.addEventListener('click', this.handleClick); // Listen for clicks
+    this.renderer.domElement.addEventListener('click', this.handleClick);
 
     this.animate();
   }
@@ -52,15 +50,18 @@ export default class ThreeDManager {
     this.boundingBox.makeEmpty();
     
     config.moogli.forEach(entity => {
+      // Store the config for this entity, keyed by its 'groupId' (name)
       this.entityConfigs.set(entity.name, {
           vmin: entity.vmin,
           vmax: entity.vmax,
-          colormap: config.displayMoogli.colormap
+          colormap: config.displayMoogli.colormap,
+          transparency: entity.transparency || 1.0
       });
 
       entity.shape.forEach((primitive, i) => {
         let mesh;
-        const materialColor = getColor((primitive.value - entity.vmin) / (entity.vmax - entity.vmin), config.displayMoogli.colormap, true);
+        const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
+        const materialColor = getColor(normalizedValue, config.displayMoogli.colormap, true);
         const material = new THREE.MeshStandardMaterial({
             color: materialColor,
             transparent: true,
@@ -84,7 +85,8 @@ export default class ThreeDManager {
             mesh.position.copy(start).add(direction.multiplyScalar(0.5));
         }
         if (mesh) {
-            mesh.userData = { entityName: entity.name, shapeIndex: i };
+            // 'entityName' here corresponds to the `groupId` in the data frame schema.
+            mesh.userData = { entityName: entity.name, shapeIndex: i, originalValue: primitive.value };
             this.scene.add(mesh);
             this.sceneMeshes.push(mesh);
             this.boundingBox.expandByObject(mesh);
@@ -93,6 +95,33 @@ export default class ThreeDManager {
     });
     this.focusCamera();
     setTimeout(() => this.onWindowResize(), 0);
+  }
+
+  // --- NEW: Method to update scene colors from a live data frame ---
+  updateSceneData(frameData) {
+    const { groupId, data } = frameData;
+
+    // Retrieve the rendering configuration for this data group
+    const entityConfig = this.entityConfigs.get(groupId);
+    if (!entityConfig) {
+        // console.warn(`Received data for unknown groupId: ${groupId}`);
+        return;
+    }
+    
+    const { vmin, vmax, colormap } = entityConfig;
+
+    // Filter the meshes to only those belonging to the specified groupId
+    const relevantMeshes = this.sceneMeshes.filter(mesh => mesh.userData.entityName === groupId);
+
+    // Update the color of each mesh based on the new data
+    data.forEach((value, index) => {
+        if (index < relevantMeshes.length) {
+            const mesh = relevantMeshes[index];
+            const normalizedValue = (value - vmin) / (vmax - vmin);
+            const newColor = getColor(normalizedValue, colormap, true);
+            mesh.material.color.set(newColor);
+        }
+    });
   }
 
   handleClick(event) {
@@ -122,8 +151,8 @@ export default class ThreeDManager {
     this.sceneMeshes.forEach(mesh => {
         const config = this.entityConfigs.get(mesh.userData.entityName);
         if (config) {
-            const value = isSelected(mesh) ? 1 : 0;
-            const newColor = getColor(value, config.colormap, true);
+            const normalizedValue = isSelected(mesh) ? 1.0 : (mesh.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
+            const newColor = getColor(normalizedValue, config.colormap, true);
             mesh.material.color.set(newColor);
         }
     });

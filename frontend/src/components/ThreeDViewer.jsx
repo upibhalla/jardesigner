@@ -1,5 +1,3 @@
-// src/components/ThreeDViewer.jsx
-
 import React, { useRef, useEffect, useMemo } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -11,7 +9,6 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
         const colormap = displayConfig?.colormap || 'jet';
         const stops = Array.from({ length: 11 }, (_, i) => {
             const value = 1 - (i / 10);
-            // This call correctly defaults to returning a CSS string
             return `${getColor(value, colormap)} ${i * 10}%`;
         }).join(', ');
         return `linear-gradient(to top, ${stops})`;
@@ -45,7 +42,8 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
     );
 };
 
-const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange }) => {
+// --- UPDATED: Added liveFrameData prop ---
+const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange, liveFrameData }) => {
   const mountRef = useRef(null);
   const managerRef = useRef(null);
 
@@ -62,12 +60,20 @@ const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected
     }
   }, [threeDConfig]);
 
-  // --- NEW: useEffect to handle visual updates when selection changes ---
   useEffect(() => {
     if (managerRef.current) {
         managerRef.current.updateSelectionVisuals(clickSelected);
     }
   }, [clickSelected]);
+
+  // --- NEW: useEffect to handle live data frames from WebSocket ---
+  useEffect(() => {
+    // If we have a valid data frame and a ThreeDManager instance, update the scene.
+    if (managerRef.current && liveFrameData) {
+        managerRef.current.updateSceneData(liveFrameData);
+    }
+  }, [liveFrameData]); // This effect runs every time liveFrameData changes.
+
 
   const handleUpdateClick = () => {
       if (setActiveMenu) {

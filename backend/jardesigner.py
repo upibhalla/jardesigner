@@ -28,19 +28,9 @@ import sys
 import time
 import matplotlib.pyplot as plt
 import argparse
-
-class DummyRmoogli():
-    def __init__(self):
-        pass
-
-    def makeMoogli( self, mooObj, args, fieldInfo ):
-        return "Dummy"
-
-    def displayMoogli( rd, _dt, _runtime, rotation = 0.0, fullscreen = False, azim = 0.0, elev = 0.0, mergeDisplays = False, center = [0.0, 0.0, 0.0], colormap = 'jet', bg = 'default' ):
-        pass
-
-    def notifySimulationEnd():
-        pass
+import requests
+import csv
+import jarmoogli
 
 class AnimationEvent():
     def __init__(self, key, time):
@@ -51,11 +41,6 @@ class DictToClass:
     def __init__(self, input_dict):
         for key, value in input_dict.items():
             setattr(self, key, value)
-
-try:
-    import rdesigneur.rmoogli as rmoogli
-except (ImportError, ModuleNotFoundError):
-    rmoogli = DummyRmoogli()
 
 from rdesigneur.rdesigneurProtos import *
 import moose.fixXreacs as fixXreacs
@@ -69,8 +54,6 @@ try:
   from lxml import etree
 except ImportError:
   import xml.etree.ElementTree as etree
-
-import csv
 
 meshOrder = ['soma', 'dend', 'spine', 'psd', 'psd_dend', 'presyn_dend', 'presyn_spine', 'endo']
 
@@ -173,9 +156,10 @@ class rdesigneur:
     """
     ################################################################
     def __init__(self, jsonFile = None, plotFile = None, jsonData = None,
-            verbose = False):
+            verbose = False, dataChannelId = None):
         schemaFile = "jardesignerSchema.json"
         self.verbose = verbose
+        self.dataChannelId = dataChannelId
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -228,7 +212,7 @@ class rdesigneur:
         self.passiveDistrib = []
         self.plotNames = [] # Need to get rid of this, use the existing dict
         self.wavePlotNames = [] # Need to get rid of this, use the existing dict
-        self.moogNames = [] # Currently holds moogli struct
+        #self.moogNames = [] # Currently holds moogli struct. Replaced with mooView
 
         if not moose.exists( '/library' ):
             library = moose.Neutral( '/library' )
@@ -1101,7 +1085,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             return
         knownFields = knownFieldsDefault
         moogliBase = moose.Neutral( self.modelPath + '/moogli' )
-        for i in self.moogli:
+        self.mooView = jarmoogli.MooView( self.displayMoogli, args.dataChannelId )
+        for idx, i in enumerate( self.moogli ):
+            groupId = "{}_{}_{}".format( Path( i['path'] ).name,
+                    i['field'], idx )
             kf = knownFields[i['field']]
             pair = i['path'] + " 1"  # I'm replacing geom_expr with '1'
             dendCompts = self.elecid.compartmentsFromExpression[ pair ]
@@ -1112,7 +1099,21 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             #mooObj3 = dendObj + spineObj
             numMoogli = len( dendObj )
             iObj = DictToClass( i )
-            self.moogNames.append( rmoogli.makeMoogli( self, dendObj, iObj, kf ) )
+            pr = moose.PyRun( '/model/moogli_' + groupId )
+            pr.runString = "jarmoogli.updateMoogliViewer({})".format(idx)
+            pr.tick = idx + 20
+            moose.setClock( pr.tick, i["dt"] )
+        
+            # Replace this with a call to the MooView
+            #self.moogNames.append( jarmoogli.makeMoogli( self, dendObj, iObj, kf ) )
+            self.mooView.drawables.append( jarmoogli.MakeMoogli( self, dendObj, iObj, kf, groupId ) )
+
+        self.mooView.initializeScene()
+#
+#            pr.runString = '''
+#import jarmoogli
+#jarmoogli.updateMoogliViewer()
+#'''
 
     def _buildFileOutput( self ):
         if not hasattr( self, 'files' ) or len( self.files ) == 0:
@@ -1189,7 +1190,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             mvfArray = []
         
         # If center is empty then use autoscaling.
-        rmoogli.displayMoogli( self, 
+        jarmoogli.displayMoogli( self, 
                 dm["dt"], dm['runtime'], rotation = dm['rotation'], 
                 fullscreen = dm['fullscreen'], azim = dm['azim'], 
                 elev = dm['elev'], 
@@ -1200,21 +1201,36 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 movieFrame = mvfArray
                 #block = dm['block']
         )
-        pr = moose.PyRun( '/model/updateMoogli' )
-
-        pr.runString = '''
-import rdesigneur.rmoogli
-rdesigneur.rmoogli.updateMoogliViewer()
-'''
-        moose.setClock( pr.tick, dm["dt"] )
         moose.reinit()
         moose.start( dm["runtime"] )
         self._save()                                            
-        rmoogli.notifySimulationEnd()
+        jarmoogli.notifySimulationEnd()
         if dm["block"] or self.plotFile != None:
             self.display( len( self.moogNames ) + 1)
         while True:
             time.sleep(1)
+        return True
+
+    def _badDisplayMoogli( self ):
+        if not hasattr( self, 'moogli' ) or not hasattr( self, 'displayMoogli' ):
+            return False
+        if len( self.moogli ) == 0:
+            return False
+
+        dm = self.displayMoogli
+        if not self.dataChannelId:
+            return self._oldDisplayMoogli()
+        
+        pr = moose.PyRun( '/model/updateJardesignerClient' )
+
+        pr.runString = "sendFrameToServer({})".format( self.DataChannelId )
+        moose.setClock( pr.tick, dm["dt"] )
+        moose.reinit()
+        moose.start( dm["runtime"] )
+        self._save()                                            
+        jarmoogli.notifySimulationEnd()
+        if dm["block"] or self.plotFile != None:
+            self.display( len( self.moogNames ) + 1)
         return True
 
     def _display( self, startIndex = 0, block=True ):
@@ -2068,20 +2084,86 @@ def main():
     parser.add_argument( '--placementFunc', type=str, help='Optional: Pick a builtin placement function for multiple models. Options: squareGrid, random. Default: None' )
     parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
     parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
+    parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface.')
     args = parser.parse_args()
     rdes = rdesigneur( args.file, args.plotFile, jsonData = None, 
-        verbose = args.verbose )
+        dataChannelId = args.data_channel_id, verbose = args.verbose )
     pf = None
     if args.placementFunc == "squareGrid":
         pf = squareGridPlacementFunc
     elif args.placementFunc == "random":
         pf = randomPlacementFunc
     rdes.buildModel( numModels = args.numModels, placementFunc = pf )
+    print( "jardesigner.py: built model" )
+
+    '''
+    if rdes.dataChannelId:
+        initial_scene_data = rdes.mooView.getSceneJson()
+    try:
+        requests.post(
+            "http://127.0.0.1:5000/internal/push_data",
+            json={
+                "data_channel_id": rdes.dataChannelId,
+                "payload": {
+                    "type": "scene_init",
+                    "scene": initial_scene_data
+                }
+            }
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"CRITICAL: Could not send initial scene data to server. Error: {e}")
+    '''
+
+    # This loop will wait for commands from server.py via stdin
+    for line in sys.stdin:
+        try:
+            # Parse the command, which is expected to be a JSON string
+            command_data = json.loads(line)
+            command = command_data.get("command")
+            print( "jardesigner.py: received command", command )
+
+            if command == "start":
+                print("Received 'start' command.")
+                runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
+                moose.reinit()
+                moose.start(runtime)
+                print("Finished run.")
+                # Notify client that the run is finished
+                rdes.display()
+                print("Finished display.")
+                jarmoogli.notifySimulationEnd() 
+                # After running, you might want to send the plot file info
+                '''
+                if rdes.plotFile and rdes.dataChannelId:
+                    self.display()
+                    jarmoogli.notifySimulationEnd()
+                '''
+
+            elif command == "reset":
+                print("Received 'reset' command.")
+                moose.reinit()
+
+            elif command == "quit":
+                print("Received 'quit' command. Exiting.")
+                break # Exit the while loop and terminate the script
+            else:
+                print(f"Warning: Unknown command '{command}'")
+
+        except json.JSONDecodeError:
+            print(f"Warning: Received non-JSON command: {line.strip()}")
+
+        # Ensure the output buffer is flushed so the server sees the prints
+        sys.stdout.flush()
+
+
+    '''
     args.run = True
     if args.run:
         if not rdes._displayMoogli():
             rdes._display() 
 
+    jarmoogli.notifySimulationEnd()
+    '''
 
 
 if __name__ == "__main__":

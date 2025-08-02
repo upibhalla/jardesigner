@@ -5,10 +5,17 @@ import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
-// By importing the JSON file, the help text is bundled with the component.
-import helpText from './RunMenuBox.Help.json';
+// Assuming helpText is a local JSON file with descriptions.
+// Example: import helpText from './RunMenuBox.Help.json';
+const helpText = {
+    runControls: { totalRuntime: "The total duration for the simulation run in seconds.", currentTime: "The current time of the active simulation." },
+    clocks: { main: "Time step settings for different simulation components.", elecDt: "Electrical time step.", chemDt: "Chemical/signaling time step.", diffusionDt: "Diffusion time step.", elecPlotDt: "Time step for plotting electrical data.", chemPlotDt: "Time step for plotting chemical data.", functionDt: "Time step for functional evaluation.", statusDt: "Time step for status updates." },
+    configuration: { main: "Global settings for the simulation model." },
+    flags: { turnOffElec: "Disable all electrical calculations.", combineSegments: "Combine adjacent segments with identical properties.", useGssa: "Use Gillespie's Stochastic Simulation Algorithm.", benchmark: "Run in benchmark mode.", verbose: "Enable detailed logging.", reuseLibraryCell: "Reuse cell from library if available." },
+    otherSettings: { modelPath: "Path to the model on the server.", odeMethod: "Method for solving ordinary differential equations.", randSeed: "Seed for random number generation.", numWaveFrames: "Number of frames for wave visualization.", diffusionLength: "Characteristic length for diffusion calculations.", temperature: "Simulation temperature in Celsius." }
+};
 
-// Helper to safely convert value to string for text fields
+
 const safeToString = (value, defaultValue = '') => {
     if (value === null || value === undefined) {
         return defaultValue;
@@ -16,7 +23,6 @@ const safeToString = (value, defaultValue = '') => {
     return String(value);
 };
 
-// Default values for all settings managed by this component
 const defaultRunConfig = {
     runtime: '0.3',
     elecDt: '50e-6',
@@ -26,7 +32,7 @@ const defaultRunConfig = {
     diffDt: '10e-3',
     funcDt: '100e-6',
     statusDt: '0.0',
-    diffusionLength: '2e-6', // Default in meters for backend
+    diffusionLength: '2e-6',
     randseed: '1234',
     temperature: '32',
     numWaveFrames: '100',
@@ -46,10 +52,16 @@ const InfoTooltip = ({ title }) => (
     </Tooltip>
 );
 
+const RunMenuBox = ({ 
+    onConfigurationChange, 
+    currentConfig, 
+    onStartRun,
+    onResetRun,
+    isSimulating,
+    activeSimPid,
+    liveFrameData
+}) => {
 
-const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, onPlotDataUpdate, onClearPlotData }) => {
-
-    // --- Local state for UI elements, initialized from props ---
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
     const [clocks, setClocks] = useState(() => ({
         elec: safeToString(currentConfig?.elecDt, defaultRunConfig.elecDt),
@@ -61,7 +73,6 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         status: safeToString(currentConfig?.statusDt, defaultRunConfig.statusDt),
     }));
     const [configSettings, setConfigSettings] = useState(() => {
-        // Convert meters from config to microns for UI display. Default to 2µm.
         const initialDiffusionLenMicrons = currentConfig?.diffusionLength
             ? String(parseFloat(currentConfig.diffusionLength) * 1e6)
             : '2';
@@ -82,28 +93,36 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         };
     });
     
-    // --- Other local state for simulation status ---
     const [currentTime, setCurrentTime] = useState(0.0);
-    const [isLoading, setIsLoading] = useState(false);
     const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
-    const [simulationPid, setSimulationPid] = useState(null);
 
-    // --- Refs for props and local state ---
-    const pollingIntervalRef = useRef(null);
     const onConfigurationChangeRef = useRef(onConfigurationChange);
-    const onPlotDataUpdateRef = useRef(onPlotDataUpdate);
-    const onClearPlotDataRef = useRef(onClearPlotData);
     const runtimeRef = useRef(runtime);
     const clocksRef = useRef(clocks);
     const configSettingsRef = useRef(configSettings);
 
-    // --- Update refs when props/state change ---
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     useEffect(() => { runtimeRef.current = runtime; }, [runtime]);
     useEffect(() => { clocksRef.current = clocks; }, [clocks]);
     useEffect(() => { configSettingsRef.current = configSettings; }, [configSettings]);
+    
+    useEffect(() => {
+        if (isSimulating) {
+            setStatusMessage({ type: 'info', text: `Simulation running (PID: ${activeSimPid})...` });
+        } else if (activeSimPid) {
+            setStatusMessage({ type: 'success', text: `Model built (PID: ${activeSimPid}). Ready to run.` });
+        } else {
+            setStatusMessage({ type: 'info', text: 'No active simulation. Change a setting to build the model.' });
+        }
+    }, [isSimulating, activeSimPid]);
 
-    // --- Local state updaters ---
+
+    useEffect(() => {
+        if (liveFrameData && typeof liveFrameData.timestamp === 'number') {
+            setCurrentTime(liveFrameData.timestamp);
+        }
+    }, [liveFrameData]);
+
     const handleRuntimeChange = (value) => setRuntime(value);
     const updateClock = (field, value) => setClocks((prev) => ({ ...prev, [field]: value }));
     const updateConfigSetting = (field, value) => setConfigSettings((prev) => ({ ...prev, [field]: value }));
@@ -118,7 +137,6 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         const getOrDefaultNumeric = (valStr, defaultValStr) => parseFloat(valStr) || parseFloat(defaultValStr);
         const getOrDefaultInt = (valStr, defaultValStr) => parseInt(valStr, 10) || parseInt(defaultValStr, 10);
         
-        // Convert diffusion length from microns (UI) to meters (backend)
         const diffusionLenInMicrons = getOrDefaultNumeric(currentConfigObj.diffusionLen, '2');
         const diffusionLenInMeters = diffusionLenInMicrons * 1e-6;
 
@@ -146,175 +164,37 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
         };
     }, []);
 
-  // --- useEffect for cleanup on unmount ---
-  useEffect(() => {
-    return () => {
-      if (onConfigurationChangeRef.current) {
-        console.log("RunMenuBox: Unmounting, calling onConfigurationChange.");
-        onConfigurationChangeRef.current(buildConfigPayload(runtimeRef.current, clocksRef.current, configSettingsRef.current));
-      }
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildConfigPayload]);
-
-  // --- Simulation Polling Logic ---
-  const pollSimulationStatus = useCallback(async (pid) => {
-    if (!pid) return;
-    try {
-      const response = await fetch(`/api/simulation_status/${pid}`);
-      const result = await response.json();
-      if (response.ok) {
-        if (result.status === 'completed' || result.status === 'completed_error') {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-          setIsLoading(false);
-          if (result.plot_ready && result.svg_filename) {
-            onPlotDataUpdateRef.current?.({ filename: result.svg_filename, ready: true, error: null });
-            setStatusMessage({ type: 'success', text: `Simulation finished. Plot '${result.svg_filename}' should be visible.` });
-          } else {
-            let detailedError = result.message || 'Plot generation failed or file not found.';
-            if (result.stderr) detailedError += `\nStderr: ${result.stderr}`;
-            if (result.stdout) detailedError += `\nStdout: ${result.stdout}`;
-            onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: detailedError });
-            setStatusMessage({ type: 'error', text: result.message || 'Plot generation failed after simulation completion.' });
-          }
-        } else if (result.status === 'running') {
-           setStatusMessage({ type: 'info', text: `Simulation (PID: ${pid}) is running... Plot not yet ready.` });
-           onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: null });
-        } else {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-            setIsLoading(false);
-            const errorMsg = `Status check error: ${result.message || 'Unknown status from backend.'}`;
-            setStatusMessage({ type: 'error', text: errorMsg });
-            onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: errorMsg });
-        }
-      } else {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-        setIsLoading(false);
-        const errorMsg = `Error checking status: ${result.message || response.statusText}`;
-        setStatusMessage({ type: 'error', text: errorMsg });
-        onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: errorMsg });
-      }
-    } catch (error) {
-      console.error("RunMenuBox: Polling error:", error);
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-      setIsLoading(false);
-      const errorMsg = `Polling network error: ${error.message}`;
-      setStatusMessage({ type: 'error', text: errorMsg });
-      onPlotDataUpdateRef.current?.({ filename: null, ready: false, error: errorMsg });
-    }
-  }, []);
-
-  // --- Button Click Handlers ---
-  const handleStart = async () => {
-    console.log("RunMenuBox: Start button clicked.");
-    setStatusMessage({ type: '', text: '' });
-    onClearPlotDataRef.current?.();
-    setCurrentTime(0);
-
-    if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-    }
-
-	if (onConfigurationChangeRef.current) {
-         console.log("RunMenuBox: Calling onConfigurationChange before starting simulation.");
-         onConfigurationChangeRef.current(buildConfigPayload(runtime, clocks, configSettings));
-    }
-
-    if (!getCurrentJsonData) {
-      setStatusMessage({ type: 'error', text: 'Internal Error: getCurrentJsonData function not provided.' });
-      return;
-    }
-    
-    const currentJsonConfig = getCurrentJsonData();
-    if (!currentJsonConfig) {
-      setStatusMessage({ type: 'error', text: 'Error: No configuration data available to start simulation.' });
-      return;
-    }
-    console.log("RunMenuBox: Sending config to backend:", JSON.stringify(currentJsonConfig, null, 2));
-
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/launch_simulation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentJsonConfig),
-      });
-      const result = await response.json();
-
-      if (response.ok && result.status === 'success') {
-        setStatusMessage({ type: 'success', text: `Simulation launch initiated (PID: ${result.pid}). Waiting for plot...` });
-        setSimulationPid(result.pid);
-        if (result.pid) {
-            pollingIntervalRef.current = setInterval(() => pollSimulationStatus(result.pid), 3000);
-        } else {
-            setIsLoading(false);
-            setStatusMessage({ type: 'error', text: 'Backend reported success but did not return a PID.' });
-        }
-      } else {
-        setStatusMessage({ type: 'error', text: `Error from backend: ${result.message || 'Unknown error during launch.'}` });
-        setIsLoading(false);
-      }
-    } catch (error) {
-      setStatusMessage({ type: 'error', text: `Network error: Could not connect to backend. ${error.message}` });
-      setIsLoading(false);
-    }
-  };
-
-  const handlePause = () => {
-      console.log("RunMenuBox: Pause clicked for PID:", simulationPid);
-      setStatusMessage({ type: 'warning', text: 'Pause functionality not fully implemented.' });
-  };
-
-  const handleReset = async () => {
-    console.log("RunMenuBox: Reset clicked for PID:", simulationPid);
-    if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-    }
-    setIsLoading(true);
-    setStatusMessage({ type: '', text: '' });
-    onClearPlotDataRef.current?.();
-
-    if (simulationPid) {
-        try {
-            const response = await fetch(`/api/reset_simulation`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pid: simulationPid })
-            });
-            const result = await response.json();
-            if (response.ok) {
-                setStatusMessage({ type: 'success', text: result.message || `Simulation PID ${simulationPid} reset successfully.` });
-            } else {
-                setStatusMessage({ type: 'error', text: result.message || `Failed to reset simulation PID ${simulationPid}.` });
+    useEffect(() => {
+        return () => {
+            if (onConfigurationChangeRef.current) {
+                onConfigurationChangeRef.current(buildConfigPayload(runtimeRef.current, clocksRef.current, configSettingsRef.current));
             }
-        } catch (error) {
-            setStatusMessage({ type: 'error', text: `Network error during reset: ${error.message}` });
-        } finally {
-            setSimulationPid(null);
-            setIsLoading(false);
-        }
-    } else {
-        setStatusMessage({ type: 'info', text: 'No active simulation to reset.' });
-        setIsLoading(false);
-    }
-  };
+        };
+    }, [buildConfigPayload]);
 
+    const handleStart = () => {
+        if (onStartRun) {
+            onStartRun({ runtime: parseFloat(runtime) || 0 });
+        }
+    };
+
+    const handlePause = () => {
+        setStatusMessage({ type: 'warning', text: 'Pause functionality is not implemented.' });
+    };
+
+    const handleReset = () => {
+        setCurrentTime(0.0);
+        if (onResetRun) {
+            onResetRun();
+        }
+    };
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isLoading}>Start</Button></Grid>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!simulationPid}>Pause</Button></Grid>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset}>Reset</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || !activeSimPid}>Start</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!isSimulating}>Pause</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
             </Grid>
             
             {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
@@ -412,3 +292,4 @@ const RunMenuBox = ({ onConfigurationChange, getCurrentJsonData, currentConfig, 
 };
 
 export default RunMenuBox;
+
