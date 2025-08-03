@@ -37,6 +37,13 @@ export default class ThreeDManager {
   }
 
   buildScene(config) {
+    // --- FIX: Add defensive checks for the config object ---
+    // According to the schema, the main array is 'drawables'. Check for it.
+    if (!config || !config.drawables) {
+        console.warn("ThreeDManager: buildScene called with invalid config. 'drawables' array not found.", config);
+        return;
+    }
+
     this.sceneMeshes = [];
     this.entityConfigs.clear();
     while(this.scene.children.length > 2){
@@ -46,22 +53,27 @@ export default class ThreeDManager {
         if(child.material) child.material.dispose();
     }
     
-    this.renderer.setClearColor(new THREE.Color(config.displayMoogli.bg || '#FFFFFF'));
+    // --- FIX: Use top-level properties from the schema ---
+    // Use config.bg directly, with a fallback.
+    this.renderer.setClearColor(new THREE.Color(config.bg === 'default' ? '#FFFFFF' : config.bg || '#FFFFFF'));
     this.boundingBox.makeEmpty();
     
-    config.moogli.forEach(entity => {
+    // --- FIX: Iterate over 'drawables' instead of 'moogli' ---
+    config.drawables.forEach(entity => {
       // Store the config for this entity, keyed by its 'groupId' (name)
-      this.entityConfigs.set(entity.name, {
+      this.entityConfigs.set(entity.groupId, {
           vmin: entity.vmin,
           vmax: entity.vmax,
-          colormap: config.displayMoogli.colormap,
+          // --- FIX: Use top-level 'colormap' from the schema ---
+          colormap: config.colormap,
           transparency: entity.transparency || 1.0
       });
 
       entity.shape.forEach((primitive, i) => {
         let mesh;
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
-        const materialColor = getColor(normalizedValue, config.displayMoogli.colormap, true);
+        // --- FIX: Use top-level 'colormap' from the schema ---
+        const materialColor = getColor(normalizedValue, config.colormap, true);
         const material = new THREE.MeshStandardMaterial({
             color: materialColor,
             transparent: true,
@@ -85,8 +97,8 @@ export default class ThreeDManager {
             mesh.position.copy(start).add(direction.multiplyScalar(0.5));
         }
         if (mesh) {
-            // 'entityName' here corresponds to the `groupId` in the data frame schema.
-            mesh.userData = { entityName: entity.name, shapeIndex: i, originalValue: primitive.value };
+            // Use 'groupId' from the schema as the entity identifier
+            mesh.userData = { entityName: entity.groupId, shapeIndex: i, originalValue: primitive.value };
             this.scene.add(mesh);
             this.sceneMeshes.push(mesh);
             this.boundingBox.expandByObject(mesh);
@@ -97,23 +109,18 @@ export default class ThreeDManager {
     setTimeout(() => this.onWindowResize(), 0);
   }
 
-  // --- NEW: Method to update scene colors from a live data frame ---
   updateSceneData(frameData) {
     const { groupId, data } = frameData;
 
-    // Retrieve the rendering configuration for this data group
     const entityConfig = this.entityConfigs.get(groupId);
     if (!entityConfig) {
-        // console.warn(`Received data for unknown groupId: ${groupId}`);
         return;
     }
     
     const { vmin, vmax, colormap } = entityConfig;
 
-    // Filter the meshes to only those belonging to the specified groupId
     const relevantMeshes = this.sceneMeshes.filter(mesh => mesh.userData.entityName === groupId);
 
-    // Update the color of each mesh based on the new data
     data.forEach((value, index) => {
         if (index < relevantMeshes.length) {
             const mesh = relevantMeshes[index];
@@ -279,3 +286,4 @@ export default class ThreeDManager {
     this.renderer.dispose();
   }
 }
+

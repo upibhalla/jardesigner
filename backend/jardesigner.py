@@ -160,6 +160,8 @@ class rdesigneur:
         schemaFile = "jardesignerSchema.json"
         self.verbose = verbose
         self.dataChannelId = dataChannelId
+        self.runMooView = None # Used for runtime display
+        self.setupMooView = None    # Used to see model during construction
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -212,7 +214,6 @@ class rdesigneur:
         self.passiveDistrib = []
         self.plotNames = [] # Need to get rid of this, use the existing dict
         self.wavePlotNames = [] # Need to get rid of this, use the existing dict
-        #self.moogNames = [] # Currently holds moogli struct. Replaced with mooView
 
         if not moose.exists( '/library' ):
             library = moose.Neutral( '/library' )
@@ -1085,7 +1086,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             return
         knownFields = knownFieldsDefault
         moogliBase = moose.Neutral( self.modelPath + '/moogli' )
-        self.mooView = jarmoogli.MooView( self.displayMoogli, args.dataChannelId )
+        self.runMooView = jarmoogli.MooView( self.dataChannelId )
         for idx, i in enumerate( self.moogli ):
             groupId = "{}_{}_{}".format( Path( i['path'] ).name,
                     i['field'], idx )
@@ -1098,22 +1099,37 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             #assert( mooField == mooField2 )
             #mooObj3 = dendObj + spineObj
             numMoogli = len( dendObj )
-            iObj = DictToClass( i )
+            iObj = DictToClass( i ) # Used as 'args' in makeMoogli
             pr = moose.PyRun( '/model/moogli_' + groupId )
             pr.runString = "jarmoogli.updateMoogliViewer({})".format(idx)
             pr.tick = idx + 20
             moose.setClock( pr.tick, i["dt"] )
-        
-            # Replace this with a call to the MooView
-            #self.moogNames.append( jarmoogli.makeMoogli( self, dendObj, iObj, kf ) )
-            self.mooView.drawables.append( jarmoogli.MakeMoogli( self, dendObj, iObj, kf, groupId ) )
+            self.runMooView.makeMoogli( self, dendObj, iObj, groupId )
 
-        self.mooView.initializeScene()
+        ## Don't do this till we hit 'start'
+        #print("jardesigner.py: sending initial scene graph to server...")
+        #self.runMooView.sendSceneGraph()
 #
 #            pr.runString = '''
 #import jarmoogli
 #jarmoogli.updateMoogliViewer()
 #'''
+
+    def _buildSetupMoogli( self ):
+        self.setupMooView = jarmoogli.MooView( self.dataChannelId )
+        elecGroupId = "{}_{}_{}".format( "#", "Vm", 0 )
+        fdict = { "title": "Elec compartments", 
+            "field": "Vm",
+            "relpath": ".",
+            "dataType": "voltage",
+            "dataUnits": "mV",
+            "ymin": -0.1,
+            "ymax": 0.05
+        }
+        self.setupMooView.makeMoogli( self.elecid, fdict, elecGroupId )
+
+        # Later also check for any chem, stim, plot etc and add those.
+
 
     def _buildFileOutput( self ):
         if not hasattr( self, 'files' ) or len( self.files ) == 0:
@@ -1204,33 +1220,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         moose.reinit()
         moose.start( dm["runtime"] )
         self._save()                                            
-        jarmoogli.notifySimulationEnd()
+        jarmoogli.notifySimulationEnd(self.dataChannelId)
         if dm["block"] or self.plotFile != None:
             self.display( len( self.moogNames ) + 1)
         while True:
             time.sleep(1)
-        return True
-
-    def _badDisplayMoogli( self ):
-        if not hasattr( self, 'moogli' ) or not hasattr( self, 'displayMoogli' ):
-            return False
-        if len( self.moogli ) == 0:
-            return False
-
-        dm = self.displayMoogli
-        if not self.dataChannelId:
-            return self._oldDisplayMoogli()
-        
-        pr = moose.PyRun( '/model/updateJardesignerClient' )
-
-        pr.runString = "sendFrameToServer({})".format( self.DataChannelId )
-        moose.setClock( pr.tick, dm["dt"] )
-        moose.reinit()
-        moose.start( dm["runtime"] )
-        self._save()                                            
-        jarmoogli.notifySimulationEnd()
-        if dm["block"] or self.plotFile != None:
-            self.display( len( self.moogNames ) + 1)
         return True
 
     def _display( self, startIndex = 0, block=True ):
@@ -2095,24 +2089,11 @@ def main():
         pf = randomPlacementFunc
     rdes.buildModel( numModels = args.numModels, placementFunc = pf )
     print( "jardesigner.py: built model" )
-
-    '''
     if rdes.dataChannelId:
-        initial_scene_data = rdes.mooView.getSceneJson()
-    try:
-        requests.post(
-            "http://127.0.0.1:5000/internal/push_data",
-            json={
-                "data_channel_id": rdes.dataChannelId,
-                "payload": {
-                    "type": "scene_init",
-                    "scene": initial_scene_data
-                }
-            }
-        )
-    except requests.exceptions.RequestException as e:
-        print(f"CRITICAL: Could not send initial scene data to server. Error: {e}")
-    '''
+        rdes._buildSetupMoogli()
+        print( "jardesigner.py: built setup 3D" )
+        rdes.setupMooView.sendSceneGraph()
+        print( "jardesigner.py: sent setup 3D" )
 
     # This loop will wait for commands from server.py via stdin
     for line in sys.stdin:
@@ -2131,7 +2112,7 @@ def main():
                 # Notify client that the run is finished
                 rdes.display()
                 print("Finished display.")
-                jarmoogli.notifySimulationEnd() 
+                jarmoogli.notifySimulationEnd( rdes.dataChannelId )
                 # After running, you might want to send the plot file info
                 '''
                 if rdes.plotFile and rdes.dataChannelId:
