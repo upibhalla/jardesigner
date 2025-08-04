@@ -6,7 +6,7 @@ export default class ThreeDManager {
   constructor(container, onSelectionChange) {
     this.container = container;
     this.onSelectionChange = onSelectionChange;
-    
+
     this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.container.appendChild(this.renderer.domElement);
@@ -20,7 +20,7 @@ export default class ThreeDManager {
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
-    
+
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
     dirLight.position.set(5, 5, 5);
@@ -52,12 +52,12 @@ export default class ThreeDManager {
         if(child.geometry) child.geometry.dispose();
         if(child.material) child.material.dispose();
     }
-    
+
     // --- FIX: Use top-level properties from the schema ---
     // Use config.bg directly, with a fallback.
     this.renderer.setClearColor(new THREE.Color(config.bg === 'default' ? '#FFFFFF' : config.bg || '#FFFFFF'));
     this.boundingBox.makeEmpty();
-    
+
     // --- FIX: Iterate over 'drawables' instead of 'moogli' ---
     config.drawables.forEach(entity => {
       // Store the config for this entity, keyed by its 'groupId' (name)
@@ -116,7 +116,7 @@ export default class ThreeDManager {
     if (!entityConfig) {
         return;
     }
-    
+
     const { vmin, vmax, colormap } = entityConfig;
 
     const relevantMeshes = this.sceneMeshes.filter(mesh => mesh.userData.entityName === groupId);
@@ -135,7 +135,7 @@ export default class ThreeDManager {
       const rect = this.renderer.domElement.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      
+
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const intersects = this.raycaster.intersectObjects(this.sceneMeshes);
 
@@ -149,8 +149,8 @@ export default class ThreeDManager {
 
   updateSelectionVisuals(clickSelected) {
     const isSelected = (mesh) => {
-        return clickSelected.some(sel => 
-            sel.entityName === mesh.userData.entityName && 
+        return clickSelected.some(sel =>
+            sel.entityName === mesh.userData.entityName &&
             sel.shapeIndex === mesh.userData.shapeIndex
         );
     };
@@ -164,7 +164,7 @@ export default class ThreeDManager {
         }
     });
   }
-  
+
   handleKeyDown(event) {
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') return;
 
@@ -181,47 +181,50 @@ export default class ThreeDManager {
         case 'P': offset.applyAxisAngle(right, -rotateSpeed); break;
         case 'y': offset.applyAxisAngle(up, rotateSpeed); break;
         case 'Y': offset.applyAxisAngle(up, -rotateSpeed); break;
-        
-        case ',': case '<': offset.multiplyScalar(0.95); break;
-        case '.': case '>': offset.multiplyScalar(1.05); break;
 
+        // --- FIX: Flipped comma/period key mappings ---
+        case ',': case '<': offset.multiplyScalar(1.05); break;
+        case '.': case '>': offset.multiplyScalar(0.95); break;
+
+        // --- FIX: Flipped up/down arrow key mappings ---
         case 'ArrowUp': {
             event.preventDefault();
             const panOffset = up.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.add(panOffset);
-            this.controls.target.add(panOffset);
+            this.camera.position.sub(panOffset);
+            this.controls.target.sub(panOffset);
             break;
         }
         case 'ArrowDown': {
             event.preventDefault();
             const panOffset = up.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.sub(panOffset);
-            this.controls.target.sub(panOffset);
+            this.camera.position.add(panOffset);
+            this.controls.target.add(panOffset);
             break;
         }
+        // --- FIX: Flipped left/right arrow key mappings ---
         case 'ArrowLeft': {
-            event.preventDefault();
-            const panOffset = right.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.sub(panOffset);
-            this.controls.target.sub(panOffset);
-            break;
-        }
-        case 'ArrowRight': {
             event.preventDefault();
             const panOffset = right.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
             this.camera.position.add(panOffset);
             this.controls.target.add(panOffset);
             break;
         }
-        
+        case 'ArrowRight': {
+            event.preventDefault();
+            const panOffset = right.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
+            this.camera.position.sub(panOffset);
+            this.controls.target.sub(panOffset);
+            break;
+        }
+
         case 'a': this.focusCamera(); return;
-        
+
         case 'd': this.diameterScale *= 0.9; this.updateDiameterScale(); break;
         case 'D': this.diameterScale *= 1.1; this.updateDiameterScale(); break;
-        
+
         default: return;
     }
-    
+
     this.camera.position.copy(this.controls.target).add(offset);
   }
 
@@ -241,17 +244,17 @@ export default class ThreeDManager {
     const center = this.boundingBox.getCenter(new THREE.Vector3());
     const size = this.boundingBox.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    
+
     const fov = this.camera.fov * (Math.PI / 180);
     const cameraDistance = Math.abs(maxDim / 1.5 / Math.tan(fov / 2));
 
     this.camera.position.copy(center);
     this.camera.position.z += cameraDistance;
     this.controls.target.copy(center);
-    
+
     this.camera.near = cameraDistance / 100;
     this.camera.far = cameraDistance * 100;
-    
+
     this.camera.updateProjectionMatrix();
   }
 
@@ -264,7 +267,7 @@ export default class ThreeDManager {
 
   animate = () => {
     requestAnimationFrame(this.animate);
-    
+
     const canvas = this.renderer.domElement;
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
@@ -272,7 +275,7 @@ export default class ThreeDManager {
         this.onWindowResize();
     }
 
-    this.controls.update(); 
+    this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -286,4 +289,3 @@ export default class ThreeDManager {
     this.renderer.dispose();
   }
 }
-
