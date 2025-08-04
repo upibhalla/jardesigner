@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+	"filetype": { "type": "string", "enum": ["jardesignerDataFrame"] },
+	"version": { "type": "string", "enum": ["1.0"] },
+    "timestamp": {"type": "number"},
+    "groupId": {"type": "string"},
+    "data": {
+        "type": "array",
+        "items": { "type": "number" }
+	}
+  },
+  "required": ["filetype", "version", "timestamp", "groupId", "data" ],
+  "additionalProperties": false
+}

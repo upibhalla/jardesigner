@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type:": "object",
+  "properties": {
+	"filetype": { "type": "string", "enum": ["jardesignerSceneGraph"] },
+	"version": { "type": "string", "enum": ["1.0"] },
+    "wallClockDt": {"type": "number", "minimum": 0.01, "default": 0.05 },
+    "runtime": {"type": "number", "minimum": 1e-3, "default": 0.3 },
+    "rotation": {"type": "number", "default": 0.0},
+    "azim": {"type": "number", "default": 0},
+    "elev": {"type": "number", "default": 0},
+    "mergeDisplays": {"type": "boolean", "default": true },
+    "colormap": {"type": "string", "default": "jet"},
+    "bg": {"type": "string", "default": "default"},
+    "block": {"type": "boolean", "default": true},
+    "fullscreen": {"type": "boolean", "default": false},
+    "center": {"type": "array", "items": {"type": "number" },
+        "minItems": 3, "maxItems": 3,
+        "default": [0,0,0]
+    },
+    "drawables": {
+        "type": "array",
+        "items": {
+            "type": "object",
+	        "properties": {
+                "title": {"type": "string", "default": "Memb Vm (mV)"},
+                "groupId": {"type": "string", "default": "cell"},
+                "dataType": {"type": "string", "default": "voltage"},
+                "dataUnits": {"type": "string", "default": "mV"},
+                "vmin": {"type": "number", "default": 0},
+                "vmax": {"type": "number", "default": 1},
+                "dt": {"type": "number", "minimum": 1e-5, "default": 0.001},
+                "transparency": {"type": "number", "minimum": 0, "default":0.5},
+    			"visible": {"type": "boolean", "default": true},
+                "shape": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+								"type": "string", 
+								"enum": ["sphere", "cylinder", "cone"]
+							},
+                            "C": {"type": "array", 
+                                "items": {"type": "number" },
+                                "minItems": 3, "maxItems": 3,
+                                "default": [0,0,0]
+                            },
+                            "C2": {"type": "array", 
+                                "items": {"type": "number" },
+                                "minItems": 3, "maxItems": 3,
+                                "default": [1e-5, 0, 0]
+                            },
+                            "diameter": {"type": "number", "default":10e-6},
+                            "value": {"type": "number", "default": 0},
+                            "swcType": {"type": "number"},
+                            "shapeIdx": {"type": "number"},
+                            "simId": {"type": "number", "default": 0},
+                            "simPath": {"type": "string"}
+                        },
+                        "required": ["type", "C", "diameter", "value", "swcType", "shapeIdx", "simId", "simPath"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+			"required": ["groupId", "title", "dataType", "dataUnits", "vmin", "vmax", "dt", "transparency", "visible", "shape"],
+  			"additionalProperties": false
+        }
+    }
+  },
+  "required": ["filetype", "version", "wallClockDt", "runtime", "rotation", "azim", "elev", "mergeDisplays", "colormap", "bg", "block", "fullscreen", "center", "drawables" ],
+  "additionalProperties": false
+}
+
