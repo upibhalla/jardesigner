@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 #########################################################################
-## rdesigneur0_5.py ---
+## jarrdesigner.py ---
 ## This program is part of 'MOOSE', the
 ## Messaging Object Oriented Simulation Environment.
 ##           Copyright (C) 2014 Upinder S. Bhalla. and NCBS
 ## It is made available under the terms of the
-## GNU General Public License version 2 or later.
+## GNU General Public License version 3 or later.
 ## See the file COPYING.LIB for the full notice.
 #########################################################################
 
@@ -16,7 +16,7 @@
 ## latter in the former, including mapping entities like calcium and
 ## channel conductances, between them.
 ##########################################################################
-from __future__ import print_function, absolute_import, division
+#from __future__ import print_function, absolute_import, division
 import json
 import jsonschema
 import importlib.util
@@ -71,8 +71,6 @@ knownFieldsDefault = {
     'conc':('PoolBase', 'getConc', 1000, 'Concentration (uM)', 0.0, 2.0 ),
     'volume':('PoolBase', 'getVolume', 1e18, 'Volume (um^3)' )
 }
-
-#EREST_ACT = -70e-3
 
 def _profile(func):
     """
@@ -139,13 +137,6 @@ def addDefaultsRecursive(instance, schema):
             instance[i] = addDefaultsRecursive(item, item_schema)
 
     return instance
-
-def dummyBuildFunction( rdes ):
-    # Dummy function to be replaced by custom function to build something
-    # within the rdes ambit, so that it can be used for plotting and for
-    # dumping to file. Example could be a complex stimulus object
-    # or a network layer for input.
-    return
 
 class rdesigneur:
     """The rdesigneur class is used to build models incorporating
@@ -709,10 +700,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             mesh = moose.NeuroMesh( newChemId.path + '/' + chemSrc )
             mesh.geometryPolicy = 'cylinder'
             mesh.separateSpines = 0
-            #mesh.diffLength = diffLength
-            # This is done above in buildChemDistrib
-            #self.cellPortionElist = self.elecid.compartmentsFromExpression[ elecPath + " " + geom ]
-            #mesh.subTree = self.cellPortionElist
         elif meshType == 'spine':
             mesh = self.buildSpineMesh( argList, newChemId, comptDict )
         elif meshType == 'psd':
@@ -721,14 +708,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             mesh = self.buildPresynMesh( argList, newChemId )
         elif meshType == 'endo' or meshType == 'endo_axial':
             return
-        #elif meshType == 'endo' or meshType == 'endo_axial':
-        #   mesh = self.buildEndoMesh( argList, newChemId )
         else:
             raise BuildError( "newChemDistrib: ERROR: No mesh of specified type found: " + meshType )
 
         self._moveCompt( chemSrcObj, mesh )
-        #if meshType == 'dend': # has to be done after moveCompt
-        #    mesh.diffLength = diffLength
         comptDict[chemSrc] = mesh.path
 
     def buildSpineMesh( self, argList, newChemId, comptDict ):
@@ -887,8 +870,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             dup = moose.copy( self.model, parent, name, 1 )
             self._positionModelObj( dup[0], idx )
             self.modelList.append( dup[0] ) # dup is a vec
-        # I wish I had an alias capability in MOOSE
-        #self.model.name = self.model.name = "_0_0"
 
     ################################################################
     # Here we call any extra building function supplied by user.
@@ -1095,9 +1076,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             dendCompts = self.elecid.compartmentsFromExpression[ pair ]
             #spineCompts = self.elecid.spinesFromExpression[ pair ]
             dendObj, mooField = self._parseComptField( dendCompts, i, knownFields )
-            #spineObj, mooField2 = self._parseComptField( spineCompts, i, knownFields )
-            #assert( mooField == mooField2 )
-            #mooObj3 = dendObj + spineObj
             numMoogli = len( dendObj )
             iObj = DictToClass( i ) # Used as 'args' in makeMoogli
             pr = moose.PyRun( '/model/moogli_' + groupId )
@@ -1263,7 +1241,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         #print( "NROWS=", nrows, "   NCOLS=", ncols, sx, sy )
         for idx, i in enumerate( self.plotNames ):
             ax = axes[idx % nrows, idx // nrows]
-            #plt.figure( i[2] + startIndex )
             ax.set_title( i[1], fontsize = 18 )
             ax.set_xlabel( "Time (s)", fontsize = 16 )
             ax.set_ylabel( i[4], fontsize = 16 )
@@ -1344,7 +1321,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     wp[0].canvas.flush_events()
             #plt.pause(0.001)
         
-        #This calls the _save function which saves only if the filenames have been specified
 
     ################################################################
     # Here we get the time-series data and write to various formats
@@ -1408,7 +1384,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 writer.writerow(row)
 
     ##########****SAVING*****###############
-
 
     def _save( self ):
         self._finishedSaving = True
@@ -1507,7 +1482,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 elecidpath = model.path + '/elec'
                 hsolve = moose.HSolve( elecidpath + '/hsolve' )
                 hsolve.dt = self.elecDt
-                #hsolve.target = self.soma.path
                 hsolve.target = elecidpath + '/soma'
 
 # Utility function for setting up clocks.
@@ -1710,7 +1684,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
 
     #################################################################
-
     # This assumes that the chemid is located in self.parent.path+/chem
     # It moves the existing chem compartments into a NeuroMesh
     # For now this requires that we have a dend, a spine and a PSD,
@@ -1932,133 +1905,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 #print( "Connecting {} to {} and {}.{}".format( i[3], chemVec[0], elObj, elecFieldDest ) )
 
 
-#######################################################################
-# Some helper classes, used to define argument lists.
-#######################################################################
-
-class baseplot:
-    def __init__( self,
-            elecpath='soma', geom_expr='1', relpath='.', field='Vm' ):
-        self.elecpath = elecpath
-        self.geom_expr = geom_expr
-        self.relpath = relpath
-        self.field = field
-
-class rplot( baseplot ):
-    def __init__( self,
-        elecpath = 'soma', geom_expr = '1', relpath = '.', field = 'Vm', 
-        title = 'Membrane potential', 
-        mode = 'time', 
-        ymin = 0.0, ymax = 0.0, 
-        saveFile = "", saveResolution = 3, show = True ):
-        baseplot.__init__( self, elecpath, geom_expr, relpath, field )
-        self.title = title
-        self.mode = mode # Options: time, wave, wave_still, raster
-        self.ymin = ymin # If ymin == ymax, it autoscales.
-        self.ymax = ymax
-        if len( saveFile ) < 5:
-            self.saveFile = ""
-        else:
-            f = saveFile.split('.')
-            if len(f) < 2 or ( f[-1] != 'xml' and f[-1] != 'csv' ):
-                raise BuildError( "rplot: Filetype is '{}', must be of type .xml or .csv.".format( f[-1] ) )
-        self.saveFile = saveFile
-        self.show = show
-
-    def printme( self ):
-        print( "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}".format( 
-            self.elecpath,
-            self.geom_expr, self.relpath, self.field, self.title,
-            self.mode, self.ymin, self.ymax, self.saveFile, self.show ) )
-
-    @staticmethod
-    def convertArg( arg ):
-        if isinstance( arg, rplot ):
-            return arg
-        elif isinstance( arg, list ):
-            return rplot( *arg )
-        else:
-            raise BuildError( "rplot initialization failed" )
-
-class rmoog( baseplot ):
-    def __init__( self,
-        elecpath = 'soma', 
-        geom_expr = '1', 
-        relpath = '.', 
-        field = 'Vm', 
-        title = 'Membrane potential', 
-        ymin = 0.0, ymax = 0.0, 
-        show = True ,
-        diaScale = 1.0
-    ): # Could put in other display options.
-        baseplot.__init__( self, elecpath, geom_expr, relpath, field )
-        self.title = title
-        self.ymin = ymin # If ymin == ymax, it autoscales.
-        self.ymax = ymax
-        self.show = show
-        self.diaScale = diaScale
-
-    @staticmethod
-    def convertArg( arg ):
-        if isinstance( arg, rmoog ):
-            return arg
-        elif isinstance( arg, list ):
-            return rmoog( *arg )
-        else:
-            raise BuildError( "rmoog initialization failed" )
-
-class rstim( baseplot ):
-    def __init__( self,
-            elecpath = 'soma', geom_expr = '1', relpath = '.', field = 'inject', expr = '0'):
-        baseplot.__init__( self, elecpath, geom_expr, relpath, field )
-        self.expr = expr
-
-    def printme( self ):
-        print( "{0}, {1}, {2}, {3}, {4}".format( 
-            self.elecpath, self.geom_expr, self.relpath, self.field, self.expr
-            ) )
-
-    @staticmethod
-    def convertArg( arg ):
-        if isinstance( arg, rstim ):
-            return arg
-        elif isinstance( arg, list ):
-            return rstim( *arg )
-        else:
-            raise BuildError( "rstim initialization failed" )
-
-
-class rfile:
-    def __init__( self,
-            fname = 'output.h5', path = 'soma', field = 'Vm', dt = 1e-4, flushSteps = 200, start = 0.0, stop = -1.0, ftype = 'nsdf'):
-        self.fname = fname
-        self.path = path
-        if not field in knownFieldsDefault:
-            print( "Error: Field '{}' not known.".format( field ) )
-            assert( 0 )
-        self.field = field
-        self.dt = dt
-        self.flushSteps = flushSteps
-        self.start = start
-        self.stop = stop
-        self.ftype = self.fname.split(".")[-1]
-        if not self.ftype in ["txt", "csv", "h5", "nsdf"]:
-            print( "Error: output file format for ", fname , " not known")
-            assert( 0 )
-        self.fname = self.fname.split("/")[-1]
-
-    def printme( self ):
-        print( "{0}, {1}, {2}, {3}".format( 
-            self.fname, self.path, self.field, self.dt) )
-
-    @staticmethod
-    def convertArg( arg ):
-        if isinstance( arg, rfile ):
-            return arg
-        elif isinstance( arg, list ):
-            return rfile( *arg )
-        else:
-            raise BuildError( "rfile initialization failed" )
 
 def squareGridPlacementFunc( numModels, idx ):
     nx = int( np.sqrt( numModels ) )
@@ -2135,7 +1981,6 @@ def main():
 
         # Ensure the output buffer is flushed so the server sees the prints
         sys.stdout.flush()
-
 
     '''
     args.run = True
