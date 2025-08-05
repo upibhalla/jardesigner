@@ -1238,7 +1238,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         fig, axes = plt.subplots( nrows = nrows, ncols = ncols, 
             figsize = (sx, sy), squeeze = False )
-        #print( "NROWS=", nrows, "   NCOLS=", ncols, sx, sy )
+        print( "NROWS=", nrows, "   NCOLS=", ncols, sx, sy )
         for idx, i in enumerate( self.plotNames ):
             ax = axes[idx % nrows, idx // nrows]
             ax.set_title( i[1], fontsize = 18 )
@@ -1926,7 +1926,7 @@ def main():
     parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
     parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface.')
     args = parser.parse_args()
-    rdes = rdesigneur( args.file, args.plotFile, jsonData = None, 
+    rdes = rdesigneur( args.file, plotFile = args.plotFile, jsonData = None, 
         dataChannelId = args.data_channel_id, verbose = args.verbose )
     pf = None
     if args.placementFunc == "squareGrid":

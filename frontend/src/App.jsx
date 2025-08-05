@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { io } from "socket.io-client";
+import { v4 as uuidv4 } from 'uuid';
 import { AppBar, Toolbar, Button, Grid } from '@mui/material';
 // --- Import Icons ---
 import runIcon from './assets/run.png';
@@ -129,29 +130,53 @@ const App = () => {
   const [isSimulating, setIsSimulating] = useState(false);
   const [clickSelected, setClickSelected] = useState([]);
   
-  const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null });
+  const [clientId] = useState(() => uuidv4());
+
+  const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null, svg_filename: null });
   const [liveFrameData, setLiveFrameData] = useState(null);
   const socketRef = useRef(null);
 
+  // --- FIX: Use a ref to hold the current sim state to avoid stale closures ---
+  const activeSimRef = useRef(activeSim);
+  useEffect(() => {
+    activeSimRef.current = activeSim;
+  }, [activeSim]);
+
   const handleSimulationEnded = useCallback(() => {
       setIsSimulating(false);
-  }, []);
+      // --- FIX: Read the SVG filename from the ref to get the latest value ---
+      const currentFilename = activeSimRef.current.svg_filename;
+      if (currentFilename) {
+          console.log(`Simulation ended. Setting plot filename to: ${currentFilename}`);
+          setSvgPlotFilename(currentFilename);
+          setIsPlotReady(true);
+          setPlotError('');
+      } else {
+          console.error("Simulation ended, but no SVG filename was available.");
+          setPlotError("Simulation finished, but plot filename is missing.");
+          setSvgPlotFilename(null);
+          setIsPlotReady(false);
+      }
+  }, []); // --- FIX: Dependency array can be empty now ---
 
   const buildModelOnServer = useCallback(async (newJsonData) => {
+    setSvgPlotFilename(null);
+    setIsPlotReady(false);
+    setPlotError('');
+
     if (activeSim.pid) {
         console.log(`Resetting previous simulation (PID: ${activeSim.pid}) before building new one.`);
         try {
-            // --- FIXED: Added full URL ---
             await fetch(`${API_BASE_URL}/reset_simulation`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pid: activeSim.pid })
+                body: JSON.stringify({ pid: activeSim.pid, client_id: clientId })
             });
         } catch (error) {
             console.error("Failed to reset previous simulation:", error);
         }
     }
-    
+
     if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -159,23 +184,36 @@ const App = () => {
 
     try {
         console.log("Sending new model configuration to server to build...");
-        // --- FIXED: Added full URL ---
+        
+        const payload = {
+            config_data: newJsonData,
+            client_id: clientId
+        };
+
         const response = await fetch(`${API_BASE_URL}/launch_simulation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newJsonData),
+            body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
-            // Handle HTTP errors like 404, 500 etc.
+            if (response.status === 409) {
+                const errorResult = await response.json();
+                alert(`Error: ${errorResult.message}`);
+                throw new Error(errorResult.message);
+            }
             throw new Error(`Server responded with status: ${response.status}`);
         }
-        
+
         const result = await response.json();
 
-        if (result.status === 'success' && result.pid && result.data_channel_id) {
+        if (result.status === 'success' && result.pid && result.data_channel_id && result.svg_filename) {
             console.log(`New simulation process created (PID: ${result.pid}). Ready to run.`);
-            setActiveSim({ pid: result.pid, data_channel_id: result.data_channel_id });
+            setActiveSim({
+                pid: result.pid,
+                data_channel_id: result.data_channel_id,
+                svg_filename: result.svg_filename
+            });
 
             const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
             socketRef.current = socket;
@@ -195,7 +233,7 @@ const App = () => {
                     handleSimulationEnded();
                 }
             });
-            
+
             socket.on('disconnect', (reason) => {
                 console.log(`Socket.IO disconnected. Reason: "${reason}"`);
             });
@@ -205,14 +243,14 @@ const App = () => {
         }
     } catch (err) {
         console.error("Error during model build:", err);
-        setActiveSim({ pid: null, data_channel_id: null });
+        setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
     }
-  }, [activeSim.pid, handleSimulationEnded]);
+  }, [activeSim.pid, handleSimulationEnded, clientId]);
 
   const updateJsonData = useCallback((newDataPart) => {
     const updatedData = { ...initialJsonData, ...jsonData, ...newDataPart };
     const compactedData = compactJsonData(updatedData, initialJsonData);
-    
+
     setJsonData(updatedData);
     setJsonContent(JSON.stringify(compactedData, null, 2));
 
@@ -224,7 +262,7 @@ const App = () => {
           console.error("Cannot start run: No active simulation process or socket connection.");
           return;
       }
-      
+
       console.log(`Sending 'start' command to PID ${activeSim.pid} with runtime: ${runParams.runtime}`);
       setIsSimulating(true);
       setLiveFrameData(null);
@@ -238,7 +276,7 @@ const App = () => {
           }
       });
   }, [activeSim.pid]);
-  
+
   const handleResetRun = useCallback(async () => {
       setIsSimulating(false);
       if (activeSim.pid) {
@@ -267,7 +305,7 @@ const App = () => {
         }
     });
   }, []);
-  
+
   const handleMorphologyFileChange = useCallback(({ filename, content }) => {
       updateJsonData({
           cellProto: {
@@ -305,6 +343,9 @@ const App = () => {
     setJsonContent(JSON.stringify(compacted, null, 2));
     setTransientSwcData(null);
     setThreeDConfig(null);
+    setSvgPlotFilename(null);
+    setIsPlotReady(false);
+    setPlotError('');
     buildModelOnServer(compacted);
   }, [buildModelOnServer]);
 
@@ -366,9 +407,9 @@ const App = () => {
   const menuComponents = useMemo(() => ({
       File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
       SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
-      Run: <RunMenuBox 
+      Run: <RunMenuBox
              onConfigurationChange={updateJsonData}
-             currentConfig={{...jsonData}} 
+             currentConfig={{...jsonData}}
              onStartRun={handleStartRun}
              onResetRun={handleResetRun}
              isSimulating={isSimulating}
@@ -431,4 +472,3 @@ const App = () => {
 };
 
 export default App;
-

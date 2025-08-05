@@ -3,7 +3,6 @@ import json
 import subprocess
 import uuid
 import time
-# --- NEW IMPORT ---
 import threading
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -27,19 +26,18 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Store running process and plot info ---
 running_processes = {}
+# ADDED: Dictionary to map a client's unique ID to their simulation PID
+client_sim_map = {}
 
-# === NEW FUNCTION TO PRINT SUBPROCESS STREAM TO CONSOLE ===
+
 def stream_printer(stream, pid, stream_name):
     """
     Reads a stream line-by-line and prints it to the console in real-time.
     This function is designed to be run in a separate thread.
     """
     try:
-        # Use iter to read the stream line by line as it comes in.
-        # This avoids blocking while waiting for output.
         for line in iter(stream.readline, ''):
             if line:
-                # Print the output to the server's console with a descriptive prefix.
                 print(f"[{pid}-{stream_name}] {line.strip()}")
         stream.close()
         print(f"Stream printer for PID {pid} ({stream_name}) has finished.")
@@ -71,7 +69,7 @@ def handle_sim_command(data):
 
     if pid in running_processes:
         process = running_processes[pid]["process"]
-        if process.poll() is None: # Check if the process is still running
+        if process.poll() is None:
             try:
                 command_payload = {
                     "command": command,
@@ -94,12 +92,28 @@ def handle_sim_command(data):
 def launch_simulation():
     print("Received request for /api/launch_simulation")
     try:
-        config_data = request.json
-        if not config_data or not isinstance(config_data, dict):
-            print("Error: Invalid or missing JSON data.")
-            return jsonify({"status": "error", "message": "Invalid or missing JSON data"}), 400
+        # MODIFIED: Read the new payload structure
+        request_data = request.json
+        config_data = request_data.get('config_data')
+        client_id = request_data.get('client_id')
 
-        print(f"Received config data: {json.dumps(config_data, indent=2)}")
+        if not config_data or not isinstance(config_data, dict):
+            return jsonify({"status": "error", "message": "Invalid or missing JSON config data"}), 400
+        
+        if not client_id:
+            return jsonify({"status": "error", "message": "Request is missing client_id"}), 400
+
+        # MODIFIED: Check if the client already has a running simulation
+        if client_id in client_sim_map:
+            pid = client_sim_map[client_id]
+            if pid in running_processes and running_processes[pid]['process'].poll() is None:
+                print(f"Client {client_id} with active PID {pid} tried to launch a new model. Request rejected.")
+                return jsonify({
+                    "status": "error",
+                    "message": f"You already have a running simulation (PID: {pid}). Please reset it before building a new one."
+                }), 409 # 409 Conflict is an appropriate status code
+
+        print(f"Received config data for client {client_id}: {json.dumps(config_data, indent=2)}")
 
         temp_file_path = None
         try:
@@ -125,7 +139,6 @@ def launch_simulation():
         svg_filepath = os.path.abspath(os.path.join(PLOT_OUTPUT_DIR, svg_filename))
         data_channel_id = str(uuid.uuid4())
         
-        # === MODIFIED COMMAND: Added -u for unbuffered output ===
         command = [
             "python", "-u",
             MOOSE_SCRIPT_PATH,
@@ -155,7 +168,9 @@ def launch_simulation():
                 "data_channel_id": data_channel_id,
             }
 
-            # === NEW: START STREAM PRINTING THREADS ===
+            # MODIFIED: Map the client_id to the new process pid
+            client_sim_map[client_id] = process.pid
+
             stdout_thread = threading.Thread(
                 target=stream_printer,
                 args=(process.stdout, process.pid, 'stdout'),
@@ -260,8 +275,6 @@ def simulation_status(pid):
     if poll_result is None:
         return jsonify({"status": "running", "pid": pid, "message": "Simulation is still in progress."}), 200
     else:
-        # === MODIFIED: Removed communicate() call ===
-        # The stdout/stderr are now handled by the threads.
         print(f"Process {pid} has terminated with return code {poll_result}.")
         
         plot_exists = os.path.exists(svg_filepath)
@@ -281,8 +294,12 @@ def get_plot(filename):
 
 @app.route('/reset_simulation', methods=['POST'])
 def reset_simulation():
-    pid_to_reset_str = request.json.get('pid')
-    print(f"Received request to RESET simulation with PID: {pid_to_reset_str}")
+    # MODIFIED: Read client_id from the request
+    request_data = request.json
+    pid_to_reset_str = request_data.get('pid')
+    client_id = request_data.get('client_id')
+
+    print(f"Received request to RESET simulation with PID: {pid_to_reset_str} from Client: {client_id}")
     
     if not pid_to_reset_str:
         return jsonify({"status": "error", "message": "PID not provided for reset."}), 400
@@ -301,6 +318,12 @@ def reset_simulation():
                 proc_info["process"].wait(timeout=5)
                 print(f"Process {pid_to_reset} terminated.")
             del running_processes[pid_to_reset]
+
+            # MODIFIED: Remove the client's entry from the tracking map
+            if client_id and client_id in client_sim_map:
+                client_sim_map.pop(client_id, None)
+                print(f"Cleared simulation mapping for client {client_id}.")
+
             return jsonify({"status": "success", "message": f"Simulation PID {pid_to_reset} reset."}), 200
         except Exception as e:
             print(f"Error during reset of PID {pid_to_reset}: {e}")
@@ -317,4 +340,3 @@ if __name__ == '__main__':
     print(f"Temporary Config Directory (absolute): {os.path.abspath(TEMP_CONFIG_DIR)}")
     print("Starting Flask-SocketIO server...")
     socketio.run(app, host='0.0.0.0', debug=False, port=5000)
-

@@ -346,5 +346,4 @@ def notifySimulationEnd( dataChannelId ):
         "data_channel_id": args.data_channel_id,
         "payload": {"status": "error", "message": str(e)}
     })
-    raise
 
