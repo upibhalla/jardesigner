@@ -16,9 +16,9 @@ const DisplayWindow = ({
   plotError,
   isSimulating,
   threeDConfig,
-  // --- NEW: Receive selection props ---
   clickSelected,
-  onSelectionChange
+  onSelectionChange,
+  liveFrameData, // --- ADDED: Receive liveFrameData prop ---
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -44,7 +44,6 @@ const DisplayWindow = ({
 
       {/* JSON Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
-        {/* MODIFIED: No longer passing threeDConfig */}
         <JsonText 
           jsonString={jsonString} 
           setActiveMenu={setActiveMenu} 
@@ -62,9 +61,9 @@ const DisplayWindow = ({
             isSimulating={isSimulating}
             threeDConfig={threeDConfig}
             setActiveMenu={setActiveMenu}
-		    // --- NEW: Pass selection props down ---
             clickSelected={clickSelected}
             onSelectionChange={onSelectionChange}
+            liveFrameData={liveFrameData} // --- ADDED: Pass liveFrameData prop down ---
         />
       </Box>
     </Box>

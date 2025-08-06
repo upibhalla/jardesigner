@@ -37,8 +37,6 @@ export default class ThreeDManager {
   }
 
   buildScene(config) {
-    // --- FIX: Add defensive checks for the config object ---
-    // According to the schema, the main array is 'drawables'. Check for it.
     if (!config || !config.drawables) {
         console.warn("ThreeDManager: buildScene called with invalid config. 'drawables' array not found.", config);
         return;
@@ -53,18 +51,13 @@ export default class ThreeDManager {
         if(child.material) child.material.dispose();
     }
 
-    // --- FIX: Use top-level properties from the schema ---
-    // Use config.bg directly, with a fallback.
     this.renderer.setClearColor(new THREE.Color(config.bg === 'default' ? '#FFFFFF' : config.bg || '#FFFFFF'));
     this.boundingBox.makeEmpty();
 
-    // --- FIX: Iterate over 'drawables' instead of 'moogli' ---
     config.drawables.forEach(entity => {
-      // Store the config for this entity, keyed by its 'groupId' (name)
       this.entityConfigs.set(entity.groupId, {
           vmin: entity.vmin,
           vmax: entity.vmax,
-          // --- FIX: Use top-level 'colormap' from the schema ---
           colormap: config.colormap,
           transparency: entity.transparency || 1.0
       });
@@ -72,7 +65,6 @@ export default class ThreeDManager {
       entity.shape.forEach((primitive, i) => {
         let mesh;
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
-        // --- FIX: Use top-level 'colormap' from the schema ---
         const materialColor = getColor(normalizedValue, config.colormap, true);
         const material = new THREE.MeshStandardMaterial({
             color: materialColor,
@@ -97,7 +89,6 @@ export default class ThreeDManager {
             mesh.position.copy(start).add(direction.multiplyScalar(0.5));
         }
         if (mesh) {
-            // Use 'groupId' from the schema as the entity identifier
             mesh.userData = { entityName: entity.groupId, shapeIndex: i, originalValue: primitive.value };
             this.scene.add(mesh);
             this.sceneMeshes.push(mesh);
@@ -111,14 +102,13 @@ export default class ThreeDManager {
 
   updateSceneData(frameData) {
     const { groupId, data } = frameData;
-
     const entityConfig = this.entityConfigs.get(groupId);
+
     if (!entityConfig) {
         return;
     }
 
     const { vmin, vmax, colormap } = entityConfig;
-
     const relevantMeshes = this.sceneMeshes.filter(mesh => mesh.userData.entityName === groupId);
 
     data.forEach((value, index) => {
@@ -126,6 +116,10 @@ export default class ThreeDManager {
             const mesh = relevantMeshes[index];
             const normalizedValue = (value - vmin) / (vmax - vmin);
             const newColor = getColor(normalizedValue, colormap, true);
+            
+            // --- ADDED: Final diagnostic log ---
+            console.log(`Updating mesh ${index}: value=${value.toFixed(4)}, normalized=${normalizedValue.toFixed(4)}, newColor=${newColor.getHexString()}`);
+
             mesh.material.color.set(newColor);
         }
     });
@@ -182,11 +176,9 @@ export default class ThreeDManager {
         case 'y': offset.applyAxisAngle(up, rotateSpeed); break;
         case 'Y': offset.applyAxisAngle(up, -rotateSpeed); break;
 
-        // --- FIX: Flipped comma/period key mappings ---
         case ',': case '<': offset.multiplyScalar(1.05); break;
         case '.': case '>': offset.multiplyScalar(0.95); break;
 
-        // --- FIX: Flipped up/down arrow key mappings ---
         case 'ArrowUp': {
             event.preventDefault();
             const panOffset = up.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
@@ -201,7 +193,6 @@ export default class ThreeDManager {
             this.controls.target.add(panOffset);
             break;
         }
-        // --- FIX: Flipped left/right arrow key mappings ---
         case 'ArrowLeft': {
             event.preventDefault();
             const panOffset = right.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);

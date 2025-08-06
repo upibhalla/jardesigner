@@ -32,6 +32,44 @@ import requests
 import csv
 import jarmoogli
 
+rdes = None # later overridden as a global.
+
+knownFieldInfo = {
+    'Vm': {'fieldScale': 1000, 'dataUnits': 'mV', 
+        'dataType': 'Memb. Potential', 'vmin':-80.0, 'vmax':40.0 },
+    'initVm': {'fieldScale': 1000, 'dataUnits': 'mV', 
+        'dataType': 'Initial Memb. Potential', 'vmin':-80.0, 'vmax':40.0 },
+    'Im': {'fieldScale': 1e9, 'dataUnits': 'nA', 
+        'dataType': 'Memb current', 'vmin':-10.0, 'vmax':10.0 },
+    'inject': {'fieldScale': 1e9, 'dataUnits': 'nA', 
+        'dataType': 'Injection current', 'vmin':-10.0, 'vmax':10.0 },
+    'Gbar': {'fieldScale': 1e9, 'dataUnits': 'nS', 
+        'dataType': 'Max chan conductance', 'vmin': 0.0, 'vmax':1.0 },
+    'Gk': {'fieldScale': 1e9, 'dataUnits': 'nS', 
+        'dataType': 'Chan conductance', 'vmin': 0.0, 'vmax':1.0 },
+    'Ik': {'fieldScale': 1e9, 'dataUnits': 'nA', 
+        'dataType': 'Chan current', 'vmin':-10.0, 'vmax':10.0 },
+    'ICa': {'fieldScale': 1e9, 'dataUnits': 'nA', 
+        'dataType': 'Ca current', 'vmin':-10.0, 'vmax':10.0 },
+    'Ca': {'fieldScale': 1e3, 'dataUnits': 'uM', 
+        'dataType': 'Ca conc', 'vmin':0.0, 'vmax':10.0 },
+    'conc': {'fieldScale': 1e3, 'dataUnits': 'uM', 
+        'dataType': 'Concentration', 'vmin':0.0, 'vmax':2.0 },
+    'n': {'fieldScale': 1, 'dataUnits': '#', 
+        'dataType': '# of molecules', 'vmin':0.0, 'vmax':200.0 },
+    'volume': {'fieldScale': 1e18, 'dataUnits': 'um^3', 
+        'dataType': 'Volume', 'vmin':0.0, 'vmax':1000.0 }
+}
+
+DefaultFdict = { "title": "Elec compartments", 
+    "field": "Vm",
+    "relpath": ".",
+    "dataType": "voltage",
+    "dataUnits": "mV",
+    "vmin": -0.1,
+    "vmax": 0.05
+}
+
 class AnimationEvent():
     def __init__(self, key, time):
         self.key = key
@@ -57,6 +95,7 @@ except ImportError:
 
 meshOrder = ['soma', 'dend', 'spine', 'psd', 'psd_dend', 'presyn_dend', 'presyn_spine', 'endo']
 
+# Deprecated. Use knownFieldInfo which is a dict defined above.
 knownFieldsDefault = {
     'Vm':('CompartmentBase', 'getVm', 1000, 'Memb. Potential (mV)', -80.0, 40.0 ),
     'initVm':('CompartmentBase', 'getInitVm', 1000, 'Init. Memb. Potl (mV)', -80.0, 40.0 ),
@@ -1069,8 +1108,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         moogliBase = moose.Neutral( self.modelPath + '/moogli' )
         self.runMooView = jarmoogli.MooView( self.dataChannelId )
         for idx, i in enumerate( self.moogli ):
-            groupId = "{}_{}_{}".format( Path( i['path'] ).name,
-                    i['field'], idx )
+            path = i['path'].split('/')[-1]
+            path2 = path.replace( '#', 'hash' )
+            path3 = path2.replace( '[', '_' )
+            path4 = path3.replace( ']', '_' )
+            groupId = "{}_{}_{}".format( path4, i['field'], idx )
             kf = knownFields[i['field']]
             pair = i['path'] + " 1"  # I'm replacing geom_expr with '1'
             dendCompts = self.elecid.compartmentsFromExpression[ pair ]
@@ -1079,12 +1121,28 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             numMoogli = len( dendObj )
             iObj = DictToClass( i ) # Used as 'args' in makeMoogli
             pr = moose.PyRun( '/model/moogli_' + groupId )
-            pr.runString = "jarmoogli.updateMoogliViewer({})".format(idx)
+            pr.runString = "rdes.runMooView.updateMoogliViewer({})".format(idx)
             pr.tick = idx + 20
-            moose.setClock( pr.tick, i["dt"] )
-            self.runMooView.makeMoogli( self, dendObj, iObj, groupId )
+            #moose.setClock( pr.tick, i["dt"] )
+            moose.setClock( pr.tick, 0.001 ) #temporary to get it to clear 05 aug
+            fdict = i.copy()
+            ff = fdict['field']
+            fdict['dataUnits'] = knownFieldInfo[ff]['dataUnits']
+            fdict['dataType'] = knownFieldInfo[ff]['dataType']
+            if not fdict.get( 'title' ):
+                fdict['title'] = "{} {} {}".format( fdict['path'], 
+                        fdict['field'], fdict['dataUnits'] )
+            if not fdict.get( 'dt' ):
+                if fdict['field'] in ['conc', 'concInit', 'n', 'nInit', 'volume']:
+                    fdict['dt'] = 0.2
+                else:
+                    fdict['dt'] = 0.001
+            if not fdict.get( 'relpath' ):
+                fdict[ 'relpath'] = '.'
 
-        ## Don't do this till we hit 'start'
+            self.runMooView.makeMoogli( dendObj, fdict, groupId )
+        
+        ## Don't send the scene graph now, wait till they hit 'start'
         #print("jardesigner.py: sending initial scene graph to server...")
         #self.runMooView.sendSceneGraph()
 #
@@ -1096,15 +1154,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def _buildSetupMoogli( self ):
         self.setupMooView = jarmoogli.MooView( self.dataChannelId )
         elecGroupId = "{}_{}_{}".format( "#", "Vm", 0 )
-        fdict = { "title": "Elec compartments", 
-            "field": "Vm",
-            "relpath": ".",
-            "dataType": "voltage",
-            "dataUnits": "mV",
-            "ymin": -0.1,
-            "ymax": 0.05
-        }
-        self.setupMooView.makeMoogli( self.elecid, fdict, elecGroupId )
+        compts = moose.wildcardFind( self.elecid.path + "/#[ISA=CompartmentBase]" )
+        self.setupMooView.makeMoogli( compts, DefaultFdict, elecGroupId )
 
         # Later also check for any chem, stim, plot etc and add those.
 
@@ -1917,6 +1968,7 @@ def randomPlacementFunc( numModels, idx ):
 
 
 def main():
+    global rdes
     parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
     parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
     parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
@@ -1939,7 +1991,7 @@ def main():
         rdes._buildSetupMoogli()
         print( "jardesigner.py: built setup 3D" )
         rdes.setupMooView.sendSceneGraph()
-        print( "jardesigner.py: sent setup 3D" )
+        print( "jardesigner.py: sent setup 3D scene" )
 
     # This loop will wait for commands from server.py via stdin
     for line in sys.stdin:
@@ -1953,11 +2005,16 @@ def main():
                 print("Received 'start' command.")
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
                 moose.reinit()
+                if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
+                    rdes.runMooView.sendSceneGraph()
+                    print( "jardesigner.py: sent runtime 3D scene" )
+
                 moose.start(runtime)
                 print("Finished run.")
                 # Notify client that the run is finished
                 rdes.display()
                 print("Finished display.")
+                time.sleep(0.1) # Give the filesystem time to flush
                 jarmoogli.notifySimulationEnd( rdes.dataChannelId )
                 # After running, you might want to send the plot file info
                 '''

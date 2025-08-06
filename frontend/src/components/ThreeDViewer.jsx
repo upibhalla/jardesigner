@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import ThreeDManager from './ThreeDManager'; 
+import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
 
 const ColorBar = ({ displayConfig, entityConfig }) => {
@@ -42,37 +42,50 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
     );
 };
 
-// --- UPDATED: Added liveFrameData prop ---
 const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange, liveFrameData }) => {
   const mountRef = useRef(null);
   const managerRef = useRef(null);
 
+  // --- MODIFIED: This primary useEffect now handles the creation and all updates ---
+  // It runs only when the component mounts and cleans up when it unmounts.
   useEffect(() => {
-    if (mountRef.current) {
+    // 1. Create the ThreeDManager instance as soon as the component mounts
+    if (mountRef.current && !managerRef.current) {
         managerRef.current = new ThreeDManager(mountRef.current, onSelectionChange);
     }
-    return () => managerRef.current?.dispose();
-  }, [onSelectionChange]);
+    
+    // 2. Clean up the instance when the component unmounts
+    return () => {
+        managerRef.current?.dispose();
+        managerRef.current = null;
+    };
+  }, [onSelectionChange]); // Dependency ensures it only runs once
+
+  // --- MODIFIED: Separate useEffects for each prop change ---
+  // This ensures that updates are handled independently and reliably.
   
+  // This hook handles building the initial scene
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
+      console.log("ThreeDViewer: Building scene with new threeDConfig.");
       managerRef.current.buildScene(threeDConfig);
     }
   }, [threeDConfig]);
 
+  // This hook handles live data updates during the simulation
+  useEffect(() => {
+    if (managerRef.current && liveFrameData) {
+      // This should now be called correctly
+      managerRef.current.updateSceneData(liveFrameData);
+    }
+  }, [liveFrameData]);
+
+  // This hook handles selection updates
   useEffect(() => {
     if (managerRef.current) {
         managerRef.current.updateSelectionVisuals(clickSelected);
     }
   }, [clickSelected]);
-
-  // --- NEW: useEffect to handle live data frames from WebSocket ---
-  useEffect(() => {
-    // If we have a valid data frame and a ThreeDManager instance, update the scene.
-    if (managerRef.current && liveFrameData) {
-        managerRef.current.updateSceneData(liveFrameData);
-    }
-  }, [liveFrameData]); // This effect runs every time liveFrameData changes.
 
 
   const handleUpdateClick = () => {

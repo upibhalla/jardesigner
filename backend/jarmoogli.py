@@ -12,6 +12,9 @@ import json
 # Define the URL for the internal server endpoint
 FLASK_SERVER_URL = "http://127.0.0.1:5000/internal/push_data"
 
+# --- MODIFIED: Create a single session object for reuse ---
+http_session = requests.Session()
+
 knownFieldInfo = {
     'Vm': {'fieldScale': 1000, 'dataUnits': 'mV', 
         'dataType': 'Memb. Potential', 'vmin':-80.0, 'vmax':40.0 },
@@ -143,8 +146,8 @@ class DataWrapper:
         default_vmax = fieldInfo['vmax']
 
         if fdict.get('vmin') is not None and fdict.get('vmax') is not None and fdict['vmin'] != fdict['vmax']:
-            self.vmin = fdict['ymin']
-            self.vmax = fdict['ymax']
+            self.vmin = fdict['vmin']
+            self.vmax = fdict['vmax']
         else:
             self.vmin = default_vmin
             self.vmax = default_vmax
@@ -159,7 +162,7 @@ class DataWrapper:
     def toDict( self ):
         return {
             "title": self.title,
-            "name": self.groupId,
+            "groupId": self.groupId,
             "dataType": self.dataType,
             "dataUnits": self.dataUnits,
             "vmin": self.vmin,
@@ -174,9 +177,9 @@ class DataWrapper:
         raise NotImplementedError
 
 class MooseNeuronDataWrapper( DataWrapper ):
-    def __init__( self, neuronId, fdict, groupId ): 
+    def __init__( self, compts, fdict, groupId ): 
         super().__init__(fdict, groupId )
-        self.neuronId_ = neuronId
+        #self.neuronId_ = neuronId
         self.dummyObj = None
         if self.field == "Ca":
             self.dummyObj = moose.CaConc( "/dummyCa" )
@@ -184,11 +187,12 @@ class MooseNeuronDataWrapper( DataWrapper ):
             self.dummyObj = moose.SynChan( "/dummySynChan" )
 
         # === RESTORED: Logic to handle both Compartment and IntFire types ===
-        compts = moose.wildcardFind( neuronId.path + "/#[ISA=CompartmentBase]" )
+        #compts = moose.wildcardFind( neuronId.path + "/#[ISA=CompartmentBase]" )
+        # Need a cleaner check for IntFires.
         if len(compts) > 0:
             self.segmentList = [ Segment.simpleCompt( cc, idx ) for idx, cc in enumerate( compts ) ]
         else:
-            compts = moose.wildcardFind( neuronId.path + "/#[ISA=IntFire]" )
+            #compts = moose.wildcardFind( neuronId.path + "/#[ISA=IntFire]" )
             if len(compts) > 0:
                 # For IntFire, we need to fetch coordinates separately.
                 coords_vec = moose.vec( compts[0].path + "/coords" )
@@ -209,7 +213,8 @@ class MooseNeuronDataWrapper( DataWrapper ):
                     self.objList_.append(self.dummyObj)
 
     def getDataFrame( self, timestamp ):
-        values = [float(moose.getField(i, self.field)) for i in self.objList_]
+        fs = self.fieldScale_
+        values = [fs*float(moose.getField(i, self.field)) for i in self.objList_]
         return {
             "filetype": "jardesignerDataFrame",
             "version": "1.0",
@@ -285,23 +290,27 @@ class MooView:
             "payload": payload,
         }
         try:
-            requests.post(FLASK_SERVER_URL, json=requestBody, timeout=0.5)
-        except Exception:
-            pass
+            # --- MODIFIED: Use the session object and print errors ---
+            http_session.post(FLASK_SERVER_URL, json=requestBody, timeout=0.5)
+        except Exception as e:
+            # This will now print any network errors to the server console
+            print(f"ERROR in updateValues: Failed to send data frame. {e}")
 
 
     def makeMoogli(self, mooObj, fdict, groupId ):
         mooField = fdict.get('field', 'Vm')
-        if mooField in ['n', 'conc']: # Here mooObj is the wildcard list
+        if mooField in ['n', 'conc']: # mooObj is the wildcard list
             dw = MooseChemDataWrapper(mooObj, fdict, groupId)
-        else: # This is filthy. Here mooObj is the elecId.
+        else:
             dw = MooseNeuronDataWrapper(mooObj, fdict, groupId)
         self.drawables.append(dw)
 
     def updateMoogliViewer( self, idx ):
-        if idx >= len(mooView.drawables):
+        if idx >= len(self.drawables):
             return
         simTime = moose.element( '/clock' ).currentTime
+        # This print statement was removed in the previous turn but is being re-added for clarity in the final file
+        print( "called updateMoogliViewer for {} at {:.3f}".format( idx, simTime ) )
         self.updateValues( simTime, idx )
 
     def sendSceneGraph( self ):
@@ -342,8 +351,8 @@ def notifySimulationEnd( dataChannelId ):
         print("Successfully sent simulation end notification.")
     except Exception as e:
         print(f"Warning: Could not send simulation end notification. {e}")
-        requests.post(FLASK_SERVER_URL, json={
-        "data_channel_id": args.data_channel_id,
-        "payload": {"status": "error", "message": str(e)}
-    })
-
+        # This was malformed. Correcting it.
+        http_session.post(FLASK_SERVER_URL, json={
+            "data_channel_id": dataChannelId,
+            "payload": {"type": "error", "message": str(e)}
+        })

@@ -224,9 +224,11 @@ const App = () => {
             });
 
             socket.on('simulation_data', (data) => {
+				console.log('Received simulation_data event from WebSocket:', data);
                 if (data?.type === 'scene_init') {
                     setThreeDConfig(data.scene);
                 } else if (data?.filetype === 'jardesignerDataFrame') {
+					console.log('got live frame data');
                     setLiveFrameData(data);
                 } else if (data?.type === 'sim_end') {
                     console.log("Received simulation end signal from server.");
