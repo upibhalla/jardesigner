@@ -27,6 +27,7 @@ const fieldOptions = [
     'modulation', 'psdArea', 'nInit'
 ];
 const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
+const fastDtFields = ['Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'activation', 'current', 'Ca'];
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
 const backgroundOptions = ['default', 'white', 'black', 'grey', 'beige'];
 
@@ -37,7 +38,7 @@ const safeToString = (value, defaultValue = '') => {
 
 // --- Default state creators ---
 const createDefaultMoogliEntry = () => ({
-    path: '',
+    path: 'soma',
     field: fieldOptions[0],
     chemProto: '.',
     childPath: '',
@@ -45,11 +46,10 @@ const createDefaultMoogliEntry = () => ({
     diameterScale: '1.0',
     min: '0',
     max: '0',
+    dt: '0.001', // Default dt for Vm
 });
 
 const createDefaultGlobalSettings = () => ({
-    runtime: '0.3',
-    dt: '0.1',
     rotation: '0.0',
     azimuth: '0.0',
     elevation: '0.0',
@@ -98,7 +98,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 initialChildPath = m.relpath || '';
             }
             return {
-                path: m.path || '',
+                path: m.path || defaults.path,
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
@@ -106,6 +106,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 diameterScale: formatFloat(m.diaScale) || defaults.diameterScale,
                 min: formatFloat(m.ymin) || defaults.min,
                 max: formatFloat(m.ymax) || defaults.max,
+                dt: formatFloat(m.dt) || (fastDtFields.includes(field) ? '0.001' : '0.2'),
             };
         }) || [];
         return initialTabs.length > 0 ? initialTabs : [createDefaultMoogliEntry()];
@@ -115,8 +116,6 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
         const initialDisplay = currentConfig?.displayMoogli || {};
         const defaults = createDefaultGlobalSettings();
         return {
-            runtime: formatFloat(initialDisplay.runtime) || defaults.runtime,
-            dt: formatFloat(initialDisplay.dt) || defaults.dt,
             rotation: formatFloat(initialDisplay.rotation) || defaults.rotation,
             azimuth: formatFloat(initialDisplay.azim) || defaults.azimuth,
             elevation: formatFloat(initialDisplay.elev) || defaults.elevation,
@@ -156,10 +155,14 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 if (i === index) {
                     const updatedTab = { ...tab, [key]: value };
                     if (key === 'field') {
+                        // Handle chem proto logic
                         const isNowChem = chemFields.includes(value);
                         const wasChem = chemFields.includes(tab.field);
                         if (wasChem && !isNowChem) updatedTab.chemProto = '.';
                         else if (!wasChem && isNowChem) updatedTab.chemProto = '';
+
+                        // Set dt based on field type
+                        updatedTab.dt = fastDtFields.includes(value) ? '0.001' : '0.2';
                     }
                     return updatedTab;
                 }
@@ -182,6 +185,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 const diaScaleNum = parseFloat(tabState.diameterScale);
                 const minNum = parseFloat(tabState.min);
                 const maxNum = parseFloat(tabState.max);
+                const dtNum = parseFloat(tabState.dt);
                 const defaultsMoogli = createDefaultMoogliEntry();
                 const isChemField = chemFields.includes(tabState.field);
                 let relpathValue = undefined;
@@ -200,9 +204,17 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaultsMoogli.diameterScale) moogliSchemaItem.diaScale = diaScaleNum;
                 if (!isNaN(minNum) && safeToString(minNum) !== defaultsMoogli.min) moogliSchemaItem.ymin = minNum;
                 if (!isNaN(maxNum) && safeToString(maxNum) !== defaultsMoogli.max) moogliSchemaItem.ymax = maxNum;
+                
+                // --- MODIFIED: Always add the 'dt' property if it's a valid number ---
+                if (!isNaN(dtNum)) moogliSchemaItem.dt = dtNum;
+
                 return moogliSchemaItem;
 
             }).filter(item => item !== null);
+
+            if (moogliData.length === 0) {
+                return { moogli: [], displayMoogli: undefined };
+            }
 
             let centerArray;
             try {
@@ -213,8 +225,6 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
             }
             const defaultsGlobal = createDefaultGlobalSettings();
             const displayMoogliData = {
-                runtime: parseFloat(globalSettingsRef.current.runtime) || parseFloat(defaultsGlobal.runtime),
-                dt: parseFloat(globalSettingsRef.current.dt) || parseFloat(defaultsGlobal.dt),
                 rotation: parseFloat(globalSettingsRef.current.rotation) || parseFloat(defaultsGlobal.rotation),
                 azim: parseFloat(globalSettingsRef.current.azimuth) || parseFloat(defaultsGlobal.azimuth),
                 elev: parseFloat(globalSettingsRef.current.elevation) || parseFloat(defaultsGlobal.elevation),
@@ -247,7 +257,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>3D Visualization (Moogli)</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
             </Box>
-            
+
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Data Sources</Typography>
                 <Tooltip title={helpText.headings.dataSources} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
@@ -283,6 +293,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                         <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} /></Grid>
                         <Grid item xs={12} sm={6}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>
                         <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} /></Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>Remove Data Source</Button>
                 </Box>
@@ -295,14 +306,12 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
             </Box>
             <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="runtime" label="Runtime (s)" type="number" value={globalSettings.runtime} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.runtime} /></Grid>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="dt" label="Display dt (s)" type="number" value={globalSettings.dt} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.dt} /></Grid>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="rotation" label="Rotation (rad/step)" type="number" value={globalSettings.rotation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.rotation} /></Grid>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="azimuth" label="Azimuth (azim)" type="number" value={globalSettings.azimuth} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.azimuth} /></Grid>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                    <Grid item xs={12} sm={6} md={4}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                    <Grid item xs={12} sm={8}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} /></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="rotation" label="Rotation (rad/step)" type="number" value={globalSettings.rotation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.rotation} /></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="azimuth" label="Azimuth (azim)" type="number" value={globalSettings.azimuth} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.azimuth} /></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} /></Grid>
                     <Grid item xs={12} container spacing={1} sx={{ mt: 1 }}>
                         <Grid item xs="auto"><Tooltip title={helpText.globalSettings.mergeDisplays}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" /></Tooltip></Grid>
                         <Grid item xs="auto"><Tooltip title={helpText.globalSettings.fullScreen}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" /></Tooltip></Grid>

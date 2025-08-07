@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Typography, Slider, TextField, Tooltip } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ReplayIcon from '@mui/icons-material/Replay';
@@ -6,7 +6,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
 
-const ColorBar = ({ displayConfig, entityConfig }) => {
+const ColorBar = ({ displayConfig, initialEntityConfig, currentRange }) => {
     const gradient = useMemo(() => {
         const colormap = displayConfig?.colormap || 'jet';
         const stops = Array.from({ length: 11 }, (_, i) => {
@@ -16,12 +16,12 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
         return `linear-gradient(to top, ${stops})`;
     }, [displayConfig?.colormap]);
 
-    if (!displayConfig || !entityConfig) {
+    if (!displayConfig || !initialEntityConfig) {
         return null;
     }
 
-    const vmin = entityConfig.vmin ?? -0.08;
-    const vmax = entityConfig.vmax ?? 0.04;
+    const vmin = currentRange.vmin !== '' ? parseFloat(currentRange.vmin) : initialEntityConfig.vmin;
+    const vmax = currentRange.vmax !== '' ? parseFloat(currentRange.vmax) : initialEntityConfig.vmax;
 
     return (
         <Box sx={{
@@ -61,6 +61,7 @@ const ThreeDViewer = ({
 }) => {
   const mountRef = useRef(null);
   const managerRef = useRef(null);
+  const [colorRange, setColorRange] = useState({ vmin: '', vmax: '' });
 
   const replayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
@@ -83,6 +84,14 @@ const ThreeDViewer = ({
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
       managerRef.current.buildScene(threeDConfig);
+      // Initialize color range state from the config
+      const entityConfig = threeDConfig?.moogli?.[0];
+      if (entityConfig) {
+          setColorRange({
+              vmin: entityConfig.vmin?.toString() || '0',
+              vmax: entityConfig.vmax?.toString() || '0'
+          });
+      }
     }
   }, [threeDConfig]);
 
@@ -92,68 +101,112 @@ const ThreeDViewer = ({
     }
   }, [clickSelected]);
 
+  // --- NEW: Effect to update the ThreeDManager when colorRange state changes ---
+  useEffect(() => {
+    if (managerRef.current && threeDConfig) {
+        const vmin = parseFloat(colorRange.vmin);
+        const vmax = parseFloat(colorRange.vmax);
+        const groupId = threeDConfig?.drawables?.[0]?.groupId;
+
+        if (!isNaN(vmin) && !isNaN(vmax) && groupId) {
+             managerRef.current.updateColorRange(groupId, { vmin, vmax });
+        }
+    }
+  }, [colorRange, threeDConfig]);
+
+
   const handleUpdateClick = () => {
       if (setActiveMenu) {
           setActiveMenu(null);
       }
   };
+  
+  // --- NEW: Autoscale logic ---
+  const handleAutoscale = () => {
+      if (!simulationFrames || simulationFrames.length === 0) return;
+      let globalMin = Infinity;
+      let globalMax = -Infinity;
+      simulationFrames.forEach(frame => {
+          frame.data.forEach(value => {
+              if (value < globalMin) globalMin = value;
+              if (value > globalMax) globalMax = value;
+          });
+      });
+      if (isFinite(globalMin) && isFinite(globalMax)) {
+           setColorRange({
+              vmin: globalMin.toExponential(2),
+              vmax: globalMax.toExponential(2)
+          });
+      }
+  };
 
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {/* The individual controls are now direct children to ensure even spacing */}
-            <Button
-                variant="contained"
-                onClick={handleUpdateClick}
-                startIcon={<AutoAwesomeIcon />}
-            >
-                Update 3D View
-            </Button>
+        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Button variant="contained" onClick={handleUpdateClick} startIcon={<AutoAwesomeIcon />}>
+                    Update 3D View
+                </Button>
+                {/* --- NEW: Autoscale button and Vmin/Vmax fields --- */}
+                {showReplayControls && (
+                    <>
+                        <Button variant="outlined" size="small" onClick={handleAutoscale}>Autoscale</Button>
+                        <TextField
+                            label="Vmin"
+                            size="small"
+                            variant="outlined"
+                            value={colorRange.vmin}
+                            onChange={(e) => setColorRange(prev => ({ ...prev, vmin: e.target.value }))}
+                            sx={{ width: '100px' }}
+                        />
+                        <TextField
+                            label="Vmax"
+                            size="small"
+                            variant="outlined"
+                            value={colorRange.vmax}
+                            onChange={(e) => setColorRange(prev => ({ ...prev, vmax: e.target.value }))}
+                            sx={{ width: '100px' }}
+                        />
+                    </>
+                )}
+            </Box>
 
             {showReplayControls && (
-                <>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={isReplaying ? onStopReplay : onStartReplay}
-                        startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}
-                    >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Button variant="outlined" size="small" onClick={isReplaying ? onStopReplay : onStartReplay} startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}>
                         {isReplaying ? 'Stop' : 'Replay'}
                     </Button>
-                    <TextField
-                        size="small"
-                        label="Replay Time (s)"
-                        value={replayTime.toFixed(4)}
-                        InputProps={{ readOnly: true }}
-                        sx={{ width: '120px' }}
-                    />
+                    <TextField size="small" label="Replay Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
                     <Box sx={{ width: '250px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-                            Speed
-                        </Typography>
+                        <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Speed</Typography>
                         <Tooltip title="Playback Speed (Slower -> Faster)">
                              <Slider
                                 value={replayInterval}
                                 onChange={(e, newValue) => setReplayInterval(newValue)}
                                 aria-labelledby="replay-speed-slider"
-                                valueLabelDisplay="off" // Bubble is now turned off
+                                valueLabelDisplay="off"
                                 min={5}
                                 max={500}
                                 step={5}
-                                inverted // Inverted places the max value (slowest) on the left
+                                inverted
                             />
                         </Tooltip>
                         <Box sx={{ minWidth: '55px', textAlign: 'center', border: '1px solid #ccc', borderRadius: '4px', p: '4px' }}>
                              <Typography variant="caption">{replayInterval}ms</Typography>
                         </Box>
                     </Box>
-                </>
+                </Box>
             )}
         </Box>
 
         <Box sx={{ position: 'relative', flexGrow: 1 }}>
             <Box ref={mountRef} sx={{ height: '100%', width: '100%', background: '#FFFFFF' }} />
-            <ColorBar displayConfig={threeDConfig?.displayMoogli} entityConfig={threeDConfig?.moogli?.[0]} />
+            {/* --- MODIFIED: Pass current color range to the color bar --- */}
+            <ColorBar
+                displayConfig={threeDConfig?.displayMoogli}
+                initialEntityConfig={threeDConfig?.moogli?.[0]}
+                currentRange={colorRange}
+            />
         </Box>
     </Box>
   );

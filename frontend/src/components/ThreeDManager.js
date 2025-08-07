@@ -100,6 +100,30 @@ export default class ThreeDManager {
     setTimeout(() => this.onWindowResize(), 0);
   }
 
+  // --- NEW: Method to update the color range dynamically ---
+  updateColorRange(groupId, newRange) {
+    const config = this.entityConfigs.get(groupId);
+    if (config) {
+        config.vmin = newRange.vmin;
+        config.vmax = newRange.vmax;
+        this.entityConfigs.set(groupId, config);
+        // Redraw the scene with the new colors based on the initial values
+        this.redrawColors();
+    }
+  }
+
+  // --- NEW: Helper method to redraw colors for all meshes ---
+  redrawColors() {
+    this.sceneMeshes.forEach(mesh => {
+        const config = this.entityConfigs.get(mesh.userData.entityName);
+        if (config) {
+            const normalizedValue = (mesh.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
+            const newColor = getColor(normalizedValue, config.colormap, true);
+            mesh.material.color.set(newColor);
+        }
+    });
+  }
+
   updateSceneData(frameData) {
     const { groupId, data } = frameData;
     const entityConfig = this.entityConfigs.get(groupId);
@@ -116,10 +140,6 @@ export default class ThreeDManager {
             const mesh = relevantMeshes[index];
             const normalizedValue = (value - vmin) / (vmax - vmin);
             const newColor = getColor(normalizedValue, colormap, true);
-            
-            // --- MODIFIED: Removed performance-intensive logging ---
-            // console.log(`Updating mesh ${index}: value=${value.toFixed(4)}, normalized=${normalizedValue.toFixed(4)}, newColor=${newColor.getHexString()}`);
-
             mesh.material.color.set(newColor);
         }
     });

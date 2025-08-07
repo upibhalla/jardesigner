@@ -510,7 +510,7 @@
           "ymin": { "type": "number", "default": 0 },
           "ymax": { "type": "number", "default": 0 },
           "diaScale": { "type": "number", "default": 1 },
-          "dt": { "type": "number" }
+          "dt": { "type": "number", "minimum": 1e-4, "default": 0.2 }
         },
         "required": ["path", "field"]
       }
@@ -518,8 +518,6 @@
 	"displayMoogli": {
 		"type": "object",
 		"properties": {
-			"dt": {"type": "number", "minimum": 1e-5, "default": 0.1 },
-			"runtime": {"type": "number", "minimum": 1e-3, "default": 0.3 },
 			"rotation": {"type": "number", "default": 0.006283},
 			"azim": {"type": "number", "default": 0},
 			"elev": {"type": "number", "default": 0},

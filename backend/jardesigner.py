@@ -1124,7 +1124,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             pr.runString = "rdes.runMooView.updateMoogliViewer({})".format(idx)
             pr.tick = idx + 20
             #moose.setClock( pr.tick, i["dt"] )
-            moose.setClock( pr.tick, 0.001 ) #temporary to get it to clear 05 aug
             fdict = i.copy()
             ff = fdict['field']
             fdict['dataUnits'] = knownFieldInfo[ff]['dataUnits']
@@ -1140,6 +1139,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             if not fdict.get( 'relpath' ):
                 fdict[ 'relpath'] = '.'
 
+            moose.setClock( pr.tick, fdict['dt'] )
             self.runMooView.makeMoogli( dendObj, fdict, groupId )
         
         ## Don't send the scene graph now, wait till they hit 'start'

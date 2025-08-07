@@ -100,20 +100,21 @@ class Segment():
     def cylChemCompt( compt, idx ):
         ret =  Segment( "cylinder", compt.coords, compt.id, 
             Segment.trimMolPath( compt.path ), 0, idx )
-        ret.diameter *= 2
+        ret.diameter *= 2           # Moose puts radius in coords[6]
         return ret
 
     @staticmethod
     def spineChemCompt( compt, idx ):
         newc = compt.coords[:7]
-        newc[6] = compt.coords[9]
+        newc[6] = compt.coords[9]   # For diameter
         return Segment( "cylinder", newc, compt.id, 
             Segment.trimMolPath( compt.path ), 0, idx )
 
     @staticmethod
     def prsynChemCompt( compt, idx ):
         newc = np.array(compt.coords[:7])
-        newc[3:6] = newc[3:6]*newc[6] + newc[0:3]
+        # Unit vector of cone direction ins in coords[3:6], dia in coords[6]
+        newc[3:6] = newc[3:6]*newc[6] + newc[0:3]   
         return Segment( "cone", newc, compt.id, 
             Segment.trimMolPath( compt.path ), 0, idx )
 
