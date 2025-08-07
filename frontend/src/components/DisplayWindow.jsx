@@ -1,5 +1,3 @@
-// src/components/DisplayWindow.jsx
-
 import React, { useState } from 'react';
 import { Box, Tabs, Tab } from '@mui/material';
 import GraphWindow from './GraphWindow';
@@ -18,8 +16,15 @@ const DisplayWindow = ({
   threeDConfig,
   clickSelected,
   onSelectionChange,
-  liveFrameData,
-  onManagerReady, // --- MODIFIED: Accept onManagerReady prop ---
+  onManagerReady,
+  // --- ADDED: Replay props to pass down ---
+  isReplaying,
+  simulationFrames,
+  replayFrameIndex,
+  replayInterval,
+  setReplayInterval,
+  onStartReplay,
+  onStopReplay,
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -64,8 +69,15 @@ const DisplayWindow = ({
             setActiveMenu={setActiveMenu}
             clickSelected={clickSelected}
             onSelectionChange={onSelectionChange}
-            liveFrameData={liveFrameData}
-            onManagerReady={onManagerReady} // --- MODIFIED: Pass onManagerReady prop down ---
+            onManagerReady={onManagerReady}
+            // --- ADDED: Pass all replay props to the viewer ---
+            isReplaying={isReplaying}
+            simulationFrames={simulationFrames}
+            replayFrameIndex={replayFrameIndex}
+            replayInterval={replayInterval}
+            setReplayInterval={setReplayInterval}
+            onStartReplay={onStartReplay}
+            onStopReplay={onStopReplay}
         />
       </Box>
     </Box>

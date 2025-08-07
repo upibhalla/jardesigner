@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useMemo } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Typography, Slider, TextField, Tooltip } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ReplayIcon from '@mui/icons-material/Replay';
+import StopIcon from '@mui/icons-material/Stop';
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
 
@@ -17,7 +19,7 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
     if (!displayConfig || !entityConfig) {
         return null;
     }
-    
+
     const vmin = entityConfig.vmin ?? -0.08;
     const vmax = entityConfig.vmax ?? 0.04;
 
@@ -42,9 +44,26 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
     );
 };
 
-const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange, onManagerReady }) => {
+const ThreeDViewer = ({
+    isSimulating,
+    threeDConfig,
+    setActiveMenu,
+    clickSelected,
+    onSelectionChange,
+    onManagerReady,
+    isReplaying,
+    simulationFrames,
+    replayFrameIndex,
+    replayInterval,
+    setReplayInterval,
+    onStartReplay,
+    onStopReplay
+}) => {
   const mountRef = useRef(null);
   const managerRef = useRef(null);
+
+  const replayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
+  const showReplayControls = !isSimulating && simulationFrames.length > 0;
 
   useEffect(() => {
     if (mountRef.current) {
@@ -60,7 +79,7 @@ const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected
         }
     };
   }, [onSelectionChange, onManagerReady]);
-  
+
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
       managerRef.current.buildScene(threeDConfig);
@@ -81,16 +100,57 @@ const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected
 
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0 }}>
+        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* The individual controls are now direct children to ensure even spacing */}
             <Button
                 variant="contained"
                 onClick={handleUpdateClick}
                 startIcon={<AutoAwesomeIcon />}
             >
-                Update 3D View from Active Menu
+                Update 3D View
             </Button>
+
+            {showReplayControls && (
+                <>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={isReplaying ? onStopReplay : onStartReplay}
+                        startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}
+                    >
+                        {isReplaying ? 'Stop' : 'Replay'}
+                    </Button>
+                    <TextField
+                        size="small"
+                        label="Replay Time (s)"
+                        value={replayTime.toFixed(4)}
+                        InputProps={{ readOnly: true }}
+                        sx={{ width: '120px' }}
+                    />
+                    <Box sx={{ width: '250px', display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
+                            Speed
+                        </Typography>
+                        <Tooltip title="Playback Speed (Slower -> Faster)">
+                             <Slider
+                                value={replayInterval}
+                                onChange={(e, newValue) => setReplayInterval(newValue)}
+                                aria-labelledby="replay-speed-slider"
+                                valueLabelDisplay="off" // Bubble is now turned off
+                                min={5}
+                                max={500}
+                                step={5}
+                                inverted // Inverted places the max value (slowest) on the left
+                            />
+                        </Tooltip>
+                        <Box sx={{ minWidth: '55px', textAlign: 'center', border: '1px solid #ccc', borderRadius: '4px', p: '4px' }}>
+                             <Typography variant="caption">{replayInterval}ms</Typography>
+                        </Box>
+                    </Box>
+                </>
+            )}
         </Box>
-        
+
         <Box sx={{ position: 'relative', flexGrow: 1 }}>
             <Box ref={mountRef} sx={{ height: '100%', width: '100%', background: '#FFFFFF' }} />
             <ColorBar displayConfig={threeDConfig?.displayMoogli} entityConfig={threeDConfig?.moogli?.[0]} />

@@ -139,7 +139,7 @@ const App = () => {
   const frameQueueRef = useRef([]);
   const animationFrameId = useRef();
 
-  // --- NEW: State for storing and managing replays ---
+  // --- State for storing and managing replays ---
   const [simulationFrames, setSimulationFrames] = useState([]);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayFrameIndex, setReplayFrameIndex] = useState(0);
@@ -255,9 +255,8 @@ const App = () => {
                     setThreeDConfig(data.scene);
                 } else if (data?.filetype === 'jardesignerDataFrame') {
                     frameQueueRef.current.push(data);
-                    // --- NEW: Store frame for replay and update live time ---
                     setSimulationFrames(prevFrames => [...prevFrames, data]);
-                    setLiveFrameData(data); // for live time display
+                    setLiveFrameData(data);
                 } else if (data?.type === 'sim_end') {
                     console.log("Received simulation end signal from server.");
                     handleSimulationEnded();
@@ -294,7 +293,6 @@ const App = () => {
       }
 
       frameQueueRef.current = [];
-      // --- NEW: Clear previous simulation frames before a new run ---
       setSimulationFrames([]);
       setReplayFrameIndex(0);
       setIsReplaying(false);
@@ -320,10 +318,8 @@ const App = () => {
       }
   }, [activeSim.pid, jsonData, buildModelOnServer]);
 
-    // --- MODIFIED: Logic to handle starting and stopping the replay ---
     const handleReplayEnd = useCallback(() => {
         setIsReplaying(false);
-        // Ensure the plot is re-enabled after replay finishes
         if (svgPlotFilename) {
             setIsPlotReady(true);
         }
@@ -331,23 +327,22 @@ const App = () => {
 
     const handleStartReplay = useCallback(() => {
         if (simulationFrames.length === 0) return;
-        setIsPlotReady(false); // Turn off graph fetching during replay
+        setIsPlotReady(false);
         setIsReplaying(true);
-        setReplayFrameIndex(0); // Start from the beginning
+        setReplayFrameIndex(0);
     }, [simulationFrames.length]);
 
     const handleStopReplay = useCallback(() => {
         handleReplayEnd();
     }, [handleReplayEnd]);
 
-    // --- MODIFIED: useEffect to manage the replay timer ---
     useEffect(() => {
         if (isReplaying) {
             replayTimerRef.current = setInterval(() => {
                 setReplayFrameIndex(prevIndex => {
                     const nextIndex = prevIndex + 1;
                     if (nextIndex >= simulationFrames.length) {
-                        handleReplayEnd(); // Stop when frames run out
+                        handleReplayEnd();
                         return prevIndex;
                     }
 
@@ -429,33 +424,6 @@ const App = () => {
     buildModelOnServer(compacted);
   }, [buildModelOnServer]);
 
-  const handleSaveModel = useCallback(async (fileInfoFromMenu) => {
-      const fullFileInfo = { ...fileInfoFromMenu, dateTime: new Date().toISOString(), userid: 'anonymous' };
-      const dataToSave = { ...jsonData, fileinfo: fullFileInfo };
-      const finalJsonToSave = compactJsonData(dataToSave, initialJsonData);
-      const jsonDataString = JSON.stringify(finalJsonToSave, null, 2);
-      const suggestedName = 'model.json';
-      const blob = new Blob([jsonDataString], { type: 'application/json' });
-      if (window.showSaveFilePicker) {
-          try {
-              const fileHandle = await window.showSaveFilePicker({ suggestedName, types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }] });
-              const writableStream = await fileHandle.createWritable();
-              await writableStream.write(blob);
-              await writableStream.close();
-          } catch (err) {
-              if (err.name !== 'AbortError') console.error('Error saving file:', err);
-          }
-      } else {
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          link.download = suggestedName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(link.href), 100);
-      }
-  }, [jsonData]);
-
   const getCurrentJsonData = useCallback(() => compactJsonData(jsonData, initialJsonData), [jsonData]);
   const getChemProtos = useCallback(() => {
       const protos = jsonData?.chemProto;
@@ -465,25 +433,11 @@ const App = () => {
       return [];
   }, [jsonData?.chemProto]);
 
-  const handlePlotDataUpdate = useCallback(({ filename, ready, error }) => {
-    setSvgPlotFilename(filename);
-    setIsPlotReady(ready);
-    setPlotError(error || '');
-    if (ready || error) {
-        handleSimulationEnded();
-    }
-  }, [handleSimulationEnded]);
-
-  const clearPlotData = useCallback(() => {
-    setSvgPlotFilename(null);
-    setIsPlotReady(false);
-    setPlotError('');
-  }, []);
-
   const toggleMenu = (menu) => {
     setActiveMenu(activeMenu === menu ? null : menu);
   };
 
+  // --- MODIFIED: menuComponents is now much simpler and more stable ---
   const menuComponents = useMemo(() => ({
       File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
       SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
@@ -495,14 +449,7 @@ const App = () => {
              isSimulating={isSimulating}
              activeSimPid={activeSim.pid}
              liveFrameData={liveFrameData}
-             // --- NEW: Pass replay props down ---
              isReplaying={isReplaying}
-             simulationFrames={simulationFrames}
-             replayFrameIndex={replayFrameIndex}
-             replayInterval={replayInterval}
-             setReplayInterval={setReplayInterval}
-             onStartReplay={handleStartReplay}
-             onStopReplay={handleStopReplay}
            />,
       Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
       Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
@@ -513,7 +460,7 @@ const App = () => {
       Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
       Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} />,
       '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
-  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData, handleMorphologyFileChange, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying, simulationFrames, replayFrameIndex, replayInterval, handleStartReplay, handleStopReplay]);
+  }), [jsonData, updateJsonString, getChemProtos, handleClearModel, handleMorphologyFileChange, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying]);
 
   return (
     <>
@@ -536,7 +483,7 @@ const App = () => {
 
       <Grid container spacing={2} style={{ padding: '16px', height: 'calc(100vh - 64px)' }}>
         <Grid item xs={4} style={{ height: '100%' }}>
-          {activeMenu && menuComponents[activeMenu]}
+            {activeMenu && menuComponents[activeMenu]}
         </Grid>
 
         <Grid item xs={8} style={{ height: '100%' }}>
@@ -552,6 +499,14 @@ const App = () => {
              clickSelected={clickSelected}
              onSelectionChange={handleSelectionChange}
              onManagerReady={onManagerReady}
+             // --- MODIFIED: Pass replay props to DisplayWindow ---
+             isReplaying={isReplaying}
+             simulationFrames={simulationFrames}
+             replayFrameIndex={replayFrameIndex}
+             replayInterval={replayInterval}
+             setReplayInterval={setReplayInterval}
+             onStartReplay={handleStartReplay}
+             onStopReplay={handleStopReplay}
           />
         </Grid>
        </Grid>

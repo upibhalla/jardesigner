@@ -117,8 +117,8 @@ export default class ThreeDManager {
             const normalizedValue = (value - vmin) / (vmax - vmin);
             const newColor = getColor(normalizedValue, colormap, true);
             
-            // --- ADDED: Final diagnostic log ---
-            console.log(`Updating mesh ${index}: value=${value.toFixed(4)}, normalized=${normalizedValue.toFixed(4)}, newColor=${newColor.getHexString()}`);
+            // --- MODIFIED: Removed performance-intensive logging ---
+            // console.log(`Updating mesh ${index}: value=${value.toFixed(4)}, normalized=${normalizedValue.toFixed(4)}, newColor=${newColor.getHexString()}`);
 
             mesh.material.color.set(newColor);
         }

@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip, Slider } from '@mui/material';
+import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import ReplayIcon from '@mui/icons-material/Replay';
 
-// Assuming helpText is a local JSON file with descriptions.
-// Example: import helpText from './RunMenuBox.Help.json';
 const helpText = {
     runControls: { totalRuntime: "The total duration for the simulation run in seconds.", currentTime: "The current time of the active simulation." },
-    replayControls: { main: "Controls for replaying the last simulation run in the 3D viewer.", replayTime: "The timestamp of the current replay frame.", replaySpeed: "Adjusts the time between replay frames. Slower on the left, faster on the right." },
     clocks: { main: "Time step settings for different simulation components.", elecDt: "Electrical time step.", chemDt: "Chemical/signaling time step.", diffusionDt: "Diffusion time step.", elecPlotDt: "Time step for plotting electrical data.", chemPlotDt: "Time step for plotting chemical data.", functionDt: "Time step for functional evaluation.", statusDt: "Time step for status updates." },
     configuration: { main: "Global settings for the simulation model." },
     flags: { turnOffElec: "Disable all electrical calculations.", combineSegments: "Combine adjacent segments with identical properties.", useGssa: "Use Gillespie's Stochastic Simulation Algorithm.", reuseLibraryCell: "Reuse cell from library if available." },
@@ -50,22 +46,15 @@ const InfoTooltip = ({ title }) => (
     </Tooltip>
 );
 
-const RunMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
+const RunMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
     onStartRun,
     onResetRun,
     isSimulating,
     activeSimPid,
     liveFrameData,
-    // --- NEW: Replay props ---
-    isReplaying,
-    simulationFrames,
-    replayFrameIndex,
-    replayInterval,
-    setReplayInterval,
-    onStartReplay,
-    onStopReplay,
+    isReplaying, // This prop is kept to show the correct status message
 }) => {
 
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
@@ -90,7 +79,7 @@ const RunMenuBox = ({
             reuseLibraryCell: currentConfig?.stealCellFromLibrary ?? defaultRunConfig.stealCellFromLibrary,
         };
     });
-    
+
     const [currentTime, setCurrentTime] = useState(0.0);
     const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
 
@@ -103,20 +92,18 @@ const RunMenuBox = ({
     useEffect(() => { runtimeRef.current = runtime; }, [runtime]);
     useEffect(() => { clocksRef.current = clocks; }, [clocks]);
     useEffect(() => { configSettingsRef.current = configSettings; }, [configSettings]);
-    
+
     useEffect(() => {
         if (isReplaying) {
-            setStatusMessage({ type: 'info', text: `Replaying frame ${replayFrameIndex + 1} of ${simulationFrames.length}.` });
+            setStatusMessage({ type: 'info', text: 'Replaying simulation in 3D viewer...' });
         } else if (isSimulating) {
             setStatusMessage({ type: 'info', text: `Simulation running (PID: ${activeSimPid})...` });
         } else if (activeSimPid) {
-            const replayReady = simulationFrames.length > 0;
-            const message = `Model built (PID: ${activeSimPid}). Ready to run.` + (replayReady ? " Replay is available." : "");
-            setStatusMessage({ type: 'success', text: message });
+            setStatusMessage({ type: 'success', text: `Model built (PID: ${activeSimPid}). Ready to run or replay.` });
         } else {
             setStatusMessage({ type: 'info', text: 'No active simulation. Change a setting to build the model.' });
         }
-    }, [isSimulating, isReplaying, activeSimPid, replayFrameIndex, simulationFrames.length]);
+    }, [isSimulating, isReplaying, activeSimPid]);
 
 
     useEffect(() => {
@@ -138,7 +125,7 @@ const RunMenuBox = ({
     const buildConfigPayload = useCallback((currentRuntimeStr, currentClocksObj, currentConfigObj) => {
         const getOrDefaultNumeric = (valStr, defaultValStr) => parseFloat(valStr) || parseFloat(defaultValStr);
         const getOrDefaultInt = (valStr, defaultValStr) => parseInt(valStr, 10) || parseInt(defaultValStr, 10);
-        
+
         return {
             runtime: getOrDefaultNumeric(currentRuntimeStr, defaultRunConfig.runtime),
             elecDt: getOrDefaultNumeric(currentClocksObj.elec, defaultRunConfig.elecDt),
@@ -184,9 +171,6 @@ const RunMenuBox = ({
         }
     };
 
-    const replayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
-    const showReplayControls = !isSimulating && simulationFrames.length > 0;
-
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -194,7 +178,7 @@ const RunMenuBox = ({
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!isSimulating}>Pause</Button></Grid>
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
             </Grid>
-            
+
             {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
 
             <Grid container spacing={1.5} sx={{ mb: 2 }}>
@@ -206,59 +190,14 @@ const RunMenuBox = ({
                 </Grid>
                 <Grid item xs={6}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" />
+                        <TextField fullWidth size="small" label="Current Time (s)" type="number" value={isSimulating ? currentTime.toFixed(4) : "0.0000"} InputProps={{ readOnly: true }} variant="filled" />
                         <InfoTooltip title={helpText.runControls.currentTime} />
                     </Box>
                 </Grid>
             </Grid>
 
-            {/* --- NEW: Replay Controls Section --- */}
-            {showReplayControls && (
-                <>
-                    <Divider sx={{ my: 2 }} />
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Replay Controls</Typography>
-                        <InfoTooltip title={helpText.replayControls.main} />
-                    </Box>
-                    <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={4}>
-                            <Button
-                                variant="contained"
-                                fullWidth
-                                startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}
-                                onClick={isReplaying ? onStopReplay : onStartReplay}
-                            >
-                                {isReplaying ? 'Stop Replay' : 'Replay'}
-                            </Button>
-                        </Grid>
-                        <Grid item xs={12} sm={8}>
-                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <TextField fullWidth size="small" label="Replay Time (s)" type="number" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" />
-                                <InfoTooltip title={helpText.replayControls.replayTime} />
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12}>
-                            <Box sx={{ px: 1 }}>
-                                <Typography gutterBottom variant="caption">Playback Speed</Typography>
-                                <Slider
-                                    value={replayInterval}
-                                    onChange={(e, newValue) => setReplayInterval(newValue)}
-                                    aria-labelledby="replay-speed-slider"
-                                    valueLabelDisplay="auto"
-                                    min={10}
-                                    max={500}
-                                    step={10}
-                                    inverted
-                                />
-                                <InfoTooltip title={helpText.replayControls.replaySpeed} />
-                            </Box>
-                        </Grid>
-                    </Grid>
-                </>
-            )}
-            
             <Divider sx={{ my: 2 }} />
-            
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Simulation Time Steps (Clocks)</Typography>
                 <InfoTooltip title={helpText.clocks.main} />
@@ -282,9 +221,8 @@ const RunMenuBox = ({
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Configuration Settings</Typography>
-                <InfoTooltip title={helpText.configuration.main} />
             </Box>
-            
+
             <Typography variant="body2" gutterBottom sx={{ mt: 1, fontWeight: 'medium' }}>Flags</Typography>
             <Grid container spacing={1} rowSpacing={0}>
                 <Grid item xs={6}><Tooltip title={helpText.flags.turnOffElec}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" /></Tooltip></Grid>
