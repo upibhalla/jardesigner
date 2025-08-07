@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
+import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip, Slider } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ReplayIcon from '@mui/icons-material/Replay';
 
 // Assuming helpText is a local JSON file with descriptions.
 // Example: import helpText from './RunMenuBox.Help.json';
 const helpText = {
     runControls: { totalRuntime: "The total duration for the simulation run in seconds.", currentTime: "The current time of the active simulation." },
+    replayControls: { main: "Controls for replaying the last simulation run in the 3D viewer.", replayTime: "The timestamp of the current replay frame.", replaySpeed: "Adjusts the time between replay frames. Slower on the left, faster on the right." },
     clocks: { main: "Time step settings for different simulation components.", elecDt: "Electrical time step.", chemDt: "Chemical/signaling time step.", diffusionDt: "Diffusion time step.", elecPlotDt: "Time step for plotting electrical data.", chemPlotDt: "Time step for plotting chemical data.", functionDt: "Time step for functional evaluation.", statusDt: "Time step for status updates." },
     configuration: { main: "Global settings for the simulation model." },
-    flags: { turnOffElec: "Disable all electrical calculations.", combineSegments: "Combine adjacent segments with identical properties.", useGssa: "Use Gillespie's Stochastic Simulation Algorithm.", benchmark: "Run in benchmark mode.", verbose: "Enable detailed logging.", reuseLibraryCell: "Reuse cell from library if available." },
-    otherSettings: { modelPath: "Path to the model on the server.", odeMethod: "Method for solving ordinary differential equations.", randSeed: "Seed for random number generation.", numWaveFrames: "Number of frames for wave visualization.", diffusionLength: "Characteristic length for diffusion calculations.", temperature: "Simulation temperature in Celsius." }
+    flags: { turnOffElec: "Disable all electrical calculations.", combineSegments: "Combine adjacent segments with identical properties.", useGssa: "Use Gillespie's Stochastic Simulation Algorithm.", reuseLibraryCell: "Reuse cell from library if available." },
+    otherSettings: { modelPath: "Path to the model on the server.", odeMethod: "Method for solving ordinary differential equations.", randSeed: "Seed for random number generation.", temperature: "Simulation temperature in Celsius." }
 };
 
 
@@ -32,15 +34,11 @@ const defaultRunConfig = {
     diffDt: '10e-3',
     funcDt: '100e-6',
     statusDt: '0.0',
-    diffusionLength: '2e-6',
     randseed: '1234',
     temperature: '32',
-    numWaveFrames: '100',
     turnOffElec: false,
     useGssa: false,
-    verbose: false,
     combineSegments: true,
-    benchmark: false,
     stealCellFromLibrary: false,
     modelPath: '/model',
     odeMethod: 'lsoda',
@@ -59,7 +57,15 @@ const RunMenuBox = ({
     onResetRun,
     isSimulating,
     activeSimPid,
-    liveFrameData
+    liveFrameData,
+    // --- NEW: Replay props ---
+    isReplaying,
+    simulationFrames,
+    replayFrameIndex,
+    replayInterval,
+    setReplayInterval,
+    onStartReplay,
+    onStopReplay,
 }) => {
 
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
@@ -73,22 +79,14 @@ const RunMenuBox = ({
         status: safeToString(currentConfig?.statusDt, defaultRunConfig.statusDt),
     }));
     const [configSettings, setConfigSettings] = useState(() => {
-        const initialDiffusionLenMicrons = currentConfig?.diffusionLength
-            ? String(parseFloat(currentConfig.diffusionLength) * 1e6)
-            : '2';
-
         return {
-            diffusionLen: initialDiffusionLenMicrons,
             randSeed: safeToString(currentConfig?.randseed, defaultRunConfig.randseed),
             temperature: safeToString(currentConfig?.temperature, defaultRunConfig.temperature),
-            numWaveFrames: safeToString(currentConfig?.numWaveFrames, defaultRunConfig.numWaveFrames),
             modelPath: safeToString(currentConfig?.modelPath, defaultRunConfig.modelPath),
             odeMethod: safeToString(currentConfig?.odeMethod, defaultRunConfig.odeMethod),
             turnOffElec: currentConfig?.turnOffElec ?? defaultRunConfig.turnOffElec,
             useGssa: currentConfig?.useGssa ?? defaultRunConfig.useGssa,
-            verbose: currentConfig?.verbose ?? defaultRunConfig.verbose,
             combineSegments: currentConfig?.combineSegments ?? defaultRunConfig.combineSegments,
-            benchmark: currentConfig?.benchmark ?? defaultRunConfig.benchmark,
             reuseLibraryCell: currentConfig?.stealCellFromLibrary ?? defaultRunConfig.stealCellFromLibrary,
         };
     });
@@ -107,14 +105,18 @@ const RunMenuBox = ({
     useEffect(() => { configSettingsRef.current = configSettings; }, [configSettings]);
     
     useEffect(() => {
-        if (isSimulating) {
+        if (isReplaying) {
+            setStatusMessage({ type: 'info', text: `Replaying frame ${replayFrameIndex + 1} of ${simulationFrames.length}.` });
+        } else if (isSimulating) {
             setStatusMessage({ type: 'info', text: `Simulation running (PID: ${activeSimPid})...` });
         } else if (activeSimPid) {
-            setStatusMessage({ type: 'success', text: `Model built (PID: ${activeSimPid}). Ready to run.` });
+            const replayReady = simulationFrames.length > 0;
+            const message = `Model built (PID: ${activeSimPid}). Ready to run.` + (replayReady ? " Replay is available." : "");
+            setStatusMessage({ type: 'success', text: message });
         } else {
             setStatusMessage({ type: 'info', text: 'No active simulation. Change a setting to build the model.' });
         }
-    }, [isSimulating, activeSimPid]);
+    }, [isSimulating, isReplaying, activeSimPid, replayFrameIndex, simulationFrames.length]);
 
 
     useEffect(() => {
@@ -137,9 +139,6 @@ const RunMenuBox = ({
         const getOrDefaultNumeric = (valStr, defaultValStr) => parseFloat(valStr) || parseFloat(defaultValStr);
         const getOrDefaultInt = (valStr, defaultValStr) => parseInt(valStr, 10) || parseInt(defaultValStr, 10);
         
-        const diffusionLenInMicrons = getOrDefaultNumeric(currentConfigObj.diffusionLen, '2');
-        const diffusionLenInMeters = diffusionLenInMicrons * 1e-6;
-
         return {
             runtime: getOrDefaultNumeric(currentRuntimeStr, defaultRunConfig.runtime),
             elecDt: getOrDefaultNumeric(currentClocksObj.elec, defaultRunConfig.elecDt),
@@ -149,15 +148,11 @@ const RunMenuBox = ({
             diffDt: getOrDefaultNumeric(currentClocksObj.diffusion, defaultRunConfig.diffDt),
             funcDt: getOrDefaultNumeric(currentClocksObj.function, defaultRunConfig.funcDt),
             statusDt: getOrDefaultNumeric(currentClocksObj.status, defaultRunConfig.statusDt),
-            diffusionLength: diffusionLenInMeters,
             randseed: getOrDefaultInt(currentConfigObj.randSeed, defaultRunConfig.randseed),
             temperature: getOrDefaultNumeric(currentConfigObj.temperature, defaultRunConfig.temperature),
-            numWaveFrames: getOrDefaultInt(currentConfigObj.numWaveFrames, defaultRunConfig.numWaveFrames),
             turnOffElec: currentConfigObj.turnOffElec,
             useGssa: currentConfigObj.useGssa,
-            verbose: currentConfigObj.verbose,
             combineSegments: currentConfigObj.combineSegments,
-            benchmark: currentConfigObj.benchmark,
             stealCellFromLibrary: currentConfigObj.reuseLibraryCell,
             modelPath: currentConfigObj.modelPath,
             odeMethod: currentConfigObj.odeMethod,
@@ -189,6 +184,9 @@ const RunMenuBox = ({
         }
     };
 
+    const replayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
+    const showReplayControls = !isSimulating && simulationFrames.length > 0;
+
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -213,6 +211,53 @@ const RunMenuBox = ({
                     </Box>
                 </Grid>
             </Grid>
+
+            {/* --- NEW: Replay Controls Section --- */}
+            {showReplayControls && (
+                <>
+                    <Divider sx={{ my: 2 }} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Replay Controls</Typography>
+                        <InfoTooltip title={helpText.replayControls.main} />
+                    </Box>
+                    <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} sm={4}>
+                            <Button
+                                variant="contained"
+                                fullWidth
+                                startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}
+                                onClick={isReplaying ? onStopReplay : onStartReplay}
+                            >
+                                {isReplaying ? 'Stop Replay' : 'Replay'}
+                            </Button>
+                        </Grid>
+                        <Grid item xs={12} sm={8}>
+                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <TextField fullWidth size="small" label="Replay Time (s)" type="number" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" />
+                                <InfoTooltip title={helpText.replayControls.replayTime} />
+                            </Box>
+                        </Grid>
+                        <Grid item xs={12}>
+                            <Box sx={{ px: 1 }}>
+                                <Typography gutterBottom variant="caption">Playback Speed</Typography>
+                                <Slider
+                                    value={replayInterval}
+                                    onChange={(e, newValue) => setReplayInterval(newValue)}
+                                    aria-labelledby="replay-speed-slider"
+                                    valueLabelDisplay="auto"
+                                    min={10}
+                                    max={500}
+                                    step={10}
+                                    inverted
+                                />
+                                <InfoTooltip title={helpText.replayControls.replaySpeed} />
+                            </Box>
+                        </Grid>
+                    </Grid>
+                </>
+            )}
+            
+            <Divider sx={{ my: 2 }} />
             
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Simulation Time Steps (Clocks)</Typography>
@@ -245,8 +290,6 @@ const RunMenuBox = ({
                 <Grid item xs={6}><Tooltip title={helpText.flags.turnOffElec}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" /></Tooltip></Grid>
                 <Grid item xs={6}><Tooltip title={helpText.flags.combineSegments}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => updateConfigSetting('combineSegments', !configSettings.combineSegments)} /> } label="Combine Segments" /></Tooltip></Grid>
                 <Grid item xs={6}><Tooltip title={helpText.flags.useGssa}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => updateConfigSetting('useGssa', !configSettings.useGssa)} /> } label="Use GSSA" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.benchmark}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.benchmark} onChange={() => updateConfigSetting('benchmark', !configSettings.benchmark)} /> } label="Benchmark" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.verbose}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.verbose} onChange={() => updateConfigSetting('verbose', !configSettings.verbose)} /> } label="Verbose" /></Tooltip></Grid>
                 <Grid item xs={6}><Tooltip title={helpText.flags.reuseLibraryCell}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => updateConfigSetting('reuseLibraryCell', !configSettings.reuseLibraryCell)} /> } label="Reuse Library Cell" /></Tooltip></Grid>
             </Grid>
 
@@ -267,24 +310,10 @@ const RunMenuBox = ({
                         <TextField fullWidth size="small" label="Rand Seed" type="number" value={configSettings.randSeed} onChange={(e) => updateConfigSetting('randSeed', e.target.value)} />
                         <InfoTooltip title={helpText.otherSettings.randSeed} />
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                        <TextField fullWidth size="small" label="Num Wave Frames" type="number" value={configSettings.numWaveFrames} onChange={(e) => updateConfigSetting('numWaveFrames', e.target.value)} />
-                        <InfoTooltip title={helpText.otherSettings.numWaveFrames} />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} />
+                        <InfoTooltip title={helpText.otherSettings.temperature} />
                     </Box>
-                </Grid>
-                 <Grid item xs={12} container spacing={1.5}>
-                    <Grid item xs={12} sm={6}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TextField fullWidth size="small" label="Diffusion Length (µm)" type="text" value={configSettings.diffusionLen} onChange={(e) => updateConfigSetting('diffusionLen', e.target.value)} />
-                            <InfoTooltip title={helpText.otherSettings.diffusionLength} />
-                        </Box>
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} />
-                            <InfoTooltip title={helpText.otherSettings.temperature} />
-                        </Box>
-                    </Grid>
                 </Grid>
             </Grid>
         </Box>
@@ -292,4 +321,3 @@ const RunMenuBox = ({
 };
 
 export default RunMenuBox;
-

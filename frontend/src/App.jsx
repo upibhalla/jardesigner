@@ -53,7 +53,6 @@ const initialJsonData = {
   benchmark: false,
   temperature: 32,
   randseed: 1234,
-  numWaveFrames: 100,
   runtime: 0.3,
   elecDt: 50e-6,
   elecPlotDt: 100e-6,
@@ -129,22 +128,50 @@ const App = () => {
   const [plotError, setPlotError] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
   const [clickSelected, setClickSelected] = useState([]);
-  
+
   const [clientId] = useState(() => uuidv4());
 
   const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null, svg_filename: null });
   const [liveFrameData, setLiveFrameData] = useState(null);
   const socketRef = useRef(null);
 
-  // --- FIX: Use a ref to hold the current sim state to avoid stale closures ---
+  const threeDManagerRef = useRef(null);
+  const frameQueueRef = useRef([]);
+  const animationFrameId = useRef();
+
+  // --- NEW: State for storing and managing replays ---
+  const [simulationFrames, setSimulationFrames] = useState([]);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [replayFrameIndex, setReplayFrameIndex] = useState(0);
+  const [replayInterval, setReplayInterval] = useState(100); // Default speed in ms
+  const replayTimerRef = useRef(null);
+
   const activeSimRef = useRef(activeSim);
   useEffect(() => {
     activeSimRef.current = activeSim;
   }, [activeSim]);
 
+  const onManagerReady = useCallback((manager) => {
+    threeDManagerRef.current = manager;
+  }, []);
+
+  useEffect(() => {
+      const processQueue = () => {
+          if (frameQueueRef.current.length > 0 && threeDManagerRef.current) {
+              const frame = frameQueueRef.current.shift();
+              threeDManagerRef.current.updateSceneData(frame);
+          }
+          animationFrameId.current = requestAnimationFrame(processQueue);
+      };
+      animationFrameId.current = requestAnimationFrame(processQueue);
+      return () => {
+          cancelAnimationFrame(animationFrameId.current);
+      };
+  }, []);
+
   const handleSimulationEnded = useCallback(() => {
       setIsSimulating(false);
-      // --- FIX: Read the SVG filename from the ref to get the latest value ---
+      frameQueueRef.current = [];
       const currentFilename = activeSimRef.current.svg_filename;
       if (currentFilename) {
           console.log(`Simulation ended. Setting plot filename to: ${currentFilename}`);
@@ -157,7 +184,7 @@ const App = () => {
           setSvgPlotFilename(null);
           setIsPlotReady(false);
       }
-  }, []); // --- FIX: Dependency array can be empty now ---
+  }, []);
 
   const buildModelOnServer = useCallback(async (newJsonData) => {
     setSvgPlotFilename(null);
@@ -184,7 +211,7 @@ const App = () => {
 
     try {
         console.log("Sending new model configuration to server to build...");
-        
+
         const payload = {
             config_data: newJsonData,
             client_id: clientId
@@ -224,12 +251,13 @@ const App = () => {
             });
 
             socket.on('simulation_data', (data) => {
-				console.log('Received simulation_data event from WebSocket:', data);
                 if (data?.type === 'scene_init') {
                     setThreeDConfig(data.scene);
                 } else if (data?.filetype === 'jardesignerDataFrame') {
-					console.log('got live frame data');
-                    setLiveFrameData(data);
+                    frameQueueRef.current.push(data);
+                    // --- NEW: Store frame for replay and update live time ---
+                    setSimulationFrames(prevFrames => [...prevFrames, data]);
+                    setLiveFrameData(data); // for live time display
                 } else if (data?.type === 'sim_end') {
                     console.log("Received simulation end signal from server.");
                     handleSimulationEnded();
@@ -265,9 +293,14 @@ const App = () => {
           return;
       }
 
+      frameQueueRef.current = [];
+      // --- NEW: Clear previous simulation frames before a new run ---
+      setSimulationFrames([]);
+      setReplayFrameIndex(0);
+      setIsReplaying(false);
+
       console.log(`Sending 'start' command to PID ${activeSim.pid} with runtime: ${runParams.runtime}`);
       setIsSimulating(true);
-      setLiveFrameData(null);
       setThreeDConfig(null);
 
       socketRef.current.emit('sim_command', {
@@ -286,6 +319,51 @@ const App = () => {
           await buildModelOnServer(compactJsonData(jsonData, initialJsonData));
       }
   }, [activeSim.pid, jsonData, buildModelOnServer]);
+
+    // --- MODIFIED: Logic to handle starting and stopping the replay ---
+    const handleReplayEnd = useCallback(() => {
+        setIsReplaying(false);
+        // Ensure the plot is re-enabled after replay finishes
+        if (svgPlotFilename) {
+            setIsPlotReady(true);
+        }
+    }, [svgPlotFilename]);
+
+    const handleStartReplay = useCallback(() => {
+        if (simulationFrames.length === 0) return;
+        setIsPlotReady(false); // Turn off graph fetching during replay
+        setIsReplaying(true);
+        setReplayFrameIndex(0); // Start from the beginning
+    }, [simulationFrames.length]);
+
+    const handleStopReplay = useCallback(() => {
+        handleReplayEnd();
+    }, [handleReplayEnd]);
+
+    // --- MODIFIED: useEffect to manage the replay timer ---
+    useEffect(() => {
+        if (isReplaying) {
+            replayTimerRef.current = setInterval(() => {
+                setReplayFrameIndex(prevIndex => {
+                    const nextIndex = prevIndex + 1;
+                    if (nextIndex >= simulationFrames.length) {
+                        handleReplayEnd(); // Stop when frames run out
+                        return prevIndex;
+                    }
+
+                    const frame = simulationFrames[nextIndex];
+                    if (threeDManagerRef.current && frame) {
+                        threeDManagerRef.current.updateSceneData(frame);
+                    }
+                    return nextIndex;
+                });
+            }, replayInterval);
+        } else {
+            clearInterval(replayTimerRef.current);
+        }
+
+        return () => clearInterval(replayTimerRef.current);
+    }, [isReplaying, replayInterval, simulationFrames, handleReplayEnd]);
 
   const [transientSwcData, setTransientSwcData] = useState(null);
 
@@ -417,6 +495,14 @@ const App = () => {
              isSimulating={isSimulating}
              activeSimPid={activeSim.pid}
              liveFrameData={liveFrameData}
+             // --- NEW: Pass replay props down ---
+             isReplaying={isReplaying}
+             simulationFrames={simulationFrames}
+             replayFrameIndex={replayFrameIndex}
+             replayInterval={replayInterval}
+             setReplayInterval={setReplayInterval}
+             onStartReplay={handleStartReplay}
+             onStopReplay={handleStopReplay}
            />,
       Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
       Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
@@ -425,9 +511,9 @@ const App = () => {
       Signaling: <ChemMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} getChemProtos={getChemProtos} />,
       Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
       Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
-      Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
+      Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} />,
       '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
-  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData, handleMorphologyFileChange, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData]);
+  }), [activeMenu, jsonData, updateJsonString, getChemProtos, handlePlotDataUpdate, clearPlotData, handleClearModel, handleSaveModel, updateJsonData, handleMorphologyFileChange, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying, simulationFrames, replayFrameIndex, replayInterval, handleStartReplay, handleStopReplay]);
 
   return (
     <>
@@ -452,7 +538,7 @@ const App = () => {
         <Grid item xs={4} style={{ height: '100%' }}>
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
-        
+
         <Grid item xs={8} style={{ height: '100%' }}>
           <DisplayWindow
              jsonString={jsonContent}
@@ -463,9 +549,9 @@ const App = () => {
              plotError={plotError}
              isSimulating={isSimulating}
              threeDConfig={threeDConfig}
-             liveFrameData={liveFrameData}
              clickSelected={clickSelected}
              onSelectionChange={handleSelectionChange}
+             onManagerReady={onManagerReady}
           />
         </Grid>
        </Grid>

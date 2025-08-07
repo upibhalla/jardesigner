@@ -18,7 +18,8 @@ const DisplayWindow = ({
   threeDConfig,
   clickSelected,
   onSelectionChange,
-  liveFrameData, // --- ADDED: Receive liveFrameData prop ---
+  liveFrameData,
+  onManagerReady, // --- MODIFIED: Accept onManagerReady prop ---
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -44,12 +45,12 @@ const DisplayWindow = ({
 
       {/* JSON Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
-        <JsonText 
-          jsonString={jsonString} 
-          setActiveMenu={setActiveMenu} 
+        <JsonText
+          jsonString={jsonString}
+          setActiveMenu={setActiveMenu}
         />
       </Box>
-      
+
       {/* Markdown Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 2 ? 'block' : 'none' }}>
         <MarkdownText />
@@ -63,7 +64,8 @@ const DisplayWindow = ({
             setActiveMenu={setActiveMenu}
             clickSelected={clickSelected}
             onSelectionChange={onSelectionChange}
-            liveFrameData={liveFrameData} // --- ADDED: Pass liveFrameData prop down ---
+            liveFrameData={liveFrameData}
+            onManagerReady={onManagerReady} // --- MODIFIED: Pass onManagerReady prop down ---
         />
       </Box>
     </Box>

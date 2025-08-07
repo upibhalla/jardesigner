@@ -42,7 +42,7 @@ const createDefaultPlot = () => ({
     yMin: '0.0',
     yMax: '0.0',
     mode: 'time',
-    waveFrames: '0',
+    waveFrames: '100', // Default value moved here
 });
 
 // --- Reusable HelpField Component ---
@@ -90,7 +90,7 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
                 yMin: formatFloat(p.ymin) || '0.0',
                 yMax: formatFloat(p.ymax) || '0.0',
                 mode: p.mode || 'time',
-                waveFrames: safeToString(p.numWaveFrames, '0'),
+                waveFrames: safeToString(p.numWaveFrames, '100'), // Updated default
             };
         }) || [];
         return initialPlots.length > 0 ? initialPlots : [createDefaultPlot()];
@@ -254,4 +254,3 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
 };
 
 export default PlotMenuBox;
-

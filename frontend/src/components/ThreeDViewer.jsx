@@ -42,51 +42,36 @@ const ColorBar = ({ displayConfig, entityConfig }) => {
     );
 };
 
-const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange, liveFrameData }) => {
+const ThreeDViewer = ({ isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange, onManagerReady }) => {
   const mountRef = useRef(null);
   const managerRef = useRef(null);
 
-  // --- MODIFIED: This primary useEffect now handles the creation and all updates ---
-  // It runs only when the component mounts and cleans up when it unmounts.
   useEffect(() => {
-    // 1. Create the ThreeDManager instance as soon as the component mounts
-    if (mountRef.current && !managerRef.current) {
+    if (mountRef.current) {
         managerRef.current = new ThreeDManager(mountRef.current, onSelectionChange);
+        if (onManagerReady) {
+            onManagerReady(managerRef.current);
+        }
     }
-    
-    // 2. Clean up the instance when the component unmounts
     return () => {
         managerRef.current?.dispose();
-        managerRef.current = null;
+        if (onManagerReady) {
+            onManagerReady(null);
+        }
     };
-  }, [onSelectionChange]); // Dependency ensures it only runs once
-
-  // --- MODIFIED: Separate useEffects for each prop change ---
-  // This ensures that updates are handled independently and reliably.
+  }, [onSelectionChange, onManagerReady]);
   
-  // This hook handles building the initial scene
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
-      console.log("ThreeDViewer: Building scene with new threeDConfig.");
       managerRef.current.buildScene(threeDConfig);
     }
   }, [threeDConfig]);
 
-  // This hook handles live data updates during the simulation
-  useEffect(() => {
-    if (managerRef.current && liveFrameData) {
-      // This should now be called correctly
-      managerRef.current.updateSceneData(liveFrameData);
-    }
-  }, [liveFrameData]);
-
-  // This hook handles selection updates
   useEffect(() => {
     if (managerRef.current) {
         managerRef.current.updateSelectionVisuals(clickSelected);
     }
   }, [clickSelected]);
-
 
   const handleUpdateClick = () => {
       if (setActiveMenu) {
