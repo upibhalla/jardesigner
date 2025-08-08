@@ -17,7 +17,6 @@ const DisplayWindow = ({
   clickSelected,
   onSelectionChange,
   onManagerReady,
-  // --- ADDED: Replay props to pass down ---
   isReplaying,
   simulationFrames,
   replayFrameIndex,
@@ -25,6 +24,9 @@ const DisplayWindow = ({
   setReplayInterval,
   onStartReplay,
   onStopReplay,
+  // --- ADDED: Receive visibility props to pass down ---
+  drawableVisibility,
+  setDrawableVisibility,
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -70,7 +72,6 @@ const DisplayWindow = ({
             clickSelected={clickSelected}
             onSelectionChange={onSelectionChange}
             onManagerReady={onManagerReady}
-            // --- ADDED: Pass all replay props to the viewer ---
             isReplaying={isReplaying}
             simulationFrames={simulationFrames}
             replayFrameIndex={replayFrameIndex}
@@ -78,6 +79,9 @@ const DisplayWindow = ({
             setReplayInterval={setReplayInterval}
             onStartReplay={onStartReplay}
             onStopReplay={onStopReplay}
+            // --- ADDED: Pass visibility props to the viewer ---
+            drawableVisibility={drawableVisibility}
+            setDrawableVisibility={setDrawableVisibility}
         />
       </Box>
     </Box>

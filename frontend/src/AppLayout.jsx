@@ -36,6 +36,8 @@ export const AppLayout = (props) => {
         updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
         getCurrentJsonData, getChemProtos, setActiveMenu,
         handleMorphologyFileChange,
+        // --- NEW: Destructure visibility props ---
+        drawableVisibility, setDrawableVisibility,
     } = props;
 
     const menuComponents = useMemo(() => ({
@@ -58,7 +60,6 @@ export const AppLayout = (props) => {
         Signaling: <ChemMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} getChemProtos={getChemProtos} />,
         Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
         Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
-        // --- MODIFIED: Pass getChemProtos to the PlotMenuBox ---
         Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
         '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
     }), [jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying, handleMorphologyFileChange]);
@@ -68,7 +69,7 @@ export const AppLayout = (props) => {
             <AppBar position="static">
                 <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
                     <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4-px' }} /> Run </Button>
+                    <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
                     <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology </Button>
                     <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines </Button>
                     <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} > <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} /> Channels </Button>
@@ -105,6 +106,9 @@ export const AppLayout = (props) => {
                         setReplayInterval={setReplayInterval}
                         onStartReplay={handleStartReplay}
                         onStopReplay={handleStopReplay}
+                        // --- NEW: Pass visibility props to DisplayWindow ---
+                        drawableVisibility={drawableVisibility}
+                        setDrawableVisibility={setDrawableVisibility}
                     />
                 </Grid>
             </Grid>

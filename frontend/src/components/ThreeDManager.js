@@ -6,6 +6,8 @@ export default class ThreeDManager {
   constructor(container, onSelectionChange) {
     this.container = container;
     this.onSelectionChange = onSelectionChange;
+    this.activeGroupId = null;
+    this.diameterScales = new Map(); // --- MODIFIED: Store scale per drawable
 
     this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -14,7 +16,6 @@ export default class ThreeDManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     this.boundingBox = new THREE.Box3();
-    this.diameterScale = 1.0;
     this.sceneMeshes = [];
     this.entityConfigs = new Map();
 
@@ -35,15 +36,19 @@ export default class ThreeDManager {
 
     this.animate();
   }
+  
+  setActiveGroupId(groupId) {
+    this.activeGroupId = groupId;
+  }
 
   buildScene(config) {
     if (!config || !config.drawables) {
-        console.warn("ThreeDManager: buildScene called with invalid config. 'drawables' array not found.", config);
         return;
     }
 
     this.sceneMeshes = [];
     this.entityConfigs.clear();
+    this.diameterScales.clear(); // --- MODIFIED: Clear scales on new scene
     while(this.scene.children.length > 2){
         const child = this.scene.children[2];
         this.scene.remove(child);
@@ -56,11 +61,13 @@ export default class ThreeDManager {
 
     config.drawables.forEach(entity => {
       this.entityConfigs.set(entity.groupId, {
+          title: entity.title,
           vmin: entity.vmin,
           vmax: entity.vmax,
           colormap: config.colormap,
           transparency: entity.transparency || 1.0
       });
+      this.diameterScales.set(entity.groupId, 1.0); // --- MODIFIED: Initialize scale for each drawable
 
       entity.shape.forEach((primitive, i) => {
         let mesh;
@@ -100,19 +107,25 @@ export default class ThreeDManager {
     setTimeout(() => this.onWindowResize(), 0);
   }
 
-  // --- NEW: Method to update the color range dynamically ---
+  setDrawableVisibility(visibilityMap) {
+      this.sceneMeshes.forEach(mesh => {
+          const groupId = mesh.userData.entityName;
+          if (visibilityMap.hasOwnProperty(groupId)) {
+              mesh.visible = visibilityMap[groupId];
+          }
+      });
+  }
+
   updateColorRange(groupId, newRange) {
     const config = this.entityConfigs.get(groupId);
     if (config) {
         config.vmin = newRange.vmin;
         config.vmax = newRange.vmax;
         this.entityConfigs.set(groupId, config);
-        // Redraw the scene with the new colors based on the initial values
         this.redrawColors();
     }
   }
 
-  // --- NEW: Helper method to redraw colors for all meshes ---
   redrawColors() {
     this.sceneMeshes.forEach(mesh => {
         const config = this.entityConfigs.get(mesh.userData.entityName);
@@ -165,7 +178,7 @@ export default class ThreeDManager {
     const isSelected = (mesh) => {
         return clickSelected.some(sel =>
             sel.entityName === mesh.userData.entityName &&
-            sel.shapeIndex === mesh.userData.shapeIndex
+            sel.shapeIndex === sel.shapeIndex
         );
     };
 
@@ -195,10 +208,8 @@ export default class ThreeDManager {
         case 'P': offset.applyAxisAngle(right, -rotateSpeed); break;
         case 'y': offset.applyAxisAngle(up, rotateSpeed); break;
         case 'Y': offset.applyAxisAngle(up, -rotateSpeed); break;
-
         case ',': case '<': offset.multiplyScalar(1.05); break;
         case '.': case '>': offset.multiplyScalar(0.95); break;
-
         case 'ArrowUp': {
             event.preventDefault();
             const panOffset = up.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
@@ -227,45 +238,46 @@ export default class ThreeDManager {
             this.controls.target.sub(panOffset);
             break;
         }
-
         case 'a': this.focusCamera(); return;
-
-        case 'd': this.diameterScale *= 0.9; this.updateDiameterScale(); break;
-        case 'D': this.diameterScale *= 1.1; this.updateDiameterScale(); break;
-
+        case 'd': this.updateDiameterScale(this.activeGroupId, 0.9); break;
+        case 'D': this.updateDiameterScale(this.activeGroupId, 1.1); break;
         default: return;
     }
 
     this.camera.position.copy(this.controls.target).add(offset);
   }
 
-  updateDiameterScale() {
+  // --- MODIFIED: Logic is now more robust and specific to a drawable ---
+  updateDiameterScale(targetGroupId, factor) {
+      if (!targetGroupId) return;
+
+      const currentScale = this.diameterScales.get(targetGroupId) || 1.0;
+      const newScale = currentScale * factor;
+      this.diameterScales.set(targetGroupId, newScale);
+
       this.sceneMeshes.forEach(mesh => {
-          if (mesh.geometry.type === 'SphereGeometry') {
-              mesh.scale.set(this.diameterScale, this.diameterScale, this.diameterScale);
-          } else if (mesh.geometry.type === 'CylinderGeometry') {
-              mesh.scale.set(this.diameterScale, 1, this.diameterScale);
+          if (mesh.userData.entityName === targetGroupId) {
+              if (mesh.geometry.type === 'SphereGeometry') {
+                  mesh.scale.set(newScale, newScale, newScale);
+              } else if (mesh.geometry.type === 'CylinderGeometry') {
+                  mesh.scale.set(newScale, 1, newScale);
+              }
           }
       });
   }
 
   focusCamera() {
     if (this.boundingBox.isEmpty()) return;
-
     const center = this.boundingBox.getCenter(new THREE.Vector3());
     const size = this.boundingBox.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-
     const fov = this.camera.fov * (Math.PI / 180);
     const cameraDistance = Math.abs(maxDim / 1.5 / Math.tan(fov / 2));
-
     this.camera.position.copy(center);
     this.camera.position.z += cameraDistance;
     this.controls.target.copy(center);
-
     this.camera.near = cameraDistance / 100;
     this.camera.far = cameraDistance * 100;
-
     this.camera.updateProjectionMatrix();
   }
 
@@ -278,14 +290,12 @@ export default class ThreeDManager {
 
   animate = () => {
     requestAnimationFrame(this.animate);
-
     const canvas = this.renderer.domElement;
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     if (canvas.width !== width || canvas.height !== height) {
         this.onWindowResize();
     }
-
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }

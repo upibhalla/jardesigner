@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { io } from "socket.io-client";
 import { v4 as uuidv4 } from 'uuid';
 import isEqual from 'lodash/isEqual';
 
-// --- Initial State / Defaults ---
+// --- (initial state and helper functions remain the same) ---
+// --- MOCK DATA: Remove or replace with your actual data ---
 const initialJsonData = {
   filetype: "jardesigner",
   version: "1.0",
@@ -81,6 +82,7 @@ function compactJsonData(currentData, defaultData) {
     return compacted;
 }
 
+
 export const useAppLogic = () => {
     const [activeMenu, setActiveMenu] = useState(null);
     const [jsonData, setJsonData] = useState(initialJsonData);
@@ -104,7 +106,10 @@ export const useAppLogic = () => {
     const [replayInterval, setReplayInterval] = useState(100);
     const replayTimerRef = useRef(null);
     const activeSimRef = useRef(activeSim);
-    const [transientSwcData, setTransientSwcData] = useState(null); // <-- RE-ADD THIS STATE
+    const [transientSwcData, setTransientSwcData] = useState(null);
+    const [drawableVisibility, setDrawableVisibility] = useState({});
+    // --- NEW: State to track simulation time during replay ---
+    const [replaySimTime, setReplaySimTime] = useState(0);
 
     useEffect(() => {
         activeSimRef.current = activeSim;
@@ -174,7 +179,7 @@ export const useAppLogic = () => {
             });
 
             if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
-
+            
             const result = await response.json();
 
             if (result.status === 'success') {
@@ -191,7 +196,14 @@ export const useAppLogic = () => {
                     socket.emit('join_sim_channel', { data_channel_id: result.data_channel_id });
                 });
                 socket.on('simulation_data', (data) => {
-                    if (data?.type === 'scene_init') setThreeDConfig(data.scene);
+                    if (data?.type === 'scene_init') {
+                        setThreeDConfig(data.scene);
+                        const initialVisibility = {};
+                        (data.scene?.drawables || []).forEach(d => {
+                            initialVisibility[d.groupId] = true;
+                        });
+                        setDrawableVisibility(initialVisibility);
+                    }
                     else if (data?.filetype === 'jardesignerDataFrame') {
                         frameQueueRef.current.push(data);
                         setSimulationFrames(prev => [...prev, data]);
@@ -216,7 +228,6 @@ export const useAppLogic = () => {
         buildModelOnServer(compactedData);
     }, [jsonData, buildModelOnServer]);
     
-    // --- RE-ADD THIS FUNCTION ---
     const handleMorphologyFileChange = useCallback(({ filename, content }) => {
         updateJsonData({
             cellProto: {
@@ -250,34 +261,77 @@ export const useAppLogic = () => {
         if (svgPlotFilename) setIsPlotReady(true);
     }, [svgPlotFilename]);
 
+    // --- MODIFIED: handleStartReplay now resets the simulation time ---
     const handleStartReplay = useCallback(() => {
         if (simulationFrames.length === 0) return;
         setIsPlotReady(false);
         setIsReplaying(true);
         setReplayFrameIndex(0);
+        setReplaySimTime(0); // Reset the clock
     }, [simulationFrames.length]);
 
     const handleStopReplay = useCallback(() => handleReplayEnd(), [handleReplayEnd]);
 
+    const minVisibleDt = useMemo(() => {
+        if (!threeDConfig?.drawables) return 0.001;
+        let minDt = Infinity;
+        threeDConfig.drawables.forEach(d => {
+            if (drawableVisibility[d.groupId] && d.dt < minDt) {
+                minDt = d.dt;
+            }
+        });
+        return minDt === Infinity ? 0.001 : minDt;
+    }, [threeDConfig, drawableVisibility]);
+
+    // --- MODIFIED: Completely new, robust replay logic driven by simulation time ---
+    const replayFrameIndexRef = useRef(0);
+    useEffect(() => {
+        replayFrameIndexRef.current = replayFrameIndex;
+    }, [replayFrameIndex]);
+
     useEffect(() => {
         if (isReplaying) {
             replayTimerRef.current = setInterval(() => {
-                setReplayFrameIndex(prev => {
-                    const nextIndex = prev + 1;
-                    if (nextIndex >= simulationFrames.length) {
+                setReplaySimTime(prevSimTime => {
+                    const totalRuntime = jsonData.runtime || 0.3;
+                    const nextSimTime = prevSimTime + minVisibleDt;
+
+                    // End replay if we have exceeded the total runtime
+                    if (prevSimTime >= totalRuntime) {
                         handleReplayEnd();
-                        return prev;
+                        return prevSimTime;
                     }
-                    const frame = simulationFrames[nextIndex];
-                    if (threeDManagerRef.current && frame) threeDManagerRef.current.updateSceneData(frame);
-                    return nextIndex;
+
+                    const lastRenderedIndex = replayFrameIndexRef.current;
+                    let nextFrameIndexToRender = lastRenderedIndex;
+
+                    // Find all frames between the last render and the new target time
+                    for (let i = lastRenderedIndex + 1; i < simulationFrames.length; i++) {
+                        const frame = simulationFrames[i];
+                        if (frame.timestamp <= nextSimTime) {
+                            if (threeDManagerRef.current && drawableVisibility[frame.groupId]) {
+                                threeDManagerRef.current.updateSceneData(frame);
+                            }
+                            nextFrameIndexToRender = i;
+                        } else {
+                            break; // Stop once we pass the target time
+                        }
+                    }
+                    
+                    // Update the UI frame index to the last frame we rendered in this step
+                    if (nextFrameIndexToRender !== lastRenderedIndex) {
+                        setReplayFrameIndex(nextFrameIndexToRender);
+                    }
+                    
+                    return nextSimTime;
                 });
             }, replayInterval);
         } else {
             clearInterval(replayTimerRef.current);
         }
         return () => clearInterval(replayTimerRef.current);
-    }, [isReplaying, replayInterval, simulationFrames, handleReplayEnd]);
+    }, [isReplaying, replayInterval, simulationFrames, handleReplayEnd, drawableVisibility, minVisibleDt, jsonData.runtime]);
+
 
     const handleSelectionChange = useCallback((selection, isCtrlClick) => {
         setClickSelected(prev => {
@@ -297,7 +351,7 @@ export const useAppLogic = () => {
             const compacted = compactJsonData(mergedData, initialJsonData);
             setJsonData(mergedData);
             setJsonContent(JSON.stringify(compacted, null, 2));
-            setTransientSwcData(null); // <-- Ensure this is cleared
+            setTransientSwcData(null);
             setThreeDConfig(null);
             buildModelOnServer(compacted);
         } catch (e) {
@@ -309,7 +363,7 @@ export const useAppLogic = () => {
         const compacted = compactJsonData(initialJsonData, initialJsonData);
         setJsonData(initialJsonData);
         setJsonContent(JSON.stringify(compacted, null, 2));
-        setTransientSwcData(null); // <-- Ensure this is cleared
+        setTransientSwcData(null);
         setThreeDConfig(null);
         setSvgPlotFilename(null);
         setIsPlotReady(false);
@@ -332,6 +386,7 @@ export const useAppLogic = () => {
         setReplayInterval, handleStartReplay, handleStopReplay, handleSelectionChange,
         updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
         getCurrentJsonData, getChemProtos, setActiveMenu,
-        handleMorphologyFileChange, // <-- ADD THIS TO THE RETURN OBJECT
+        handleMorphologyFileChange,
+        drawableVisibility, setDrawableVisibility,
     };
 };
