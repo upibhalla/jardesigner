@@ -60,8 +60,7 @@ export default class ThreeDManager {
     this.boundingBox.makeEmpty();
 
     config.drawables.forEach(entity => {
-      // --- NEW: Diagnostic log to verify incoming data ---
-      console.log("Processing Drawable from SceneGraph:", entity);
+      // The noisy console.log has been removed from here.
 
       this.entityConfigs.set(entity.groupId, {
           title: entity.title,

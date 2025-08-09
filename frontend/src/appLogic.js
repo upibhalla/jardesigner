@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { io } from "socket.io-client";
 import { v4 as uuidv4 } from 'uuid';
 import isEqual from 'lodash/isEqual';
+import { useReplayLogic } from './replayLogic'; // Import the new hook
 
-// --- (initial state and helper functions remain the same) ---
+// --- (initial state and other helper functions remain the same) ---
 const initialJsonData = {
   filetype: "jardesigner",
   version: "1.0",
@@ -100,24 +101,35 @@ export const useAppLogic = () => {
     const frameQueueRef = useRef([]);
     const animationFrameId = useRef();
     const [simulationFrames, setSimulationFrames] = useState([]);
-    const [isReplaying, setIsReplaying] = useState(false);
-    const [replayFrameIndex, setReplayFrameIndex] = useState(0);
     const [replayInterval, setReplayInterval] = useState(100);
-    const [replayTime, setReplayTime] = useState(0);
-    const replayTimerRef = useRef(null);
-    const activeSimRef = useRef(activeSim);
+    const totalRuntime = useMemo(() => jsonData.runtime || 0.3, [jsonData.runtime]);
     const [drawableVisibility, setDrawableVisibility] = useState({});
-    
-    // --- MODIFIED: Replaced unused state with a ref ---
-    const replaySimTimeRef = useRef(0);
-
-    useEffect(() => {
-        activeSimRef.current = activeSim;
-    }, [activeSim]);
 
     const onManagerReady = useCallback((manager) => {
         threeDManagerRef.current = manager;
     }, []);
+
+    const handleReplayEnd = useCallback(() => {
+        if (svgPlotFilename) setIsPlotReady(true);
+    }, [svgPlotFilename]);
+    
+    // All replay logic is now managed by the custom hook.
+    const {
+        replayTime,
+        isReplaying,
+        handleStartReplay,
+        handlePauseReplay,
+        handleRewindReplay,
+        handleSeekReplay
+    } = useReplayLogic({
+        simulationFrames,
+        drawableVisibility,
+        threeDConfig,
+        totalRuntime,
+        replayInterval,
+        threeDManagerRef,
+        onReplayEnd: handleReplayEnd
+    });
 
     useEffect(() => {
         const processQueue = () => {
@@ -136,7 +148,8 @@ export const useAppLogic = () => {
     const handleSimulationEnded = useCallback(() => {
         setIsSimulating(false);
         frameQueueRef.current = [];
-        const currentFilename = activeSimRef.current.svg_filename;
+        // FIX: Use activeSim state variable directly, not the removed activeSimRef
+        const currentFilename = activeSim.svg_filename;
         if (currentFilename) {
             setSvgPlotFilename(currentFilename);
             setIsPlotReady(true);
@@ -146,7 +159,9 @@ export const useAppLogic = () => {
             setSvgPlotFilename(null);
             setIsPlotReady(false);
         }
-    }, []);
+        // When simulation ends, reset the replay controls
+        handleRewindReplay();
+    }, [activeSim, handleRewindReplay]);
 
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null);
@@ -206,7 +221,7 @@ export const useAppLogic = () => {
                     }
                     else if (data?.filetype === 'jardesignerDataFrame') {
                         frameQueueRef.current.push(data);
-                        setSimulationFrames(prev => [...prev, data]);
+                        setSimulationFrames(prev => [...prev, data].sort((a, b) => a.timestamp - b.timestamp));
                         setLiveFrameData(data);
                     } else if (data?.type === 'sim_end') handleSimulationEnded();
                 });
@@ -235,19 +250,17 @@ export const useAppLogic = () => {
                 source: filename
             }
         });
-        // The transientSwcData state was removed as it was unused.
     }, [updateJsonData]);
 
     const handleStartRun = useCallback((runParams) => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
         frameQueueRef.current = [];
         setSimulationFrames([]);
-        setReplayFrameIndex(0);
-        setIsReplaying(false);
+        handleRewindReplay(); // Reset replay state
         setIsSimulating(true);
         setThreeDConfig(null);
         socketRef.current.emit('sim_command', { command: 'start', pid: activeSim.pid, params: { runtime: runParams.runtime } });
-    }, [activeSim.pid]);
+    }, [activeSim.pid, handleRewindReplay]);
 
     const handleResetRun = useCallback(async () => {
         setIsSimulating(false);
@@ -255,90 +268,6 @@ export const useAppLogic = () => {
             await buildModelOnServer(compactJsonData(jsonData, initialJsonData));
         }
     }, [activeSim.pid, jsonData, buildModelOnServer]);
-
-    const handleReplayEnd = useCallback(() => {
-        setIsReplaying(false);
-        if (svgPlotFilename) setIsPlotReady(true);
-    }, [svgPlotFilename]);
-
-    const handleStartReplay = useCallback(() => {
-        if (simulationFrames.length === 0) return;
-        // Ensure frames are in timestamp order
-        setSimulationFrames(prev => [...prev].sort((a, b) => a.timestamp - b.timestamp));
-        setIsPlotReady(false);
-        setIsReplaying(true);
-        setReplayFrameIndex(0);
-        replaySimTimeRef.current = 0; // Reset the clock
-        setReplayTime(0);
-    }, [simulationFrames.length]);
-
-    const handleStopReplay = useCallback(() => handleReplayEnd(), [handleReplayEnd]);
-
-    const minVisibleDt = useMemo(() => {
-        if (!threeDConfig?.drawables) return 0.001;
-        let minDt = Infinity;
-        threeDConfig.drawables.forEach(d => {
-            const dtNum = parseFloat(d.dt);
-            if (drawableVisibility[d.groupId] && !isNaN(dtNum) && dtNum < minDt) {
-                minDt = dtNum;
-            }
-        });
-        return minDt === Infinity ? 0.001 : minDt;
-    }, [threeDConfig, drawableVisibility]);
-
-    const replayFrameIndexRef = useRef(0);
-    useEffect(() => {
-        replayFrameIndexRef.current = replayFrameIndex;
-    }, [replayFrameIndex]);
-
-    useEffect(() => {
-        if (isReplaying) {
-            replayTimerRef.current = setInterval(() => {
-                const totalRuntime = jsonData.runtime || 0.3;
-                const prevSimTime = replaySimTimeRef.current;
-
-                if (prevSimTime >= totalRuntime) {
-                    handleReplayEnd();
-                    return;
-                }
-
-                const timeStep = Math.max(minVisibleDt, 1e-9); 
-                const nextSimTime = prevSimTime + timeStep;
-                replaySimTimeRef.current = nextSimTime; // Advance the clock
-                setReplayTime(nextSimTime);
-
-                const lastRenderedIndex = replayFrameIndexRef.current;
-                let nextFrameIndexToRender = lastRenderedIndex;
-
-                for (let i = lastRenderedIndex + 1; i < simulationFrames.length; i++) {
-                    const frame = simulationFrames[i];
-                    if (frame.timestamp <= nextSimTime) {
-                        if (threeDManagerRef.current && drawableVisibility[frame.groupId]) {
-                            threeDManagerRef.current.updateSceneData(frame);
-                        }
-                        nextFrameIndexToRender = i;
-                    } else {
-                        break;
-                    }
-                }
-                
-                if (nextFrameIndexToRender >= simulationFrames.length - 1) {
-                     setReplayFrameIndex(simulationFrames.length - 1);
-                     handleReplayEnd();
-                     return;
-                }
-                
-                if (nextFrameIndexToRender !== lastRenderedIndex) {
-                    setReplayFrameIndex(nextFrameIndexToRender);
-                }
-                
-            }, replayInterval);
-        } else {
-            clearInterval(replayTimerRef.current);
-        }
-        return () => clearInterval(replayTimerRef.current);
-    }, [isReplaying, replayInterval, simulationFrames, handleReplayEnd, drawableVisibility, minVisibleDt, jsonData.runtime]);
-
 
     const handleSelectionChange = useCallback((selection, isCtrlClick) => {
         setClickSelected(prev => {
@@ -387,13 +316,19 @@ export const useAppLogic = () => {
     return {
         activeMenu, toggleMenu, jsonData, jsonContent, threeDConfig, svgPlotFilename,
         isPlotReady, plotError, isSimulating, clickSelected, activeSim, liveFrameData,
-        simulationFrames, isReplaying, replayFrameIndex, replayInterval, onManagerReady,
-        setReplayInterval, handleStartReplay, handleStopReplay, handleSelectionChange,
+        // Pass down replay state and handlers from the hook
+        simulationFrames, isReplaying, replayFrameIndex: -1, /* Not used directly anymore */
+        replayInterval, onManagerReady,
+        setReplayInterval, handleStartReplay, handlePauseReplay, handleSelectionChange,
         updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
         getCurrentJsonData, getChemProtos, setActiveMenu,
         handleMorphologyFileChange,
         drawableVisibility, setDrawableVisibility,
         replayTime,
+        totalRuntime,
+        handleRewindReplay,
+        handleSeekReplay,
+        // handleStopReplay is now handlePauseReplay
+        handleStopReplay: handlePauseReplay,
     };
 };
-

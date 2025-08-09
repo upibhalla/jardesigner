@@ -26,95 +26,140 @@ import ThreeDMenuBox from './components/MenuBoxes/ThreeDMenuBox';
 import StimMenuBox from './components/MenuBoxes/StimMenuBox';
 import DisplayWindow from './components/DisplayWindow';
 import schema from './schema.json';
+import { ReplayContext } from './components/ReplayContext'; // Import the context
 
 export const AppLayout = (props) => {
-    const {
-        activeMenu, toggleMenu, jsonData, jsonContent, threeDConfig, svgPlotFilename,
-        isPlotReady, plotError, isSimulating, clickSelected, activeSim, liveFrameData,
-        simulationFrames, isReplaying, replayFrameIndex, replayInterval, onManagerReady,
-        setReplayInterval, handleStartReplay, handleStopReplay, handleSelectionChange,
-        updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
-        getCurrentJsonData, getChemProtos, setActiveMenu,
-        handleMorphologyFileChange,
-        // --- NEW: Destructure visibility props ---
-        drawableVisibility, setDrawableVisibility,
-        replayTime,
-    } = props;
+  const {
+    activeMenu, toggleMenu, jsonData, jsonContent, threeDConfig, svgPlotFilename,
+    isPlotReady, plotError, isSimulating, clickSelected, activeSim, liveFrameData,
+    simulationFrames, isReplaying, replayFrameIndex, replayInterval, onManagerReady,
+    setReplayInterval, handleStartReplay, handleStopReplay, handleSelectionChange,
+    updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
+    getCurrentJsonData, getChemProtos, setActiveMenu,
+    handleMorphologyFileChange,
+    drawableVisibility, setDrawableVisibility,
+    replayTime, // This prop is now used for the context provider
+    totalRuntime,
+    handlePauseReplay,
+    handleRewindReplay,
+    handleSeekReplay,
+  } = props;
 
-    const menuComponents = useMemo(() => ({
-        File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
-        SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
-        Run: <RunMenuBox
-               onConfigurationChange={updateJsonData}
-               currentConfig={{...jsonData}}
-               onStartRun={handleStartRun}
-               onResetRun={handleResetRun}
-               isSimulating={isSimulating}
-               activeSimPid={activeSim.pid}
-               liveFrameData={liveFrameData}
-               isReplaying={isReplaying}
-             />,
-        Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
-        Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
-        Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
-        Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
-        Signaling: <ChemMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} getChemProtos={getChemProtos} />,
-        Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
-        Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
-        Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
-        '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
-    }), [jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos, handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying, handleMorphologyFileChange]);
+  const menuComponents = useMemo(() => ({
+    File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
+    SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
+    Run: <RunMenuBox
+      onConfigurationChange={updateJsonData}
+      currentConfig={{ ...jsonData }}
+      onStartRun={handleStartRun}
+      onResetRun={handleResetRun}
+      isSimulating={isSimulating}
+      activeSimPid={activeSim.pid}
+      liveFrameData={liveFrameData}
+      isReplaying={isReplaying}
+    />,
+    Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
+    Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
+    Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
+    Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
+    Signaling: <ChemMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} getChemProtos={getChemProtos} />,
+    Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
+    Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
+    Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
+    '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
+  }), [
+    jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,
+    handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying,
+    handleMorphologyFileChange
+  ]);
 
-    return (
-        <>
-            <AppBar position="static">
-                <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-                    <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} > <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} > <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} > <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} > <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} > <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} /> Channels </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} > <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} /> Passive </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} > <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} /> Signaling </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} > <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} /> Adaptors </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} > <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} /> Stimuli </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} > <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} /> Plots </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} > <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} /> 3D </Button>
-                    <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} > <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} /> Sim Output </Button>
-                </Toolbar>
-            </AppBar>
-            <Grid container spacing={2} style={{ padding: '16px', height: 'calc(100vh - 64px)' }}>
-                <Grid item xs={4} style={{ height: '100%' }}>
-                    {activeMenu && menuComponents[activeMenu]}
-                </Grid>
-                <Grid item xs={8} style={{ height: '100%' }}>
-                    <DisplayWindow
-                        jsonString={jsonContent}
-                        schema={schema}
-                        setActiveMenu={setActiveMenu}
-                        svgPlotFilename={svgPlotFilename}
-                        isPlotReady={isPlotReady}
-                        plotError={plotError}
-                        isSimulating={isSimulating}
-                        threeDConfig={threeDConfig}
-                        clickSelected={clickSelected}
-                        onSelectionChange={handleSelectionChange}
-                        onManagerReady={onManagerReady}
-                        isReplaying={isReplaying}
-                        simulationFrames={simulationFrames}
-                        replayFrameIndex={replayFrameIndex}
-                        replayInterval={replayInterval}
-                        setReplayInterval={setReplayInterval}
-                        onStartReplay={handleStartReplay}
-                        onStopReplay={handleStopReplay}
-                        // --- NEW: Pass visibility props to DisplayWindow ---
-                        drawableVisibility={drawableVisibility}
-                        setDrawableVisibility={setDrawableVisibility}
-                        replayTime={replayTime}
-                    />
-                </Grid>
-            </Grid>
-        </>
-    );
+  return (
+    <ReplayContext.Provider value={{ replayTime }}>
+      <AppBar position="static">
+        <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
+          <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} >
+            <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            File
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} >
+            <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Run
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} >
+            <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Morphology
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} >
+            <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Spines
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} >
+            <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Channels
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} >
+            <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Passive
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} >
+            <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Signaling
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} >
+            <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Adaptors
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} >
+            <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Stimuli
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} >
+            <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Plots
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} >
+            <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            3D
+          </Button>
+          <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} >
+            <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} />
+            Sim Output
+          </Button>
+        </Toolbar>
+      </AppBar>
+
+      <Grid container spacing={2} style={{ padding: '16px', height: 'calc(100vh - 64px)' }}>
+        <Grid item xs={4} style={{ height: '100%' }}>
+          {activeMenu && menuComponents[activeMenu]}
+        </Grid>
+        <Grid item xs={8} style={{ height: '100%' }}>
+          <DisplayWindow
+            jsonString={jsonContent}
+            schema={schema}
+            setActiveMenu={setActiveMenu}
+            svgPlotFilename={svgPlotFilename}
+            isPlotReady={isPlotReady}
+            plotError={plotError}
+            isSimulating={isSimulating}
+            threeDConfig={threeDConfig}
+            clickSelected={clickSelected}
+            onSelectionChange={handleSelectionChange}
+            onManagerReady={onManagerReady}
+            isReplaying={isReplaying}
+            simulationFrames={simulationFrames}
+            replayInterval={replayInterval}
+            setReplayInterval={setReplayInterval}
+            onStartReplay={handleStartReplay}
+            onStopReplay={handleStopReplay}
+            drawableVisibility={drawableVisibility}
+            setDrawableVisibility={setDrawableVisibility}
+            totalRuntime={totalRuntime}
+            handlePauseReplay={handlePauseReplay}
+            handleRewindReplay={handleRewindReplay}
+            handleSeekReplay={handleSeekReplay}
+          />
+        </Grid>
+      </Grid>
+    </ReplayContext.Provider>
+  );
 };
-

@@ -1,10 +1,9 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { Box, Button, Typography, Slider, TextField, Tooltip, FormControlLabel, Checkbox } from '@mui/material';
+import React, { useRef, useEffect, useMemo, useState, memo } from 'react';
+import { Box, Button, Typography, TextField, FormControlLabel, Checkbox } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import ReplayIcon from '@mui/icons-material/Replay';
-import StopIcon from '@mui/icons-material/Stop';
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
+import ReplayControls from './ReplayControls'; // Import the new component
 
 const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
     const gradient = useMemo(() => {
@@ -44,34 +43,28 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
     );
 };
 
-const ThreeDViewer = ({
+// All replay props are now passed directly to ReplayControls via {...props}
+const ThreeDViewer = (props) => {
+  const {
     isSimulating,
     threeDConfig,
     setActiveMenu,
     clickSelected,
     onSelectionChange,
     onManagerReady,
-    isReplaying,
     simulationFrames,
-    replayFrameIndex,
-    replayInterval,
-    setReplayInterval,
-    onStartReplay,
-    onStopReplay,
     drawableVisibility,
     setDrawableVisibility,
-    replayTime,
-}) => {
+  } = props;
+
   const mountRef = useRef(null);
   const managerRef = useRef(null);
   const [colorRanges, setColorRanges] = useState({});
   const [displayConfig, setDisplayConfig] = useState(null);
-
-  const displayedReplayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
-  const showReplayControls = !isSimulating && simulationFrames.length > 0;
   
+  const showReplayControls = !isSimulating && simulationFrames.length > 0;
   const drawables = useMemo(() => threeDConfig?.drawables || [], [threeDConfig]);
-
+  
   const activeDrawable = useMemo(() => {
     return drawables.find(d => drawableVisibility[d.groupId]);
   }, [drawables, drawableVisibility]);
@@ -97,18 +90,21 @@ const ThreeDViewer = ({
     if (managerRef.current && threeDConfig) {
       managerRef.current.buildScene(threeDConfig);
       
+      const initialVisibility = {};
       const initialColorRanges = {};
       (threeDConfig?.drawables || []).forEach(d => {
+          initialVisibility[d.groupId] = true;
           initialColorRanges[d.groupId] = {
               vmin: d.vmin?.toString() || '0',
               vmax: d.vmax?.toString() || '0'
           };
       });
+      setDrawableVisibility(initialVisibility);
       setColorRanges(initialColorRanges);
       
       setDisplayConfig(threeDConfig);
     }
-  }, [threeDConfig]);
+  }, [threeDConfig, setDrawableVisibility]);
 
   useEffect(() => {
     if (managerRef.current) {
@@ -216,31 +212,9 @@ const ThreeDViewer = ({
                         </>
                     )}
                 </Box>
-
-                {showReplayControls && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Button variant="outlined" size="small" onClick={isReplaying ? onStopReplay : onStartReplay} startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}>
-                            {isReplaying ? 'Stop' : 'Replay'}
-                        </Button>
-                        <TextField size="small" label="Replay Time (s)" value={displayedReplayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
-                        <Box sx={{ width: '250px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Speed</Typography>
-                            <Tooltip title="Playback Speed (Slower -> Faster)">
-                                 <Slider
-                                    value={replayInterval}
-                                    onChange={(e, newValue) => setReplayInterval(newValue)}
-                                    aria-labelledby="replay-speed-slider"
-                                    valueLabelDisplay="off" min={5} max={500} step={5} inverted
-                                />
-                            </Tooltip>
-                            <Box sx={{ minWidth: '55px', textAlign: 'center', border: '1px solid #ccc', borderRadius: '4px', p: '4px' }}>
-                                 <Typography variant="caption">{replayInterval}ms</Typography>
-                            </Box>
-                        </Box>
-                    </Box>
-                )}
+                {/* The replay controls are now isolated and receive all needed props */}
+                {showReplayControls && <ReplayControls {...props} />}
             </Box>
-            {/* --- MODIFIED: Show checkboxes if there is at least one drawable --- */}
             {drawables.length > 0 && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1 }}>
                      <Typography variant="body2" sx={{fontWeight: 'bold'}}>Visible:</Typography>
@@ -263,7 +237,7 @@ const ThreeDViewer = ({
 
         <Box sx={{ position: 'relative', flexGrow: 1 }}>
             <Box ref={mountRef} sx={{ height: '100%', width: '100%', background: '#FFFFFF' }} />
-            {(isSimulating || isReplaying) && activeDrawable && (
+            {((isSimulating || simulationFrames.length > 0) && activeDrawable) && (
                 <ColorBar
                     displayConfig={displayConfig} 
                     entityConfig={activeDrawable}
@@ -275,5 +249,4 @@ const ThreeDViewer = ({
   );
 };
 
-export default ThreeDViewer;
-
+export default memo(ThreeDViewer);

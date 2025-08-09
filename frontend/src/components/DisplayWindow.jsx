@@ -19,15 +19,16 @@ const DisplayWindow = ({
   onManagerReady,
   isReplaying,
   simulationFrames,
-  replayFrameIndex,
   replayInterval,
   setReplayInterval,
   onStartReplay,
   onStopReplay,
-  // --- ADDED: Receive visibility props to pass down ---
   drawableVisibility,
   setDrawableVisibility,
-  replayTime,
+  totalRuntime,
+  handlePauseReplay,
+  handleRewindReplay,
+  handleSeekReplay,
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -53,10 +54,7 @@ const DisplayWindow = ({
 
       {/* JSON Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
-        <JsonText
-          jsonString={jsonString}
-          setActiveMenu={setActiveMenu}
-        />
+        <JsonText jsonString={jsonString} setActiveMenu={setActiveMenu} />
       </Box>
 
       {/* Markdown Panel */}
@@ -67,23 +65,24 @@ const DisplayWindow = ({
       {/* 3D Viewer Panel */}
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>
         <ThreeDViewer
-            isSimulating={isSimulating}
-            threeDConfig={threeDConfig}
-            setActiveMenu={setActiveMenu}
-            clickSelected={clickSelected}
-            onSelectionChange={onSelectionChange}
-            onManagerReady={onManagerReady}
-            isReplaying={isReplaying}
-            simulationFrames={simulationFrames}
-            replayFrameIndex={replayFrameIndex}
-            replayInterval={replayInterval}
-            setReplayInterval={setReplayInterval}
-            onStartReplay={onStartReplay}
-            onStopReplay={onStopReplay}
-            // --- ADDED: Pass visibility props to the viewer ---
-            drawableVisibility={drawableVisibility}
-            setDrawableVisibility={setDrawableVisibility}
-            replayTime={replayTime}
+          isSimulating={isSimulating}
+          threeDConfig={threeDConfig}
+          setActiveMenu={setActiveMenu}
+          clickSelected={clickSelected}
+          onSelectionChange={onSelectionChange}
+          onManagerReady={onManagerReady}
+          isReplaying={isReplaying}
+          simulationFrames={simulationFrames}
+          replayInterval={replayInterval}
+          setReplayInterval={setReplayInterval}
+          onStartReplay={onStartReplay}
+          onStopReplay={onStopReplay}
+          drawableVisibility={drawableVisibility}
+          setDrawableVisibility={setDrawableVisibility}
+          totalRuntime={totalRuntime}
+          onPauseReplay={handlePauseReplay}
+          onRewindReplay={handleRewindReplay}
+          onSeekReplay={handleSeekReplay}
         />
       </Box>
     </Box>
