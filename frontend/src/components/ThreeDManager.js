@@ -60,8 +60,6 @@ export default class ThreeDManager {
     this.boundingBox.makeEmpty();
 
     config.drawables.forEach(entity => {
-      // The noisy console.log has been removed from here.
-
       this.entityConfigs.set(entity.groupId, {
           title: entity.title,
           vmin: entity.vmin,
@@ -100,7 +98,13 @@ export default class ThreeDManager {
             mesh.position.copy(start).add(direction.multiplyScalar(0.5));
         }
         if (mesh) {
-            mesh.userData = { entityName: entity.groupId, shapeIndex: i, originalValue: primitive.value };
+            mesh.userData = { 
+                entityName: entity.groupId, 
+                shapeIndex: i, 
+                originalValue: primitive.value,
+                // Store the original position for the explode feature
+                originalPosition: mesh.position.clone(),
+            };
             
             if (mesh.geometry.type === 'SphereGeometry') {
                 mesh.scale.set(initialScale, initialScale, initialScale);
@@ -116,6 +120,33 @@ export default class ThreeDManager {
     });
     this.focusCamera();
     setTimeout(() => this.onWindowResize(), 0);
+  }
+
+  // New method to apply the exploded view
+  applyExplodeView(isExploded, offset, drawableOrder) {
+    if (this.sceneMeshes.length === 0) return;
+
+    const offsetVector = new THREE.Vector3(
+        parseFloat(offset.x) || 0,
+        parseFloat(offset.y) || 0,
+        parseFloat(offset.z) || 0
+    );
+
+    this.sceneMeshes.forEach(mesh => {
+        if (!mesh.userData.originalPosition) return;
+
+        if (!isExploded) {
+            // If not exploded, reset to original position
+            mesh.position.copy(mesh.userData.originalPosition);
+        } else {
+            // If exploded, find the drawable's index and apply the cumulative offset
+            const drawableIndex = drawableOrder.indexOf(mesh.userData.entityName);
+            if (drawableIndex !== -1) {
+                const cumulativeOffset = offsetVector.clone().multiplyScalar(drawableIndex);
+                mesh.position.copy(mesh.userData.originalPosition).add(cumulativeOffset);
+            }
+        }
+    });
   }
 
   setDrawableVisibility(visibilityMap) {

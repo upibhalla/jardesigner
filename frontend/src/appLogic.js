@@ -2,9 +2,8 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { io } from "socket.io-client";
 import { v4 as uuidv4 } from 'uuid';
 import isEqual from 'lodash/isEqual';
-import { useReplayLogic } from './replayLogic'; // Import the new hook
+import { useReplayLogic } from './replayLogic';
 
-// --- (initial state and other helper functions remain the same) ---
 const initialJsonData = {
   filetype: "jardesigner",
   version: "1.0",
@@ -104,6 +103,10 @@ export const useAppLogic = () => {
     const [replayInterval, setReplayInterval] = useState(100);
     const totalRuntime = useMemo(() => jsonData.runtime || 0.3, [jsonData.runtime]);
     const [drawableVisibility, setDrawableVisibility] = useState({});
+    
+    // State for the new Explode feature with updated default
+    const [isExploded, setIsExploded] = useState(false);
+    const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0.00005, z: 0 });
 
     const onManagerReady = useCallback((manager) => {
         threeDManagerRef.current = manager;
@@ -113,7 +116,6 @@ export const useAppLogic = () => {
         if (svgPlotFilename) setIsPlotReady(true);
     }, [svgPlotFilename]);
     
-    // All replay logic is now managed by the custom hook.
     const {
         replayTime,
         isReplaying,
@@ -130,6 +132,21 @@ export const useAppLogic = () => {
         threeDManagerRef,
         onReplayEnd: handleReplayEnd
     });
+    
+    useEffect(() => {
+        if (threeDManagerRef.current && threeDConfig?.drawables) {
+            const drawableOrder = threeDConfig.drawables.map(d => d.groupId);
+            threeDManagerRef.current.applyExplodeView(isExploded, explodeOffset, drawableOrder);
+        }
+    }, [isExploded, explodeOffset, threeDConfig]);
+
+    const handleExplodeToggle = useCallback(() => {
+        setIsExploded(prev => !prev);
+    }, []);
+
+    const handleExplodeOffsetChange = useCallback((axis, value) => {
+        setExplodeOffset(prev => ({ ...prev, [axis]: value }));
+    }, []);
 
     useEffect(() => {
         const processQueue = () => {
@@ -148,7 +165,6 @@ export const useAppLogic = () => {
     const handleSimulationEnded = useCallback(() => {
         setIsSimulating(false);
         frameQueueRef.current = [];
-        // FIX: Use activeSim state variable directly, not the removed activeSimRef
         const currentFilename = activeSim.svg_filename;
         if (currentFilename) {
             setSvgPlotFilename(currentFilename);
@@ -159,7 +175,6 @@ export const useAppLogic = () => {
             setSvgPlotFilename(null);
             setIsPlotReady(false);
         }
-        // When simulation ends, reset the replay controls
         handleRewindReplay();
     }, [activeSim, handleRewindReplay]);
 
@@ -167,6 +182,8 @@ export const useAppLogic = () => {
         setSvgPlotFilename(null);
         setIsPlotReady(false);
         setPlotError('');
+        setSimulationFrames([]);
+        handleRewindReplay();
 
         if (activeSim.pid) {
             try {
@@ -233,7 +250,7 @@ export const useAppLogic = () => {
             console.error("Error during model build:", err);
             setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
         }
-    }, [activeSim.pid, clientId, handleSimulationEnded]);
+    }, [activeSim.pid, clientId, handleSimulationEnded, handleRewindReplay]);
 
     const updateJsonData = useCallback((newDataPart) => {
         const updatedData = { ...initialJsonData, ...jsonData, ...newDataPart };
@@ -256,7 +273,7 @@ export const useAppLogic = () => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
         frameQueueRef.current = [];
         setSimulationFrames([]);
-        handleRewindReplay(); // Reset replay state
+        handleRewindReplay(); 
         setIsSimulating(true);
         setThreeDConfig(null);
         socketRef.current.emit('sim_command', { command: 'start', pid: activeSim.pid, params: { runtime: runParams.runtime } });
@@ -316,9 +333,7 @@ export const useAppLogic = () => {
     return {
         activeMenu, toggleMenu, jsonData, jsonContent, threeDConfig, svgPlotFilename,
         isPlotReady, plotError, isSimulating, clickSelected, activeSim, liveFrameData,
-        // Pass down replay state and handlers from the hook
-        simulationFrames, isReplaying, replayFrameIndex: -1, /* Not used directly anymore */
-        replayInterval, onManagerReady,
+        simulationFrames, isReplaying, replayInterval, onManagerReady,
         setReplayInterval, handleStartReplay, handlePauseReplay, handleSelectionChange,
         updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
         getCurrentJsonData, getChemProtos, setActiveMenu,
@@ -328,7 +343,10 @@ export const useAppLogic = () => {
         totalRuntime,
         handleRewindReplay,
         handleSeekReplay,
-        // handleStopReplay is now handlePauseReplay
         handleStopReplay: handlePauseReplay,
+        isExploded,
+        explodeOffset,
+        handleExplodeToggle,
+        handleExplodeOffsetChange,
     };
 };

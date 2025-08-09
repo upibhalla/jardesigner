@@ -6,7 +6,7 @@ import MarkdownText from './MarkdownText';
 import ThreeDViewer from './ThreeDViewer';
 
 const DisplayWindow = ({
-  jsonString,
+  jsonContent,
   schema,
   setActiveMenu,
   svgPlotFilename,
@@ -23,12 +23,16 @@ const DisplayWindow = ({
   setReplayInterval,
   onStartReplay,
   onStopReplay,
-  drawableVisibility,
-  setDrawableVisibility,
-  totalRuntime,
   handlePauseReplay,
   handleRewindReplay,
   handleSeekReplay,
+  drawableVisibility,
+  setDrawableVisibility,
+  totalRuntime,
+  isExploded,
+  explodeOffset,
+  handleExplodeToggle,
+  handleExplodeOffsetChange,
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -47,22 +51,18 @@ const DisplayWindow = ({
         </Tabs>
       </Box>
 
-      {/* Graph Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1, display: tabIndex === 0 ? 'flex' : 'none' }}>
         <GraphWindow svgPlotFilename={svgPlotFilename} isPlotReady={isPlotReady} plotError={plotError} />
       </Box>
 
-      {/* JSON Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
-        <JsonText jsonString={jsonString} setActiveMenu={setActiveMenu} />
+        <JsonText jsonString={jsonContent} setActiveMenu={setActiveMenu} />
       </Box>
 
-      {/* Markdown Panel */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 2 ? 'block' : 'none' }}>
         <MarkdownText />
       </Box>
 
-      {/* 3D Viewer Panel */}
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>
         <ThreeDViewer
           isSimulating={isSimulating}
@@ -77,12 +77,16 @@ const DisplayWindow = ({
           setReplayInterval={setReplayInterval}
           onStartReplay={onStartReplay}
           onStopReplay={onStopReplay}
-          drawableVisibility={drawableVisibility}
-          setDrawableVisibility={setDrawableVisibility}
-          totalRuntime={totalRuntime}
           onPauseReplay={handlePauseReplay}
           onRewindReplay={handleRewindReplay}
           onSeekReplay={handleSeekReplay}
+          drawableVisibility={drawableVisibility}
+          setDrawableVisibility={setDrawableVisibility}
+          totalRuntime={totalRuntime}
+          isExploded={isExploded}
+          explodeOffset={explodeOffset}
+          onExplodeToggle={handleExplodeToggle}
+          onExplodeOffsetChange={handleExplodeOffsetChange}
         />
       </Box>
     </Box>
@@ -90,4 +94,3 @@ const DisplayWindow = ({
 };
 
 export default DisplayWindow;
-

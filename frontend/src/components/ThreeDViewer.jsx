@@ -3,7 +3,8 @@ import { Box, Button, Typography, TextField, FormControlLabel, Checkbox } from '
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
-import ReplayControls from './ReplayControls'; // Import the new component
+import ReplayControls from './ReplayControls';
+import ExplodeControls from './ExplodeControls'; // Import the new component
 
 const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
     const gradient = useMemo(() => {
@@ -43,7 +44,6 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
     );
 };
 
-// All replay props are now passed directly to ReplayControls via {...props}
 const ThreeDViewer = (props) => {
   const {
     isSimulating,
@@ -55,6 +55,11 @@ const ThreeDViewer = (props) => {
     simulationFrames,
     drawableVisibility,
     setDrawableVisibility,
+    // Explode props
+    isExploded,
+    onExplodeToggle,
+    explodeOffset,
+    onExplodeOffsetChange,
   } = props;
 
   const mountRef = useRef(null);
@@ -186,7 +191,9 @@ const ThreeDViewer = (props) => {
 
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0 }}>
+        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            
+            {/* Line 1: Main Controls and Replay */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Button variant="contained" onClick={handleUpdateClick} startIcon={<AutoAwesomeIcon />}>
@@ -212,11 +219,12 @@ const ThreeDViewer = (props) => {
                         </>
                     )}
                 </Box>
-                {/* The replay controls are now isolated and receive all needed props */}
                 {showReplayControls && <ReplayControls {...props} />}
             </Box>
+
+            {/* Line 2: Visibility Controls */}
             {drawables.length > 0 && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1, borderTop: '1px solid #ddd', mt: 1 }}>
                      <Typography variant="body2" sx={{fontWeight: 'bold'}}>Visible:</Typography>
                     {drawables.map(d => (
                         <FormControlLabel
@@ -231,6 +239,18 @@ const ThreeDViewer = (props) => {
                             label={<Typography variant="body2">{d.title || d.groupId}</Typography>}
                         />
                     ))}
+                </Box>
+            )}
+
+            {/* Line 3: Explode Controls */}
+            {drawables.length > 0 && (
+                <Box sx={{ borderTop: '1px solid #ddd' }}>
+                    <ExplodeControls 
+                        isExploded={isExploded}
+                        onExplodeToggle={onExplodeToggle}
+                        explodeOffset={explodeOffset}
+                        onExplodeOffsetChange={onExplodeOffsetChange}
+                    />
                 </Box>
             )}
         </Box>

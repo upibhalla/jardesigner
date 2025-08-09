@@ -313,8 +313,7 @@ class MooView:
         if idx >= len(self.drawables):
             return
         simTime = moose.element( '/clock' ).currentTime
-        # This print statement was removed in the previous turn but is being re-added for clarity in the final file
-        print( "called updateMoogliViewer for {} at {:.3f}".format( idx, simTime ) )
+        #print( "called updateMoogliViewer for {} at {:.3f}".format( idx, simTime ) )
         self.updateValues( simTime, idx )
 
     def sendSceneGraph( self ):
