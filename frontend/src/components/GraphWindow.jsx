@@ -1,14 +1,13 @@
-import React from 'react';
+import React, { memo } from 'react'; // Import 'memo'
 import { Box, Typography, Card, CardMedia, CardContent, Button, Alert } from '@mui/material';
 
-const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
+// The component is now wrapped in memo to prevent unnecessary re-renders.
+const GraphWindow = memo(({ svgPlotFilename, isPlotReady, plotError }) => {
   return (
-    // MODIFIED: Removed padding, background, and borderRadius to fit nicely in a tab panel.
-    // The parent (DisplayWindow) now controls the padding.
     <Box
       style={{
         height: '100%',
-        width: '100%', // Ensure it fills the parent tab panel
+        width: '100%',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -23,7 +22,6 @@ const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
         </Alert>
       )}
 
-      {/* Container for the plot or placeholder message */}
       <Box
         sx={{
           flexGrow: 1,
@@ -49,7 +47,7 @@ const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
             <CardMedia
               component="img"
               alt="Simulation Plot"
-              image={`/api/plots/${svgPlotFilename}?t=${new Date().getTime()}`} // Cache buster
+              image={`${svgPlotFilename}?t=${new Date().getTime()}`} // Cache buster
               sx={{
                 objectFit: 'contain',
                 maxWidth: '100%',
@@ -66,8 +64,8 @@ const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
               <Button
                 variant="outlined"
                 size="small"
-                href={`/api/plots/${svgPlotFilename}`}
-                download={svgPlotFilename}
+                href={svgPlotFilename}
+                download={'plot.svg'}
                 target="_blank"
               >
                 Download SVG
@@ -84,6 +82,6 @@ const GraphWindow = ({ svgPlotFilename, isPlotReady, plotError }) => {
       </Box>
     </Box>
   );
-};
+});
 
 export default GraphWindow;

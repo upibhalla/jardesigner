@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Box, Tabs, Tab } from '@mui/material';
 import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
 import MarkdownText from './MarkdownText';
 import ThreeDViewer from './ThreeDViewer';
+
+// Create memoized versions of the static panel components.
+// This prevents them from re-rendering unnecessarily.
+const MemoizedGraphWindow = memo(GraphWindow);
+const MemoizedJsonText = memo(JsonText);
+const MemoizedMarkdownText = memo(MarkdownText);
 
 const DisplayWindow = ({
   jsonContent,
@@ -52,15 +58,15 @@ const DisplayWindow = ({
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1, display: tabIndex === 0 ? 'flex' : 'none' }}>
-        <GraphWindow svgPlotFilename={svgPlotFilename} isPlotReady={isPlotReady} plotError={plotError} />
+        <MemoizedGraphWindow svgPlotFilename={svgPlotFilename} isPlotReady={isPlotReady} plotError={plotError} />
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>
-        <JsonText jsonString={jsonContent} setActiveMenu={setActiveMenu} />
+        <MemoizedJsonText jsonString={jsonContent} setActiveMenu={setActiveMenu} />
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 2 ? 'block' : 'none' }}>
-        <MarkdownText />
+        <MemoizedMarkdownText />
       </Box>
 
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>

@@ -186,11 +186,12 @@ class rdesigneur:
     """
     ################################################################
     def __init__(self, jsonFile = None, plotFile = None, jsonData = None,
-            verbose = False, dataChannelId = None):
+            verbose = False, dataChannelId = None, sessionDir = None):
         schemaFile = "jardesignerSchema.json"
         self.verbose = verbose
-        self.dataChannelId = dataChannelId
-        self.runMooView = None # Used for runtime display
+        self.dataChannelId = dataChannelId # Used for server-mode jardes
+        self.sessionDir = sessionDir # Used for server-mode jardes
+        self.runMooView = None      # Used for runtime display
         self.setupMooView = None    # Used to see model during construction
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -206,6 +207,7 @@ class rdesigneur:
             if not (plotFile.endswith(".svg") or plotFile.endswith(".png") ):
                 print(f"Plot file '{plotFile}' should be svg or png.")
                 quit()
+        #self.plotFile = plotFile if sessionDir == None else sessionDir + "/" + plotFile
         self.plotFile = plotFile
         with open(schemaFile_path) as f:
             try:
@@ -215,6 +217,7 @@ class rdesigneur:
                 print( e )
                 quit()
         if jsonFile:
+            #jf = jsonFile if sessionDir == None else sessionDir + "/"+jsonFile
             with open(jsonFile) as f:
                 try:
                     data = json.load(f)
@@ -1969,9 +1972,12 @@ def main():
     parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
     parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
     parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface.')
+    parser.add_argument('--session-path', type=str, help='Temp directory for model and plot files, used in server mode for jardesigner interface.')
     args = parser.parse_args()
-    rdes = rdesigneur( args.file, plotFile = args.plotFile, jsonData = None, 
-        dataChannelId = args.data_channel_id, verbose = args.verbose )
+    rdes = rdesigneur( args.file, plotFile = args.plotFile, 
+        jsonData = None, dataChannelId = args.data_channel_id, 
+        sessionDir = args.session_path,
+        verbose = args.verbose )
     pf = None
     if args.placementFunc == "squareGrid":
         pf = squareGridPlacementFunc

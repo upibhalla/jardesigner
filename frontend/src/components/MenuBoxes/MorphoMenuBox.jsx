@@ -50,7 +50,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 });
 
 // --- The Main Component ---
-const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange }) => {
+const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, clientId }) => {
     const [tabIndex, setTabIndex] = useState(() => typeToIndexMap[currentConfig?.type] ?? 0);
 
     const [somaValues, setSomaValues] = useState(() =>
@@ -95,22 +95,41 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange }) =
     const handleTabChange = (event, newIndex) => setTabIndex(newIndex);
     const handleFileSelect = () => fileInputRef.current.click();
 
+    // This function now handles the file upload to the server.
     const handleFileChange = async (event) => {
         const file = event.target.files[0];
-        if (file && onFileChange) {
-            try {
-                const content = await file.text();
-                onFileChange({ filename: file.name, content });
-            } catch (error) {
-                console.error("Error reading file:", error);
-                alert("Failed to read the selected file.");
+        if (!file || !onFileChange || !clientId) return;
+
+        // 1. Create FormData to send the file and session ID.
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('clientId', clientId);
+
+        try {
+            // 2. POST the file to the server's upload endpoint.
+            const response = await fetch('http://localhost:5000/upload_file', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'File upload failed');
             }
+
+            // 3. On success, update the main app state with the original filename for portability.
+            onFileChange({ filename: file.name });
+            
+        } catch (error) {
+            console.error("Error uploading file:", error);
+            alert(`Failed to upload the selected file: ${error.message}`);
         }
     };
 
     useEffect(() => {
         const getMorphologyDataForUnmount = () => {
             const { tabIndex, somaValues, ballAndStickValues, yBranchValues } = stateRefs.current;
+            // Only process if a procedural morphology tab is active. File-based is handled separately.
             if (tabIndex === 0) return null;
 
             const type = indexToTypeMap[tabIndex];
@@ -171,14 +190,14 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange }) =
                 {tabIndex === 0 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>File-based Morphology</Typography>
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".swc" />
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".swc,.xml" />
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={handleFileSelect}>Select Morphology File...</Button>
                             <Tooltip title={helpText.fields.file.source} placement="right"><IconButton size="small"><InfoOutlinedIcon /></IconButton></Tooltip>
                         </Box>
                         {currentConfig.source && (
                             <Typography sx={{ mt: 1, fontStyle: 'italic' }}>
-                                Selected: {currentConfig.source}
+                                Active File: {currentConfig.source}
                             </Typography>
                         )}
                     </Box>

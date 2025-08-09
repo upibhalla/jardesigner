@@ -104,9 +104,10 @@ export const useAppLogic = () => {
     const totalRuntime = useMemo(() => jsonData.runtime || 0.3, [jsonData.runtime]);
     const [drawableVisibility, setDrawableVisibility] = useState({});
     
-    // State for the new Explode feature with updated default
     const [isExploded, setIsExploded] = useState(false);
     const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0.00005, z: 0 });
+    
+    const simulationEndedCallbackRef = useRef();
 
     const onManagerReady = useCallback((manager) => {
         threeDManagerRef.current = manager;
@@ -167,7 +168,10 @@ export const useAppLogic = () => {
         frameQueueRef.current = [];
         const currentFilename = activeSim.svg_filename;
         if (currentFilename) {
-            setSvgPlotFilename(currentFilename);
+            // This is the correct version that builds the FULL URL.
+            const plotUrl = `${API_BASE_URL}/session_file/${clientId}/${currentFilename}`;
+            console.log(`[CLIENT-SIDE LOG] Simulation ended. Setting plot filename for GraphWindow to: ${plotUrl}`);
+            setSvgPlotFilename(plotUrl);
             setIsPlotReady(true);
             setPlotError('');
         } else {
@@ -176,7 +180,55 @@ export const useAppLogic = () => {
             setIsPlotReady(false);
         }
         handleRewindReplay();
-    }, [activeSim, handleRewindReplay]);
+    }, [activeSim, handleRewindReplay, clientId]);
+
+    useEffect(() => {
+        simulationEndedCallbackRef.current = handleSimulationEnded;
+    }, [handleSimulationEnded]);
+
+    useEffect(() => {
+        if (!activeSim.data_channel_id) {
+            return;
+        }
+
+        const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+            socket.emit('register_client', { clientId: clientId });
+            socket.emit('join_sim_channel', { data_channel_id: activeSim.data_channel_id });
+        });
+
+        socket.on('simulation_data', (data) => {
+            if (data?.type === 'scene_init') {
+                setThreeDConfig(data.scene);
+                const initialVisibility = {};
+                (data.scene?.drawables || []).forEach(d => {
+                    initialVisibility[d.groupId] = true;
+                });
+                setDrawableVisibility(initialVisibility);
+            }
+            else if (data?.filetype === 'jardesignerDataFrame') {
+                frameQueueRef.current.push(data);
+                setSimulationFrames(prev => [...prev, data].sort((a, b) => a.timestamp - b.timestamp));
+                setLiveFrameData(data);
+            } 
+            else if (data?.type === 'sim_end') {
+                if (simulationEndedCallbackRef.current) {
+                    simulationEndedCallbackRef.current();
+                }
+            }
+        });
+
+        socket.on('disconnect', (reason) => console.log(`Socket.IO disconnected. Reason: "${reason}"`));
+
+        return () => {
+            socket.disconnect();
+            socketRef.current = null;
+        };
+
+    }, [activeSim.data_channel_id, clientId]);
+
 
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null);
@@ -185,23 +237,12 @@ export const useAppLogic = () => {
         setSimulationFrames([]);
         handleRewindReplay();
 
-        if (activeSim.pid) {
-            try {
-                await fetch(`${API_BASE_URL}/reset_simulation`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pid: activeSim.pid, client_id: clientId })
-                });
-            } catch (error) {
-                console.error("Failed to reset previous simulation:", error);
-            }
-        }
-
         if (socketRef.current) {
             socketRef.current.disconnect();
-            socketRef.current = null;
         }
 
+        setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
+        
         try {
             const payload = { config_data: newJsonData, client_id: clientId };
             const response = await fetch(`${API_BASE_URL}/launch_simulation`, {
@@ -220,29 +261,6 @@ export const useAppLogic = () => {
                     data_channel_id: result.data_channel_id,
                     svg_filename: result.svg_filename
                 });
-
-                const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
-                socketRef.current = socket;
-
-                socket.on('connect', () => {
-                    socket.emit('join_sim_channel', { data_channel_id: result.data_channel_id });
-                });
-                socket.on('simulation_data', (data) => {
-                    if (data?.type === 'scene_init') {
-                        setThreeDConfig(data.scene);
-                        const initialVisibility = {};
-                        (data.scene?.drawables || []).forEach(d => {
-                            initialVisibility[d.groupId] = true;
-                        });
-                        setDrawableVisibility(initialVisibility);
-                    }
-                    else if (data?.filetype === 'jardesignerDataFrame') {
-                        frameQueueRef.current.push(data);
-                        setSimulationFrames(prev => [...prev, data].sort((a, b) => a.timestamp - b.timestamp));
-                        setLiveFrameData(data);
-                    } else if (data?.type === 'sim_end') handleSimulationEnded();
-                });
-                socket.on('disconnect', (reason) => console.log(`Socket.IO disconnected. Reason: "${reason}"`));
             } else {
                 throw new Error(result.message || 'Failed to launch simulation');
             }
@@ -250,7 +268,7 @@ export const useAppLogic = () => {
             console.error("Error during model build:", err);
             setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
         }
-    }, [activeSim.pid, clientId, handleSimulationEnded, handleRewindReplay]);
+    }, [clientId, handleRewindReplay]);
 
     const updateJsonData = useCallback((newDataPart) => {
         const updatedData = { ...initialJsonData, ...jsonData, ...newDataPart };
@@ -260,7 +278,7 @@ export const useAppLogic = () => {
         buildModelOnServer(compactedData);
     }, [jsonData, buildModelOnServer]);
     
-    const handleMorphologyFileChange = useCallback(({ filename, content }) => {
+    const handleMorphologyFileChange = useCallback(({ filename }) => {
         updateJsonData({
             cellProto: {
                 type: 'file',
@@ -282,9 +300,18 @@ export const useAppLogic = () => {
     const handleResetRun = useCallback(async () => {
         setIsSimulating(false);
         if (activeSim.pid) {
-            await buildModelOnServer(compactJsonData(jsonData, initialJsonData));
+            try {
+                await fetch(`${API_BASE_URL}/reset_simulation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pid: activeSim.pid, client_id: clientId })
+                });
+                setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
+            } catch (error) {
+                console.error("Failed to reset previous simulation:", error);
+            }
         }
-    }, [activeSim.pid, jsonData, buildModelOnServer]);
+    }, [activeSim.pid, clientId]);
 
     const handleSelectionChange = useCallback((selection, isCtrlClick) => {
         setClickSelected(prev => {
@@ -304,7 +331,6 @@ export const useAppLogic = () => {
             const compacted = compactJsonData(mergedData, initialJsonData);
             setJsonData(mergedData);
             setJsonContent(JSON.stringify(compacted, null, 2));
-            setThreeDConfig(null);
             buildModelOnServer(compacted);
         } catch (e) {
             alert(`Failed to load model: ${e.message}`);
@@ -348,5 +374,6 @@ export const useAppLogic = () => {
         explodeOffset,
         handleExplodeToggle,
         handleExplodeOffsetChange,
+        clientId,
     };
 };
