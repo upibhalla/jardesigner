@@ -170,6 +170,7 @@ class DataWrapper:
             "vmax": self.vmax,
             "dt": self.dt,
             "transparency": self.transparency,
+            "diaScale": self.diaScale,
             "visible": self.visible,
             "shape": [ ss.toDict() for ss in self.segmentList ]
         }
@@ -179,6 +180,7 @@ class DataWrapper:
 
 class MooseNeuronDataWrapper( DataWrapper ):
     def __init__( self, compts, fdict, groupId ): 
+        fdict['transparency'] = fdict.get('transparency', 0.5)
         super().__init__(fdict, groupId )
         #self.neuronId_ = neuronId
         self.dummyObj = None
@@ -226,6 +228,7 @@ class MooseNeuronDataWrapper( DataWrapper ):
 
 class MooseChemDataWrapper( DataWrapper ):
     def __init__( self, objList, fdict, groupId ):
+        fdict['transparency'] = fdict.get('transparency', 0.8)
         super().__init__(fdict, groupId )
         self.objList_ = objList
         if not objList:

@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 import isEqual from 'lodash/isEqual';
 
 // --- (initial state and helper functions remain the same) ---
-// --- MOCK DATA: Remove or replace with your actual data ---
 const initialJsonData = {
   filetype: "jardesigner",
   version: "1.0",
@@ -104,12 +103,13 @@ export const useAppLogic = () => {
     const [isReplaying, setIsReplaying] = useState(false);
     const [replayFrameIndex, setReplayFrameIndex] = useState(0);
     const [replayInterval, setReplayInterval] = useState(100);
+    const [replayTime, setReplayTime] = useState(0);
     const replayTimerRef = useRef(null);
     const activeSimRef = useRef(activeSim);
-    const [transientSwcData, setTransientSwcData] = useState(null);
     const [drawableVisibility, setDrawableVisibility] = useState({});
-    // --- NEW: State to track simulation time during replay ---
-    const [replaySimTime, setReplaySimTime] = useState(0);
+    
+    // --- MODIFIED: Replaced unused state with a ref ---
+    const replaySimTimeRef = useRef(0);
 
     useEffect(() => {
         activeSimRef.current = activeSim;
@@ -235,7 +235,7 @@ export const useAppLogic = () => {
                 source: filename
             }
         });
-        setTransientSwcData(content);
+        // The transientSwcData state was removed as it was unused.
     }, [updateJsonData]);
 
     const handleStartRun = useCallback((runParams) => {
@@ -261,13 +261,15 @@ export const useAppLogic = () => {
         if (svgPlotFilename) setIsPlotReady(true);
     }, [svgPlotFilename]);
 
-    // --- MODIFIED: handleStartReplay now resets the simulation time ---
     const handleStartReplay = useCallback(() => {
         if (simulationFrames.length === 0) return;
+        // Ensure frames are in timestamp order
+        setSimulationFrames(prev => [...prev].sort((a, b) => a.timestamp - b.timestamp));
         setIsPlotReady(false);
         setIsReplaying(true);
         setReplayFrameIndex(0);
-        setReplaySimTime(0); // Reset the clock
+        replaySimTimeRef.current = 0; // Reset the clock
+        setReplayTime(0);
     }, [simulationFrames.length]);
 
     const handleStopReplay = useCallback(() => handleReplayEnd(), [handleReplayEnd]);
@@ -276,14 +278,14 @@ export const useAppLogic = () => {
         if (!threeDConfig?.drawables) return 0.001;
         let minDt = Infinity;
         threeDConfig.drawables.forEach(d => {
-            if (drawableVisibility[d.groupId] && d.dt < minDt) {
-                minDt = d.dt;
+            const dtNum = parseFloat(d.dt);
+            if (drawableVisibility[d.groupId] && !isNaN(dtNum) && dtNum < minDt) {
+                minDt = dtNum;
             }
         });
         return minDt === Infinity ? 0.001 : minDt;
     }, [threeDConfig, drawableVisibility]);
 
-    // --- MODIFIED: Completely new, robust replay logic driven by simulation time ---
     const replayFrameIndexRef = useRef(0);
     useEffect(() => {
         replayFrameIndexRef.current = replayFrameIndex;
@@ -292,39 +294,44 @@ export const useAppLogic = () => {
     useEffect(() => {
         if (isReplaying) {
             replayTimerRef.current = setInterval(() => {
-                setReplaySimTime(prevSimTime => {
-                    const totalRuntime = jsonData.runtime || 0.3;
-                    const nextSimTime = prevSimTime + minVisibleDt;
+                const totalRuntime = jsonData.runtime || 0.3;
+                const prevSimTime = replaySimTimeRef.current;
 
-                    // End replay if we have exceeded the total runtime
-                    if (prevSimTime >= totalRuntime) {
-                        handleReplayEnd();
-                        return prevSimTime;
-                    }
+                if (prevSimTime >= totalRuntime) {
+                    handleReplayEnd();
+                    return;
+                }
 
-                    const lastRenderedIndex = replayFrameIndexRef.current;
-                    let nextFrameIndexToRender = lastRenderedIndex;
+                const timeStep = Math.max(minVisibleDt, 1e-9); 
+                const nextSimTime = prevSimTime + timeStep;
+                replaySimTimeRef.current = nextSimTime; // Advance the clock
+                setReplayTime(nextSimTime);
 
-                    // Find all frames between the last render and the new target time
-                    for (let i = lastRenderedIndex + 1; i < simulationFrames.length; i++) {
-                        const frame = simulationFrames[i];
-                        if (frame.timestamp <= nextSimTime) {
-                            if (threeDManagerRef.current && drawableVisibility[frame.groupId]) {
-                                threeDManagerRef.current.updateSceneData(frame);
-                            }
-                            nextFrameIndexToRender = i;
-                        } else {
-                            break; // Stop once we pass the target time
+                const lastRenderedIndex = replayFrameIndexRef.current;
+                let nextFrameIndexToRender = lastRenderedIndex;
+
+                for (let i = lastRenderedIndex + 1; i < simulationFrames.length; i++) {
+                    const frame = simulationFrames[i];
+                    if (frame.timestamp <= nextSimTime) {
+                        if (threeDManagerRef.current && drawableVisibility[frame.groupId]) {
+                            threeDManagerRef.current.updateSceneData(frame);
                         }
+                        nextFrameIndexToRender = i;
+                    } else {
+                        break;
                     }
-                    
-                    // Update the UI frame index to the last frame we rendered in this step
-                    if (nextFrameIndexToRender !== lastRenderedIndex) {
-                        setReplayFrameIndex(nextFrameIndexToRender);
-                    }
-                    
-                    return nextSimTime;
-                });
+                }
+                
+                if (nextFrameIndexToRender >= simulationFrames.length - 1) {
+                     setReplayFrameIndex(simulationFrames.length - 1);
+                     handleReplayEnd();
+                     return;
+                }
+                
+                if (nextFrameIndexToRender !== lastRenderedIndex) {
+                    setReplayFrameIndex(nextFrameIndexToRender);
+                }
+                
             }, replayInterval);
         } else {
             clearInterval(replayTimerRef.current);
@@ -351,7 +358,6 @@ export const useAppLogic = () => {
             const compacted = compactJsonData(mergedData, initialJsonData);
             setJsonData(mergedData);
             setJsonContent(JSON.stringify(compacted, null, 2));
-            setTransientSwcData(null);
             setThreeDConfig(null);
             buildModelOnServer(compacted);
         } catch (e) {
@@ -363,7 +369,6 @@ export const useAppLogic = () => {
         const compacted = compactJsonData(initialJsonData, initialJsonData);
         setJsonData(initialJsonData);
         setJsonContent(JSON.stringify(compacted, null, 2));
-        setTransientSwcData(null);
         setThreeDConfig(null);
         setSvgPlotFilename(null);
         setIsPlotReady(false);
@@ -388,5 +393,7 @@ export const useAppLogic = () => {
         getCurrentJsonData, getChemProtos, setActiveMenu,
         handleMorphologyFileChange,
         drawableVisibility, setDrawableVisibility,
+        replayTime,
     };
 };
+

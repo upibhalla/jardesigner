@@ -31,6 +31,7 @@
                 "vmax": {"type": "number", "default": 1},
                 "dt": {"type": "number", "minimum": 1e-5, "default": 0.001},
                 "transparency": {"type": "number", "minimum": 0, "default":0.5},
+    			"diaScale": {"type": "number", "minimum": 1e-3, "default": 1},
     			"visible": {"type": "boolean", "default": true},
                 "shape": {
                     "type": "array",

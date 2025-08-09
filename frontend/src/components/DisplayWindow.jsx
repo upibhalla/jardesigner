@@ -27,6 +27,7 @@ const DisplayWindow = ({
   // --- ADDED: Receive visibility props to pass down ---
   drawableVisibility,
   setDrawableVisibility,
+  replayTime,
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -82,6 +83,7 @@ const DisplayWindow = ({
             // --- ADDED: Pass visibility props to the viewer ---
             drawableVisibility={drawableVisibility}
             setDrawableVisibility={setDrawableVisibility}
+            replayTime={replayTime}
         />
       </Box>
     </Box>
@@ -89,3 +91,4 @@ const DisplayWindow = ({
 };
 
 export default DisplayWindow;
+

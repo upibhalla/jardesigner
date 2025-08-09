@@ -38,6 +38,7 @@ export const AppLayout = (props) => {
         handleMorphologyFileChange,
         // --- NEW: Destructure visibility props ---
         drawableVisibility, setDrawableVisibility,
+        replayTime,
     } = props;
 
     const menuComponents = useMemo(() => ({
@@ -109,9 +110,11 @@ export const AppLayout = (props) => {
                         // --- NEW: Pass visibility props to DisplayWindow ---
                         drawableVisibility={drawableVisibility}
                         setDrawableVisibility={setDrawableVisibility}
+                        replayTime={replayTime}
                     />
                 </Grid>
             </Grid>
         </>
     );
 };
+

@@ -7,7 +7,7 @@ export default class ThreeDManager {
     this.container = container;
     this.onSelectionChange = onSelectionChange;
     this.activeGroupId = null;
-    this.diameterScales = new Map(); // --- MODIFIED: Store scale per drawable
+    this.diameterScales = new Map();
 
     this.scene = new THREE.Scene();
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -48,7 +48,7 @@ export default class ThreeDManager {
 
     this.sceneMeshes = [];
     this.entityConfigs.clear();
-    this.diameterScales.clear(); // --- MODIFIED: Clear scales on new scene
+    this.diameterScales.clear();
     while(this.scene.children.length > 2){
         const child = this.scene.children[2];
         this.scene.remove(child);
@@ -60,6 +60,9 @@ export default class ThreeDManager {
     this.boundingBox.makeEmpty();
 
     config.drawables.forEach(entity => {
+      // --- NEW: Diagnostic log to verify incoming data ---
+      console.log("Processing Drawable from SceneGraph:", entity);
+
       this.entityConfigs.set(entity.groupId, {
           title: entity.title,
           vmin: entity.vmin,
@@ -67,7 +70,9 @@ export default class ThreeDManager {
           colormap: config.colormap,
           transparency: entity.transparency || 1.0
       });
-      this.diameterScales.set(entity.groupId, 1.0); // --- MODIFIED: Initialize scale for each drawable
+      
+      const initialScale = entity.diaScale ?? 1.0;
+      this.diameterScales.set(entity.groupId, initialScale);
 
       entity.shape.forEach((primitive, i) => {
         let mesh;
@@ -97,6 +102,13 @@ export default class ThreeDManager {
         }
         if (mesh) {
             mesh.userData = { entityName: entity.groupId, shapeIndex: i, originalValue: primitive.value };
+            
+            if (mesh.geometry.type === 'SphereGeometry') {
+                mesh.scale.set(initialScale, initialScale, initialScale);
+            } else if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'ConeGeometry') {
+                mesh.scale.set(initialScale, 1, initialScale);
+            }
+
             this.scene.add(mesh);
             this.sceneMeshes.push(mesh);
             this.boundingBox.expandByObject(mesh);
@@ -178,7 +190,7 @@ export default class ThreeDManager {
     const isSelected = (mesh) => {
         return clickSelected.some(sel =>
             sel.entityName === mesh.userData.entityName &&
-            sel.shapeIndex === sel.shapeIndex
+            sel.shapeIndex === mesh.userData.shapeIndex
         );
     };
 
@@ -247,7 +259,6 @@ export default class ThreeDManager {
     this.camera.position.copy(this.controls.target).add(offset);
   }
 
-  // --- MODIFIED: Logic is now more robust and specific to a drawable ---
   updateDiameterScale(targetGroupId, factor) {
       if (!targetGroupId) return;
 

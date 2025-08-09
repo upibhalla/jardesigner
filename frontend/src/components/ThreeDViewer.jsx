@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { Box, Button, Typography, Slider, TextField, Tooltip, FormControlLabel, Checkbox, Divider } from '@mui/material';
+import { Box, Button, Typography, Slider, TextField, Tooltip, FormControlLabel, Checkbox } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ReplayIcon from '@mui/icons-material/Replay';
 import StopIcon from '@mui/icons-material/Stop';
@@ -58,21 +58,21 @@ const ThreeDViewer = ({
     setReplayInterval,
     onStartReplay,
     onStopReplay,
-    // --- NEW: Receive visibility state from parent ---
     drawableVisibility,
     setDrawableVisibility,
+    replayTime,
 }) => {
   const mountRef = useRef(null);
   const managerRef = useRef(null);
   const [colorRanges, setColorRanges] = useState({});
   const [displayConfig, setDisplayConfig] = useState(null);
 
-  const replayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
+  const displayedReplayTime = simulationFrames[replayFrameIndex]?.timestamp ?? 0.0;
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
-  const drawables = threeDConfig?.drawables || [];
+  
+  const drawables = useMemo(() => threeDConfig?.drawables || [], [threeDConfig]);
 
   const activeDrawable = useMemo(() => {
-    // Return the first drawable that is marked as visible
     return drawables.find(d => drawableVisibility[d.groupId]);
   }, [drawables, drawableVisibility]);
   
@@ -93,10 +93,10 @@ const ThreeDViewer = ({
     };
   }, [onSelectionChange, onManagerReady]);
 
-  // --- MODIFIED: No longer sets visibility state, just caches display config ---
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
       managerRef.current.buildScene(threeDConfig);
+      
       const initialColorRanges = {};
       (threeDConfig?.drawables || []).forEach(d => {
           initialColorRanges[d.groupId] = {
@@ -105,9 +105,8 @@ const ThreeDViewer = ({
           };
       });
       setColorRanges(initialColorRanges);
-      if (threeDConfig.displayMoogli) {
-          setDisplayConfig(threeDConfig.displayMoogli);
-      }
+      
+      setDisplayConfig(threeDConfig);
     }
   }, [threeDConfig]);
 
@@ -130,7 +129,6 @@ const ThreeDViewer = ({
     }
   }, [colorRanges]);
 
-  // --- MODIFIED: Pass the centrally managed visibility state to the manager ---
   useEffect(() => {
       if (managerRef.current) {
           managerRef.current.setDrawableVisibility(drawableVisibility);
@@ -183,7 +181,6 @@ const ThreeDViewer = ({
       }));
   };
 
-  // --- MODIFIED: This now calls the setter function from props ---
   const handleVisibilityChange = (groupId, isChecked) => {
       setDrawableVisibility(prev => ({
           ...prev,
@@ -225,7 +222,7 @@ const ThreeDViewer = ({
                         <Button variant="outlined" size="small" onClick={isReplaying ? onStopReplay : onStartReplay} startIcon={isReplaying ? <StopIcon /> : <ReplayIcon />}>
                             {isReplaying ? 'Stop' : 'Replay'}
                         </Button>
-                        <TextField size="small" label="Replay Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
+                        <TextField size="small" label="Replay Time (s)" value={displayedReplayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
                         <Box sx={{ width: '250px', display: 'flex', alignItems: 'center', gap: 2 }}>
                             <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Speed</Typography>
                             <Tooltip title="Playback Speed (Slower -> Faster)">
@@ -243,7 +240,8 @@ const ThreeDViewer = ({
                     </Box>
                 )}
             </Box>
-            {drawables.length > 1 && (
+            {/* --- MODIFIED: Show checkboxes if there is at least one drawable --- */}
+            {drawables.length > 0 && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1 }}>
                      <Typography variant="body2" sx={{fontWeight: 'bold'}}>Visible:</Typography>
                     {drawables.map(d => (
@@ -278,3 +276,4 @@ const ThreeDViewer = ({
 };
 
 export default ThreeDViewer;
+

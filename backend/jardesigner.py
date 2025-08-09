@@ -1128,6 +1128,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             ff = fdict['field']
             fdict['dataUnits'] = knownFieldInfo[ff]['dataUnits']
             fdict['dataType'] = knownFieldInfo[ff]['dataType']
+            fdict['diaScale'] = i.get( "diaScale", 1 )
             if not fdict.get( 'title' ):
                 fdict['title'] = "{} {} {}".format( fdict['path'], 
                         fdict['field'], fdict['dataUnits'] )
@@ -1141,15 +1142,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
             moose.setClock( pr.tick, fdict['dt'] )
             self.runMooView.makeMoogli( dendObj, fdict, groupId )
-        
-        ## Don't send the scene graph now, wait till they hit 'start'
-        #print("jardesigner.py: sending initial scene graph to server...")
-        #self.runMooView.sendSceneGraph()
-#
-#            pr.runString = '''
-#import jarmoogli
-#jarmoogli.updateMoogliViewer()
-#'''
 
     def _buildSetupMoogli( self ):
         self.setupMooView = jarmoogli.MooView( self.dataChannelId )
