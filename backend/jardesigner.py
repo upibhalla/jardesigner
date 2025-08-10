@@ -574,7 +574,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     self.buildProtoFromFunction( cp['source'], cp['name'] )
                     self.chemid = moose.element( '/library/' + cp['name'] )
                 elif ctype in ['kkit', 'sbml']:
-                    self._loadChem( cp['source'], cp['name'] )
+                    sourceFile = cp['source']
+                    if self.sessionDir != None:
+                        sourceFile = self.sessionDir + "/" + sourceFile
+                    self._loadChem( sourceFile, cp['name'] )
                     self.chemid = moose.element( '/library/' + cp['name'] )
                 elif ctype == 'in_memory':
                     self.chemid = moose.element( '/library/' + cp['name'] )

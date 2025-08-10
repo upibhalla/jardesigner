@@ -14,6 +14,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import helpText from './ChemMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
 
@@ -52,15 +53,10 @@ const locationOptions = [
     'Dendrite', 'Spine', 'PSD', 'Endo', 'Presyn_spine', 'Presyn_dend'
 ];
 
-const safeToString = (value, defaultValue = '') => {
-    return value !== undefined && value !== null ? String(value) : defaultValue;
-};
-
 // --- Default State Creators ---
 const createDefaultChemPrototype = () => ({
     type: prototypeTypeOptions[0],
     name: prototypeTypeOptions[0],
-    file: '',
     source: '',
     manualName: false,
 });
@@ -87,7 +83,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
+const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chemProto?.map(p => {
             const componentType = getComponentTypeFromSchema(p.type, p.source);
@@ -98,7 +94,6 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
             return {
                 type: componentType,
                 name: p.name,
-                file: '',
                 source: sourceValue,
                 manualName: p.name !== componentType,
             };
@@ -142,6 +137,8 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
     useEffect(() => { prototypesRef.current = prototypes; }, [prototypes]);
     const distributionsRef = useRef(distributions);
     useEffect(() => { distributionsRef.current = distributions; }, [distributions]);
+    
+    const fileInputRef = useRef(null);
 
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultChemPrototype()]);
@@ -182,6 +179,36 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
             )
         );
     }, []);
+    
+    const handleFileSelect = () => fileInputRef.current.click();
+
+    const handleFileChange = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !clientId) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('clientId', clientId);
+
+        try {
+            const uploadUrl = `http://${window.location.hostname}:5000/upload_file`;
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'File upload failed');
+            }
+            
+            updatePrototype(activePrototype, 'source', file.name);
+            
+        } catch (error) {
+            console.error("Error uploading chem file:", error);
+            alert(`Failed to upload the selected file: ${error.message}`);
+        }
+    };
 
     const addDistribution = useCallback(() => {
         setDistributions((prev) => [...prev, createDefaultChemDistribution()]);
@@ -274,6 +301,14 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                style={{ display: 'none' }} 
+                accept=".xml,.g" 
+            />
+
             <Typography variant="h6" gutterBottom>Chemical Signaling Definitions</Typography>
 
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
@@ -293,15 +328,45 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig }) => {
                              <HelpField id="type" label="Type" value={activeProtoData.type} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.type} select>
                                 {prototypeTypeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
                             </HelpField>
-                             {['SBML', 'kkit', 'User Func', 'In-memory'].includes(activeProtoData.type) && (
-                                <Box mt={1}>
-                                    <HelpField id="source" label="Source" value={activeProtoData.source} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.source} required />
-                                </Box>
-                            )}
-                         </Grid>
+                        </Grid>
                          <Grid item xs={12} sm={6}>
                             <HelpField id="name" label="Prototype Name" value={activeProtoData.name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required/>
                          </Grid>
+                         
+                         {/* FIX: New full-width row for the source file input */}
+                         {['SBML', 'kkit'].includes(activeProtoData.type) && (
+                            <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <TextField 
+                                        fullWidth 
+                                        size="small" 
+                                        label="Source File" 
+                                        variant="outlined"
+                                        value={activeProtoData.source} 
+                                        InputProps={{ readOnly: true }}
+                                        helperText="Click button to select file"
+                                    />
+                                    <Button 
+                                        variant="outlined" 
+                                        size="small" 
+                                        onClick={handleFileSelect}
+                                        startIcon={<UploadFileIcon />}
+                                        sx={{ flexShrink: 0, height: '40px' }}
+                                    >
+                                        Select...
+                                    </Button>
+                                    <Tooltip title={helpText.prototypes.source} placement="right">
+                                        <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
+                                    </Tooltip>
+                                </Box>
+                            </Grid>
+                        )}
+
+                         {['User Func', 'In-memory'].includes(activeProtoData.type) && (
+                            <Grid item xs={12}>
+                                <HelpField id="source" label="Source" value={activeProtoData.source} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.source} required />
+                            </Grid>
+                        )}
                     </Grid>
                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removePrototype(activePrototype)} sx={{ mt: 2 }}>
                         Remove '{activeProtoData.name}'

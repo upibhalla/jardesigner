@@ -45,7 +45,6 @@ export const AppLayout = (props) => {
     isReplaying,
     handleMorphologyFileChange,
     replayTime,
-    // FIX: Destructure clientId so it can be passed down.
     clientId,
   } = props;
 
@@ -62,7 +61,6 @@ export const AppLayout = (props) => {
       liveFrameData={liveFrameData}
       isReplaying={isReplaying}
     />,
-    // FIX: Pass the clientId prop to MorphoMenuBox.
     Morphology: <MorphoMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={jsonData.cellProto} 
@@ -72,7 +70,13 @@ export const AppLayout = (props) => {
     Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
     Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
     Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
-    Signaling: <ChemMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} getChemProtos={getChemProtos} />,
+    // FIX: Pass the clientId prop to ChemMenuBox (Signaling)
+    Signaling: <ChemMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} 
+        getChemProtos={getChemProtos} 
+        clientId={clientId}
+    />,
     Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
     Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
     Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
@@ -81,7 +85,6 @@ export const AppLayout = (props) => {
     jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,
     handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying,
     handleMorphologyFileChange, 
-    // FIX: Add clientId to the dependency array.
     clientId
   ]);
 
@@ -146,33 +149,7 @@ export const AppLayout = (props) => {
         </Grid>
         <Grid item xs={8} style={{ height: '100%' }}>
           <DisplayWindow
-            jsonContent={props.jsonContent}
-            schema={props.schema}
-            setActiveMenu={props.setActiveMenu}
-            svgPlotFilename={props.svgPlotFilename}
-            isPlotReady={props.isPlotReady}
-            plotError={props.plotError}
-            isSimulating={props.isSimulating}
-            threeDConfig={props.threeDConfig}
-            clickSelected={props.clickSelected}
-            onSelectionChange={props.handleSelectionChange}
-            onManagerReady={props.onManagerReady}
-            isReplaying={props.isReplaying}
-            simulationFrames={props.simulationFrames}
-            replayInterval={props.replayInterval}
-            setReplayInterval={props.setReplayInterval}
-            onStartReplay={props.handleStartReplay}
-            onStopReplay={props.handleStopReplay}
-            drawableVisibility={props.drawableVisibility}
-            setDrawableVisibility={props.setDrawableVisibility}
-            totalRuntime={props.totalRuntime}
-            handlePauseReplay={props.handlePauseReplay}
-            handleRewindReplay={props.handleRewindReplay}
-            handleSeekReplay={props.handleSeekReplay}
-            isExploded={props.isExploded}
-            explodeOffset={props.explodeOffset}
-            handleExplodeToggle={props.handleExplodeToggle}
-            handleExplodeOffsetChange={props.handleExplodeOffsetChange}
+            {...props}
           />
         </Grid>
       </Grid>
