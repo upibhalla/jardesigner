@@ -32,15 +32,37 @@ sid_clientid_map = {}
 
 
 def stream_printer(stream, pid, stream_name):
+    """
+    Reads a stream line-by-line and prints it to the console in real-time.
+    """
     try:
         for line in iter(stream.readline, ''):
             if line:
                 print(f"[{pid}-{stream_name}] {line.strip()}")
+        # FIX: Corrected typo from .closee() to .close()
         stream.close()
         print(f"Stream printer for PID {pid} ({stream_name}) has finished.")
     except Exception as e:
         print(f"Error in stream printer for PID {pid} ({stream_name}): {e}")
 
+
+def terminate_process(pid):
+    """Safely terminates a running process and cleans up its entry."""
+    if pid in running_processes:
+        try:
+            proc_info = running_processes[pid]
+            if proc_info["process"].poll() is None:
+                print(f"Terminating process {pid}...")
+                proc_info["process"].terminate()
+                proc_info["process"].wait(timeout=5)
+                print(f"Process {pid} terminated.")
+            del running_processes[pid]
+            return True
+        except Exception as e:
+            print(f"Error during termination of PID {pid}: {e}")
+            if pid in running_processes:
+                del running_processes[pid]
+    return False
 
 # --- API Endpoints ---
 @app.route('/')
@@ -77,12 +99,10 @@ def upload_file():
 def handle_sim_command(data):
     pid_str = data.get('pid')
     command = data.get('command')
-    if not pid_str or not command:
-        return
+    if not pid_str or not command: return
     try:
         pid = int(pid_str)
-    except (ValueError, TypeError):
-        return
+    except (ValueError, TypeError): return
     if pid in running_processes:
         process = running_processes[pid]["process"]
         if process.poll() is None:
@@ -93,6 +113,7 @@ def handle_sim_command(data):
                 process.stdin.flush()
             except Exception as e:
                 print(f"Error writing to PID {pid} stdin: {e}")
+
 @app.route('/launch_simulation', methods=['POST'])
 def launch_simulation():
     request_data = request.json
@@ -103,10 +124,12 @@ def launch_simulation():
         return jsonify({"status": "error", "message": "Invalid or missing JSON config data"}), 400
     if not client_id:
         return jsonify({"status": "error", "message": "Request is missing client_id"}), 400
+    
     if client_id in client_sim_map:
-        pid = client_sim_map[client_id]
-        if pid in running_processes and running_processes[pid]['process'].poll() is None:
-            return jsonify({"status": "error", "message": f"You already have a running simulation (PID: {pid})."}), 409
+        old_pid = client_sim_map[client_id]
+        print(f"Client {client_id} has an existing simulation (PID: {old_pid}). Terminating it.")
+        terminate_process(old_pid)
+        client_sim_map.pop(client_id, None)
 
     temp_file_path = None
     try:
@@ -137,22 +160,14 @@ def launch_simulation():
     
     try:
         process = subprocess.Popen(
-            command,
-            cwd=BASE_DIR,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1
+            command, cwd=BASE_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, bufsize=1
         )
 
         running_processes[process.pid] = {
-            "process": process,
-            "svg_filename": svg_filename,
-            "temp_config_file_path": temp_file_path,
-            "start_time": time.time(),
-            "data_channel_id": data_channel_id,
-            "client_id": client_id,
+            "process": process, "svg_filename": svg_filename,
+            "temp_config_file_path": temp_file_path, "start_time": time.time(),
+            "data_channel_id": data_channel_id, "client_id": client_id,
         }
         client_sim_map[client_id] = process.pid
 
@@ -163,11 +178,8 @@ def launch_simulation():
         return jsonify({"status": "error", "message": f"Failed to launch MOOSE script: {e}"}), 500
 
     return jsonify({
-        "status": "success",
-        "message": f"MOOSE simulation started (PID: {process.pid}).",
-        "pid": process.pid,
-        "svg_filename": svg_filename,
-        "data_channel_id": data_channel_id
+        "status": "success", "pid": process.pid,
+        "svg_filename": svg_filename, "data_channel_id": data_channel_id
     }), 200
 
 @app.route('/internal/push_data', methods=['POST'])
@@ -180,9 +192,24 @@ def push_data():
     socketio.emit('simulation_data', payload, room=channel_id)
     return jsonify({"status": "success"}), 200
 
+# MODIFIED: Restored the detailed diagnostic logging on connect.
 @socketio.on('connect')
 def handle_connect():
+    print("-------------------------------------------")
+    print(f"SERVER LOG: Client attempting to connect with sid: {request.sid}")
+    headers = dict(request.headers)
+    upgrade = headers.get("Upgrade", "Not found").lower()
+    connection = headers.get("Connection", "Not found").lower()
+    print(f"SERVER LOG: Request Headers => {headers}")
+    print(f"SERVER LOG: 'Upgrade' header value => '{upgrade}'")
+    print(f"SERVER LOG: 'Connection' header value => '{connection}'")
+    if "websocket" not in upgrade:
+        print("SERVER LOG: >>> FATAL: 'Upgrade: websocket' header is MISSING.")
+    else:
+        print("SERVER LOG: >>> SUCCESS: 'Upgrade: websocket' header found.")
+    print("-------------------------------------------")
     print(f"Client connected: {request.sid}")
+
 
 @socketio.on('register_client')
 def handle_register_client(data):
@@ -208,13 +235,12 @@ def handle_disconnect():
         sid_clientid_map.pop(request.sid, None)
         pid = client_sim_map.pop(client_id, None)
         if pid:
-            running_processes.pop(pid, None)
+            terminate_process(pid)
 
 @socketio.on('join_sim_channel')
 def handle_join_sim_channel(data):
     channel_id = data.get('data_channel_id')
-    if not channel_id:
-        return
+    if not channel_id: return
     join_room(channel_id)
     print(f"Client {request.sid} joined data channel (room): {channel_id}")
 
@@ -222,12 +248,14 @@ def handle_join_sim_channel(data):
 def simulation_status(pid):
     if pid not in running_processes:
         return jsonify({"status": "error", "message": "Process ID not found."}), 404
+    
     proc_info = running_processes[pid]
     process = proc_info["process"]
     svg_filename = proc_info["svg_filename"]
     client_id = proc_info["client_id"]
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
     svg_filepath = os.path.abspath(os.path.join(session_dir, svg_filename))
+
     poll_result = process.poll()
     if poll_result is None:
         return jsonify({"status": "running", "pid": pid, "message": "Simulation is still in progress."}), 200
@@ -242,19 +270,8 @@ def simulation_status(pid):
 def get_session_file(client_id, filename):
     if '..' in client_id or '/' in client_id or '..' in filename or filename.startswith('/'):
         return jsonify({"status": "error", "message": "Invalid path."}), 400
-    
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
-    
-    # DEBUGGING: Log the request and check if the file exists at this moment.
-    full_path = os.path.join(session_dir, filename)
-    print(f"[SERVER-SIDE LOG] Request received for: {full_path}")
-    if os.path.exists(full_path):
-        print("[SERVER-SIDE LOG] File exists. Serving file.")
-    else:
-        print("[SERVER-SIDE LOG] File does NOT exist at this moment.")
-    
     return send_from_directory(session_dir, filename)
-
 
 @app.route('/reset_simulation', methods=['POST'])
 def reset_simulation():
@@ -267,23 +284,13 @@ def reset_simulation():
         pid_to_reset = int(pid_to_reset_str)
     except (ValueError, TypeError):
         return jsonify({"status": "error", "message": f"Invalid PID format: {pid_to_reset_str}"}), 400
-    if pid_to_reset in running_processes:
-        try:
-            proc_info = running_processes[pid_to_reset]
-            if proc_info["process"].poll() is None:
-                proc_info["process"].terminate()
-                proc_info["process"].wait(timeout=5)
-            del running_processes[pid_to_reset]
-            if client_id and client_id in client_sim_map:
-                client_sim_map.pop(client_id, None)
-            return jsonify({"status": "success", "message": f"Simulation PID {pid_to_reset} reset."}), 200
-        except Exception as e:
-            if pid_to_reset in running_processes:
-                del running_processes[pid_to_reset]
-            return jsonify({"status": "error", "message": f"Error resetting simulation: {e}"}), 500
+
+    if terminate_process(pid_to_reset):
+        if client_id and client_id in client_sim_map:
+            client_sim_map.pop(client_id, None)
+        return jsonify({"status": "success", "message": f"Simulation PID {pid_to_reset} reset."}), 200
     else:
         return jsonify({"status": "error", "message": "Process ID not found for reset."}), 404
-
 
 if __name__ == '__main__':
     print(f"MOOSE Script Path: {MOOSE_SCRIPT_PATH}")

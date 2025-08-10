@@ -28,7 +28,6 @@ import DisplayWindow from './components/DisplayWindow';
 import { ReplayContext } from './components/ReplayContext';
 
 export const AppLayout = (props) => {
-  // Only destructure props that are directly used in AppLayout
   const {
     activeMenu,
     toggleMenu,
@@ -46,6 +45,8 @@ export const AppLayout = (props) => {
     isReplaying,
     handleMorphologyFileChange,
     replayTime,
+    // FIX: Destructure clientId so it can be passed down.
+    clientId,
   } = props;
 
   const menuComponents = useMemo(() => ({
@@ -61,7 +62,13 @@ export const AppLayout = (props) => {
       liveFrameData={liveFrameData}
       isReplaying={isReplaying}
     />,
-    Morphology: <MorphoMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.cellProto} onFileChange={handleMorphologyFileChange} />,
+    // FIX: Pass the clientId prop to MorphoMenuBox.
+    Morphology: <MorphoMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={jsonData.cellProto} 
+        onFileChange={handleMorphologyFileChange} 
+        clientId={clientId} 
+    />,
     Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
     Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
     Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
@@ -73,7 +80,9 @@ export const AppLayout = (props) => {
   }), [
     jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,
     handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying,
-    handleMorphologyFileChange
+    handleMorphologyFileChange, 
+    // FIX: Add clientId to the dependency array.
+    clientId
   ]);
 
   return (
@@ -136,7 +145,6 @@ export const AppLayout = (props) => {
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
         <Grid item xs={8} style={{ height: '100%' }}>
-          {/* Explicitly pass all necessary props down to DisplayWindow */}
           <DisplayWindow
             jsonContent={props.jsonContent}
             schema={props.schema}

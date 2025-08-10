@@ -494,7 +494,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             elif ptype == 'func':
                 self.buildProtoFromFunction( pp["source"], "elec" )
             elif ptype == 'file':
-                self._loadElec( pp['source'], 'cell' )
+                fpath = pp['source']
+                if self.sessionDir != None:
+                    fpath = self.sessionDir + "/" + fpath
+                print( "Server log: Loading cell morpho file: ", fpath )
+                self._loadElec( fpath, 'cell' )
             elif ptype == 'in_memory':
                 self.inMemoryProto( "cell", pp )
             else:

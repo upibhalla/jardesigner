@@ -97,6 +97,8 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
 
     // This function now handles the file upload to the server.
     const handleFileChange = async (event) => {
+		console.log("File selected. Checking required props:", { onFileChange, clientId });
+
         const file = event.target.files[0];
         if (!file || !onFileChange || !clientId) return;
 
@@ -107,7 +109,9 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
 
         try {
             // 2. POST the file to the server's upload endpoint.
-            const response = await fetch('http://localhost:5000/upload_file', {
+			const uploadUrl = `http://${window.location.hostname}:5000/upload_file`;
+
+            const response = await fetch(uploadUrl, {
                 method: 'POST',
                 body: formData,
             });

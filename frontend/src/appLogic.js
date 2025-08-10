@@ -45,7 +45,7 @@ const initialJsonData = {
 };
 
 const requiredKeys = ["filetype", "version"];
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = `http://${window.location.hostname}:5000`;
 
 const isSameSelection = (selA, selB) => {
     if (!selA || !selB) return false;
@@ -107,8 +107,6 @@ export const useAppLogic = () => {
     const [isExploded, setIsExploded] = useState(false);
     const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0.00005, z: 0 });
     
-    const simulationEndedCallbackRef = useRef();
-
     const onManagerReady = useCallback((manager) => {
         threeDManagerRef.current = manager;
     }, []);
@@ -163,40 +161,30 @@ export const useAppLogic = () => {
         };
     }, []);
 
-    const handleSimulationEnded = useCallback(() => {
-        setIsSimulating(false);
-        frameQueueRef.current = [];
-        const currentFilename = activeSim.svg_filename;
-        if (currentFilename) {
-            // This is the correct version that builds the FULL URL.
-            const plotUrl = `${API_BASE_URL}/session_file/${clientId}/${currentFilename}`;
-            console.log(`[CLIENT-SIDE LOG] Simulation ended. Setting plot filename for GraphWindow to: ${plotUrl}`);
-            setSvgPlotFilename(plotUrl);
-            setIsPlotReady(true);
-            setPlotError('');
-        } else {
-            setPlotError("Simulation finished, but plot filename is missing.");
-            setSvgPlotFilename(null);
-            setIsPlotReady(false);
-        }
-        handleRewindReplay();
-    }, [activeSim, handleRewindReplay, clientId]);
-
+    // MODIFIED: This useEffect now establishes a SINGLE, persistent socket connection for the app's lifetime.
     useEffect(() => {
-        simulationEndedCallbackRef.current = handleSimulationEnded;
-    }, [handleSimulationEnded]);
-
-    useEffect(() => {
-        if (!activeSim.data_channel_id) {
-            return;
-        }
-
         const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
         socketRef.current = socket;
 
+        const handleSimulationEnded = () => {
+            setIsSimulating(false);
+            frameQueueRef.current = [];
+            const currentFilename = activeSimRef.current.svg_filename;
+            if (currentFilename) {
+                const plotUrl = `${API_BASE_URL}/session_file/${clientId}/${currentFilename}`;
+                setSvgPlotFilename(plotUrl);
+                setIsPlotReady(true);
+                setPlotError('');
+            } else {
+                setPlotError("Simulation finished, but plot filename is missing.");
+                setSvgPlotFilename(null);
+                setIsPlotReady(false);
+            }
+        };
+
         socket.on('connect', () => {
+            console.log("Socket connected, registering client.");
             socket.emit('register_client', { clientId: clientId });
-            socket.emit('join_sim_channel', { data_channel_id: activeSim.data_channel_id });
         });
 
         socket.on('simulation_data', (data) => {
@@ -214,21 +202,24 @@ export const useAppLogic = () => {
                 setLiveFrameData(data);
             } 
             else if (data?.type === 'sim_end') {
-                if (simulationEndedCallbackRef.current) {
-                    simulationEndedCallbackRef.current();
-                }
+                handleSimulationEnded();
             }
         });
 
         socket.on('disconnect', (reason) => console.log(`Socket.IO disconnected. Reason: "${reason}"`));
 
         return () => {
+            console.log("Cleaning up main application socket connection.");
             socket.disconnect();
             socketRef.current = null;
         };
-
-    }, [activeSim.data_channel_id, clientId]);
-
+    }, [clientId]); // This effect runs only once.
+    
+    // A ref to hold the latest activeSim state to avoid stale closures in the socket listener.
+    const activeSimRef = useRef(activeSim);
+    useEffect(() => {
+        activeSimRef.current = activeSim;
+    }, [activeSim]);
 
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null);
@@ -236,12 +227,6 @@ export const useAppLogic = () => {
         setPlotError('');
         setSimulationFrames([]);
         handleRewindReplay();
-
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-        }
-
-        setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
         
         try {
             const payload = { config_data: newJsonData, client_id: clientId };
@@ -256,6 +241,10 @@ export const useAppLogic = () => {
             const result = await response.json();
 
             if (result.status === 'success') {
+                // Join the data channel for this new simulation
+                if (socketRef.current?.connected) {
+                    socketRef.current.emit('join_sim_channel', { data_channel_id: result.data_channel_id });
+                }
                 setActiveSim({
                     pid: result.pid,
                     data_channel_id: result.data_channel_id,
@@ -287,15 +276,15 @@ export const useAppLogic = () => {
         });
     }, [updateJsonData]);
 
-    const handleStartRun = useCallback((runParams) => {
+    const handleStartRun = useCallback(() => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
         frameQueueRef.current = [];
         setSimulationFrames([]);
         handleRewindReplay(); 
         setIsSimulating(true);
         setThreeDConfig(null);
-        socketRef.current.emit('sim_command', { command: 'start', pid: activeSim.pid, params: { runtime: runParams.runtime } });
-    }, [activeSim.pid, handleRewindReplay]);
+        socketRef.current.emit('sim_command', { command: 'start', pid: activeSim.pid, params: { runtime: jsonData.runtime } });
+    }, [activeSim.pid, handleRewindReplay, jsonData.runtime]);
 
     const handleResetRun = useCallback(async () => {
         setIsSimulating(false);
