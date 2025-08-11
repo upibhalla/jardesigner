@@ -104,9 +104,11 @@ export const useAppLogic = () => {
     const totalRuntime = useMemo(() => jsonData.runtime || 0.3, [jsonData.runtime]);
     const [drawableVisibility, setDrawableVisibility] = useState({});
     
-    const [isExploded, setIsExploded] = useState(false);
-    const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0.00005, z: 0 });
-    
+    // NEW: State for Explode feature
+    const [explodeAxis, setExplodeAxis] = useState({ x: false, y: false });
+    const [modelBboxSize, setModelBboxSize] = useState({ x: 0, y: 0, z: 0 });
+    const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0, z: 0 });
+
     const onManagerReady = useCallback((manager) => {
         threeDManagerRef.current = manager;
     }, []);
@@ -132,19 +134,30 @@ export const useAppLogic = () => {
         onReplayEnd: handleReplayEnd
     });
     
+    // NEW: Effect to calculate the actual offset when checkboxes or model size changes
+    useEffect(() => {
+        const largestDim = Math.max(modelBboxSize.x, modelBboxSize.y, modelBboxSize.z) || 0;
+        const offsetValue = largestDim * 0.1;
+        
+        setExplodeOffset({
+            x: explodeAxis.x ? offsetValue : 0,
+            y: explodeAxis.y ? offsetValue : 0,
+            z: 0
+        });
+    }, [explodeAxis, modelBboxSize]);
+
+    // This effect applies the calculated offset to the 3D view
     useEffect(() => {
         if (threeDManagerRef.current && threeDConfig?.drawables) {
             const drawableOrder = threeDConfig.drawables.map(d => d.groupId);
+            // The isExploded logic is now implicitly handled by whether the offset is non-zero
+            const isExploded = explodeOffset.x > 0 || explodeOffset.y > 0 || explodeOffset.z > 0;
             threeDManagerRef.current.applyExplodeView(isExploded, explodeOffset, drawableOrder);
         }
-    }, [isExploded, explodeOffset, threeDConfig]);
+    }, [explodeOffset, threeDConfig]);
 
-    const handleExplodeToggle = useCallback(() => {
-        setIsExploded(prev => !prev);
-    }, []);
-
-    const handleExplodeOffsetChange = useCallback((axis, value) => {
-        setExplodeOffset(prev => ({ ...prev, [axis]: value }));
+    const handleExplodeAxisToggle = useCallback((axis) => {
+        setExplodeAxis(prev => ({ ...prev, [axis]: !prev[axis] }));
     }, []);
 
     useEffect(() => {
@@ -160,13 +173,17 @@ export const useAppLogic = () => {
             cancelAnimationFrame(animationFrameId.current);
         };
     }, []);
-
-    // MODIFIED: This useEffect now establishes a SINGLE, persistent socket connection for the app's lifetime.
+    
+    const activeSimRef = useRef(activeSim);
+    useEffect(() => {
+        activeSimRef.current = activeSim;
+    }, [activeSim]);
+    
     useEffect(() => {
         const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
         socketRef.current = socket;
 
-        const handleSimulationEnded = () => {
+        const onSimulationEnded = () => {
             setIsSimulating(false);
             frameQueueRef.current = [];
             const currentFilename = activeSimRef.current.svg_filename;
@@ -183,7 +200,6 @@ export const useAppLogic = () => {
         };
 
         socket.on('connect', () => {
-            console.log("Socket connected, registering client.");
             socket.emit('register_client', { clientId: clientId });
         });
 
@@ -202,25 +218,19 @@ export const useAppLogic = () => {
                 setLiveFrameData(data);
             } 
             else if (data?.type === 'sim_end') {
-                handleSimulationEnded();
+                onSimulationEnded();
+                handleRewindReplay();
             }
         });
 
         socket.on('disconnect', (reason) => console.log(`Socket.IO disconnected. Reason: "${reason}"`));
 
         return () => {
-            console.log("Cleaning up main application socket connection.");
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [clientId]); // This effect runs only once.
+    }, [clientId, handleRewindReplay]);
     
-    // A ref to hold the latest activeSim state to avoid stale closures in the socket listener.
-    const activeSimRef = useRef(activeSim);
-    useEffect(() => {
-        activeSimRef.current = activeSim;
-    }, [activeSim]);
-
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null);
         setIsPlotReady(false);
@@ -241,7 +251,6 @@ export const useAppLogic = () => {
             const result = await response.json();
 
             if (result.status === 'success') {
-                // Join the data channel for this new simulation
                 if (socketRef.current?.connected) {
                     socketRef.current.emit('join_sim_channel', { data_channel_id: result.data_channel_id });
                 }
@@ -349,20 +358,21 @@ export const useAppLogic = () => {
         activeMenu, toggleMenu, jsonData, jsonContent, threeDConfig, svgPlotFilename,
         isPlotReady, plotError, isSimulating, clickSelected, activeSim, liveFrameData,
         simulationFrames, isReplaying, replayInterval, onManagerReady,
-        setReplayInterval, handleStartReplay, handlePauseReplay, handleSelectionChange,
+        setReplayInterval, handleSelectionChange,
         updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
         getCurrentJsonData, getChemProtos, setActiveMenu,
         handleMorphologyFileChange,
         drawableVisibility, setDrawableVisibility,
         replayTime,
         totalRuntime,
+        handleStartReplay,
+        handlePauseReplay,
         handleRewindReplay,
         handleSeekReplay,
-        handleStopReplay: handlePauseReplay,
-        isExploded,
-        explodeOffset,
-        handleExplodeToggle,
-        handleExplodeOffsetChange,
+        // NEW: Pass down new state and handlers for Explode feature
+        explodeAxis,
+        handleExplodeAxisToggle,
+        onSceneBuilt: setModelBboxSize, // Pass the state setter as a callback
         clientId,
     };
 };

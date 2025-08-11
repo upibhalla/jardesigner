@@ -68,9 +68,8 @@ export const AppLayout = (props) => {
         clientId={clientId} 
     />,
     Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
-    Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} />,
+    Channels: <ElecMenuBox onConfigurationChange={updateJsonData} currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} clientId={clientId}/>,
     Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
-    // FIX: Pass the clientId prop to ChemMenuBox (Signaling)
     Signaling: <ChemMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} 
@@ -93,52 +92,40 @@ export const AppLayout = (props) => {
       <AppBar position="static">
         <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
             <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} >
-                <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                File
+                <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} /> File
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} >
-                <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Run
+                <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} /> Run
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} >
-                <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Morphology
+                <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} /> Morphology
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} >
-                <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Spines
+                <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} /> Spines
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} >
-                <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Channels
+                <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} /> Channels
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} >
-                <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Passive
+                <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} /> Passive
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} >
-                <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Signaling
+                <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} /> Signaling
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} >
-                <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Adaptors
+                <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} /> Adaptors
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} >
-                <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Stimuli
+                <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} /> Stimuli
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} >
-                <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Plots
+                <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} /> Plots
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} >
-                <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                3D
+                <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} /> 3D
             </Button>
             <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} >
-                <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Sim Output
+                <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} /> Sim Output
             </Button>
         </Toolbar>
       </AppBar>
@@ -148,9 +135,7 @@ export const AppLayout = (props) => {
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
         <Grid item xs={8} style={{ height: '100%' }}>
-          <DisplayWindow
-            {...props}
-          />
+          <DisplayWindow {...props} />
         </Grid>
       </Grid>
     </ReplayContext.Provider>

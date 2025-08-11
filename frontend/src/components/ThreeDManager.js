@@ -37,6 +37,13 @@ export default class ThreeDManager {
     this.animate();
   }
   
+  // NEW: Method to get the size of the bounding box
+  getBoundingBoxSize() {
+    const size = new THREE.Vector3();
+    this.boundingBox.getSize(size);
+    return { x: size.x, y: size.y, z: size.z };
+  }
+
   setActiveGroupId(groupId) {
     this.activeGroupId = groupId;
   }
@@ -61,24 +68,17 @@ export default class ThreeDManager {
 
     config.drawables.forEach(entity => {
       this.entityConfigs.set(entity.groupId, {
-          title: entity.title,
-          vmin: entity.vmin,
-          vmax: entity.vmax,
-          colormap: config.colormap,
-          transparency: entity.transparency || 1.0
+          title: entity.title, vmin: entity.vmin, vmax: entity.vmax,
+          colormap: config.colormap, transparency: entity.transparency || 1.0
       });
-      
       const initialScale = entity.diaScale ?? 1.0;
       this.diameterScales.set(entity.groupId, initialScale);
-
       entity.shape.forEach((primitive, i) => {
         let mesh;
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
         const materialColor = getColor(normalizedValue, config.colormap, true);
         const material = new THREE.MeshStandardMaterial({
-            color: materialColor,
-            transparent: true,
-            opacity: entity.transparency || 1.0,
+            color: materialColor, transparent: true, opacity: entity.transparency || 1.0,
         });
         if (primitive.type === 'sphere') {
             const geometry = new THREE.SphereGeometry(primitive.diameter / 2, 16, 8);
@@ -99,19 +99,14 @@ export default class ThreeDManager {
         }
         if (mesh) {
             mesh.userData = { 
-                entityName: entity.groupId, 
-                shapeIndex: i, 
-                originalValue: primitive.value,
-                // Store the original position for the explode feature
+                entityName: entity.groupId, shapeIndex: i, originalValue: primitive.value,
                 originalPosition: mesh.position.clone(),
             };
-            
             if (mesh.geometry.type === 'SphereGeometry') {
                 mesh.scale.set(initialScale, initialScale, initialScale);
             } else if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'ConeGeometry') {
                 mesh.scale.set(initialScale, 1, initialScale);
             }
-
             this.scene.add(mesh);
             this.sceneMeshes.push(mesh);
             this.boundingBox.expandByObject(mesh);
@@ -122,24 +117,16 @@ export default class ThreeDManager {
     setTimeout(() => this.onWindowResize(), 0);
   }
 
-  // New method to apply the exploded view
   applyExplodeView(isExploded, offset, drawableOrder) {
     if (this.sceneMeshes.length === 0) return;
-
     const offsetVector = new THREE.Vector3(
-        parseFloat(offset.x) || 0,
-        parseFloat(offset.y) || 0,
-        parseFloat(offset.z) || 0
+        parseFloat(offset.x) || 0, parseFloat(offset.y) || 0, parseFloat(offset.z) || 0
     );
-
     this.sceneMeshes.forEach(mesh => {
         if (!mesh.userData.originalPosition) return;
-
         if (!isExploded) {
-            // If not exploded, reset to original position
             mesh.position.copy(mesh.userData.originalPosition);
         } else {
-            // If exploded, find the drawable's index and apply the cumulative offset
             const drawableIndex = drawableOrder.indexOf(mesh.userData.entityName);
             if (drawableIndex !== -1) {
                 const cumulativeOffset = offsetVector.clone().multiplyScalar(drawableIndex);
@@ -182,14 +169,9 @@ export default class ThreeDManager {
   updateSceneData(frameData) {
     const { groupId, data } = frameData;
     const entityConfig = this.entityConfigs.get(groupId);
-
-    if (!entityConfig) {
-        return;
-    }
-
+    if (!entityConfig) { return; }
     const { vmin, vmax, colormap } = entityConfig;
     const relevantMeshes = this.sceneMeshes.filter(mesh => mesh.userData.entityName === groupId);
-
     data.forEach((value, index) => {
         if (index < relevantMeshes.length) {
             const mesh = relevantMeshes[index];
@@ -204,10 +186,8 @@ export default class ThreeDManager {
       const rect = this.renderer.domElement.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const intersects = this.raycaster.intersectObjects(this.sceneMeshes);
-
       if (intersects.length > 0) {
           const firstIntersect = intersects[0].object;
           if (this.onSelectionChange && firstIntersect.userData) {
@@ -219,11 +199,9 @@ export default class ThreeDManager {
   updateSelectionVisuals(clickSelected) {
     const isSelected = (mesh) => {
         return clickSelected.some(sel =>
-            sel.entityName === mesh.userData.entityName &&
-            sel.shapeIndex === mesh.userData.shapeIndex
+            sel.entityName === mesh.userData.entityName && sel.shapeIndex === mesh.userData.shapeIndex
         );
     };
-
     this.sceneMeshes.forEach(mesh => {
         const config = this.entityConfigs.get(mesh.userData.entityName);
         if (config) {
@@ -236,13 +214,11 @@ export default class ThreeDManager {
 
   handleKeyDown(event) {
     if (event.target.tagName.toLowerCase() === 'input' || event.target.tagName.toLowerCase() === 'textarea') return;
-
     const rotateSpeed = 0.05;
     const offset = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
     const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 0);
     const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 1);
     const forward = new THREE.Vector3().setFromMatrixColumn(this.camera.matrix, 2);
-
     switch(event.key) {
         case 'r': this.camera.up.applyAxisAngle(forward, rotateSpeed); break;
         case 'R': this.camera.up.applyAxisAngle(forward, -rotateSpeed); break;
@@ -255,47 +231,36 @@ export default class ThreeDManager {
         case 'ArrowUp': {
             event.preventDefault();
             const panOffset = up.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.sub(panOffset);
-            this.controls.target.sub(panOffset);
-            break;
+            this.camera.position.sub(panOffset); this.controls.target.sub(panOffset); break;
         }
         case 'ArrowDown': {
             event.preventDefault();
             const panOffset = up.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.add(panOffset);
-            this.controls.target.add(panOffset);
-            break;
+            this.camera.position.add(panOffset); this.controls.target.add(panOffset); break;
         }
         case 'ArrowLeft': {
             event.preventDefault();
             const panOffset = right.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.add(panOffset);
-            this.controls.target.add(panOffset);
-            break;
+            this.camera.position.add(panOffset); this.controls.target.add(panOffset); break;
         }
         case 'ArrowRight': {
             event.preventDefault();
             const panOffset = right.clone().multiplyScalar(this.camera.position.distanceTo(this.controls.target) * 0.05);
-            this.camera.position.sub(panOffset);
-            this.controls.target.sub(panOffset);
-            break;
+            this.camera.position.sub(panOffset); this.controls.target.sub(panOffset); break;
         }
         case 'a': this.focusCamera(); return;
         case 'd': this.updateDiameterScale(this.activeGroupId, 0.9); break;
         case 'D': this.updateDiameterScale(this.activeGroupId, 1.1); break;
         default: return;
     }
-
     this.camera.position.copy(this.controls.target).add(offset);
   }
 
   updateDiameterScale(targetGroupId, factor) {
       if (!targetGroupId) return;
-
       const currentScale = this.diameterScales.get(targetGroupId) || 1.0;
       const newScale = currentScale * factor;
       this.diameterScales.set(targetGroupId, newScale);
-
       this.sceneMeshes.forEach(mesh => {
           if (mesh.userData.entityName === targetGroupId) {
               if (mesh.geometry.type === 'SphereGeometry') {

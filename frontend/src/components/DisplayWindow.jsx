@@ -5,41 +5,26 @@ import JsonText from './JsonText';
 import MarkdownText from './MarkdownText';
 import ThreeDViewer from './ThreeDViewer';
 
-// Create memoized versions of the static panel components.
-// This prevents them from re-rendering unnecessarily.
 const MemoizedGraphWindow = memo(GraphWindow);
 const MemoizedJsonText = memo(JsonText);
 const MemoizedMarkdownText = memo(MarkdownText);
 
-const DisplayWindow = ({
-  jsonContent,
-  schema,
-  setActiveMenu,
-  svgPlotFilename,
-  isPlotReady,
-  plotError,
-  isSimulating,
-  threeDConfig,
-  clickSelected,
-  onSelectionChange,
-  onManagerReady,
-  isReplaying,
-  simulationFrames,
-  replayInterval,
-  setReplayInterval,
-  onStartReplay,
-  onStopReplay,
-  handlePauseReplay,
-  handleRewindReplay,
-  handleSeekReplay,
-  drawableVisibility,
-  setDrawableVisibility,
-  totalRuntime,
-  isExploded,
-  explodeOffset,
-  handleExplodeToggle,
-  handleExplodeOffsetChange,
-}) => {
+const DisplayWindow = (props) => {
+  const {
+    jsonContent,
+    setActiveMenu,
+    svgPlotFilename,
+    isPlotReady,
+    plotError,
+    // Destructure handlers to pass them explicitly
+    handleStartReplay,
+    handlePauseReplay,
+    handleRewindReplay,
+    handleSeekReplay,
+    handleExplodeAxisToggle, // New handler
+    onSceneBuilt, // New handler
+  } = props;
+
   const [tabIndex, setTabIndex] = useState(0);
 
   const handleTabChange = (event, newValue) => {
@@ -71,28 +56,14 @@ const DisplayWindow = ({
 
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>
         <ThreeDViewer
-          isSimulating={isSimulating}
-          threeDConfig={threeDConfig}
-          setActiveMenu={setActiveMenu}
-          clickSelected={clickSelected}
-          onSelectionChange={onSelectionChange}
-          onManagerReady={onManagerReady}
-          isReplaying={isReplaying}
-          simulationFrames={simulationFrames}
-          replayInterval={replayInterval}
-          setReplayInterval={setReplayInterval}
-          onStartReplay={onStartReplay}
-          onStopReplay={onStopReplay}
+          {...props}
+          // Standardize prop names passed to the final UI component
+          onStartReplay={handleStartReplay}
           onPauseReplay={handlePauseReplay}
           onRewindReplay={handleRewindReplay}
           onSeekReplay={handleSeekReplay}
-          drawableVisibility={drawableVisibility}
-          setDrawableVisibility={setDrawableVisibility}
-          totalRuntime={totalRuntime}
-          isExploded={isExploded}
-          explodeOffset={explodeOffset}
-          onExplodeToggle={handleExplodeToggle}
-          onExplodeOffsetChange={handleExplodeOffsetChange}
+          onExplodeAxisToggle={handleExplodeAxisToggle}
+          onSceneBuilt={onSceneBuilt}
         />
       </Box>
     </Box>
