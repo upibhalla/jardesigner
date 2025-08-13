@@ -101,13 +101,21 @@ export const useAppLogic = () => {
     const animationFrameId = useRef();
     const [simulationFrames, setSimulationFrames] = useState([]);
     const [replayInterval, setReplayInterval] = useState(100);
-    const totalRuntime = useMemo(() => jsonData.runtime || 0.3, [jsonData.runtime]);
     const [drawableVisibility, setDrawableVisibility] = useState({});
     
-    // NEW: State for Explode feature
     const [explodeAxis, setExplodeAxis] = useState({ x: false, y: false });
     const [modelBboxSize, setModelBboxSize] = useState({ x: 0, y: 0, z: 0 });
     const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0, z: 0 });
+
+    // FIX: The total runtime is now dynamically calculated from the latest simulation frame.
+    const totalRuntime = useMemo(() => {
+        if (simulationFrames.length > 0) {
+            // The runtime is the timestamp of the last available frame.
+            return simulationFrames[simulationFrames.length - 1].timestamp;
+        }
+        // Fallback to the configured runtime if no frames are available.
+        return jsonData.runtime || 0.3;
+    }, [simulationFrames, jsonData.runtime]);
 
     const onManagerReady = useCallback((manager) => {
         threeDManagerRef.current = manager;
@@ -128,13 +136,12 @@ export const useAppLogic = () => {
         simulationFrames,
         drawableVisibility,
         threeDConfig,
-        totalRuntime,
+        totalRuntime, // This now passes the dynamic value to the replay logic
         replayInterval,
         threeDManagerRef,
         onReplayEnd: handleReplayEnd
     });
     
-    // NEW: Effect to calculate the actual offset when checkboxes or model size changes
     useEffect(() => {
         const largestDim = Math.max(modelBboxSize.x, modelBboxSize.y, modelBboxSize.z) || 0;
         const offsetValue = largestDim * 0.1;
@@ -146,13 +153,11 @@ export const useAppLogic = () => {
         });
     }, [explodeAxis, modelBboxSize]);
 
-    // This effect applies the calculated offset to the 3D view
     useEffect(() => {
         if (threeDManagerRef.current && threeDConfig?.drawables) {
             const drawableOrder = threeDConfig.drawables.map(d => d.groupId);
-            // The isExploded logic is now implicitly handled by whether the offset is non-zero
-            const isExploded = explodeOffset.x > 0 || explodeOffset.y > 0 || explodeOffset.z > 0;
-            threeDManagerRef.current.applyExplodeView(isExploded, explodeOffset, drawableOrder);
+            const isExplodedNow = explodeOffset.x > 0 || explodeOffset.y > 0 || explodeOffset.z > 0;
+            threeDManagerRef.current.applyExplodeView(isExplodedNow, explodeOffset, drawableOrder);
         }
     }, [explodeOffset, threeDConfig]);
 
@@ -219,7 +224,6 @@ export const useAppLogic = () => {
             } 
             else if (data?.type === 'sim_end') {
                 onSimulationEnded();
-                handleRewindReplay();
             }
         });
 
@@ -229,7 +233,7 @@ export const useAppLogic = () => {
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [clientId, handleRewindReplay]);
+    }, [clientId]);
     
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null);
@@ -259,6 +263,7 @@ export const useAppLogic = () => {
                     data_channel_id: result.data_channel_id,
                     svg_filename: result.svg_filename
                 });
+                lastBuiltJsonDataRef.current = newJsonData;
             } else {
                 throw new Error(result.message || 'Failed to launch simulation');
             }
@@ -267,15 +272,26 @@ export const useAppLogic = () => {
             setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
         }
     }, [clientId, handleRewindReplay]);
-
+    
+    const lastBuiltJsonDataRef = useRef(null);
     const updateJsonData = useCallback((newDataPart) => {
         const updatedData = { ...initialJsonData, ...jsonData, ...newDataPart };
         const compactedData = compactJsonData(updatedData, initialJsonData);
         setJsonData(updatedData);
         setJsonContent(JSON.stringify(compactedData, null, 2));
-        buildModelOnServer(compactedData);
+
+        if (!isEqual(compactedData, lastBuiltJsonDataRef.current)) {
+            buildModelOnServer(compactedData);
+        }
     }, [jsonData, buildModelOnServer]);
     
+    const setRunParameters = useCallback((runParams) => {
+        const updatedData = { ...jsonData, ...runParams };
+        setJsonData(updatedData);
+        const compactedData = compactJsonData(updatedData, initialJsonData);
+        setJsonContent(JSON.stringify(compactedData, null, 2));
+    }, [jsonData]);
+
     const handleMorphologyFileChange = useCallback(({ filename }) => {
         updateJsonData({
             cellProto: {
@@ -287,16 +303,31 @@ export const useAppLogic = () => {
 
     const handleStartRun = useCallback(() => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
-        frameQueueRef.current = [];
-        setSimulationFrames([]);
-        handleRewindReplay(); 
+        
+        setSvgPlotFilename(null);
+        setIsPlotReady(false);
+        setPlotError('');
+
+        if (simulationFrames.length === 0) {
+            setThreeDConfig(null);
+            handleRewindReplay();
+        } else {
+            frameQueueRef.current = [];
+        }
+        
         setIsSimulating(true);
-        setThreeDConfig(null);
         socketRef.current.emit('sim_command', { command: 'start', pid: activeSim.pid, params: { runtime: jsonData.runtime } });
-    }, [activeSim.pid, handleRewindReplay, jsonData.runtime]);
+    }, [activeSim.pid, jsonData.runtime, simulationFrames.length, handleRewindReplay]);
 
     const handleResetRun = useCallback(async () => {
         setIsSimulating(false);
+        setSimulationFrames([]);
+        setThreeDConfig(null);
+        setSvgPlotFilename(null);
+        setIsPlotReady(false);
+        setPlotError('');
+        handleRewindReplay();
+
         if (activeSim.pid) {
             try {
                 await fetch(`${API_BASE_URL}/reset_simulation`, {
@@ -305,11 +336,12 @@ export const useAppLogic = () => {
                     body: JSON.stringify({ pid: activeSim.pid, client_id: clientId })
                 });
                 setActiveSim({ pid: null, data_channel_id: null, svg_filename: null });
+                lastBuiltJsonDataRef.current = null;
             } catch (error) {
                 console.error("Failed to reset previous simulation:", error);
             }
         }
-    }, [activeSim.pid, clientId]);
+    }, [activeSim.pid, clientId, handleRewindReplay]);
 
     const handleSelectionChange = useCallback((selection, isCtrlClick) => {
         setClickSelected(prev => {
@@ -326,23 +358,16 @@ export const useAppLogic = () => {
         try {
             const parsedData = JSON.parse(newJsonString);
             const mergedData = { ...initialJsonData, ...parsedData };
-            const compacted = compactJsonData(mergedData, initialJsonData);
-            setJsonData(mergedData);
-            setJsonContent(JSON.stringify(compacted, null, 2));
-            buildModelOnServer(compacted);
+            updateJsonData(mergedData);
         } catch (e) {
             alert(`Failed to load model: ${e.message}`);
         }
-    }, [buildModelOnServer]);
+    }, [updateJsonData]);
 
     const handleClearModel = useCallback(() => {
         const compacted = compactJsonData(initialJsonData, initialJsonData);
         setJsonData(initialJsonData);
         setJsonContent(JSON.stringify(compacted, null, 2));
-        setThreeDConfig(null);
-        setSvgPlotFilename(null);
-        setIsPlotReady(false);
-        setPlotError('');
         buildModelOnServer(compacted);
     }, [buildModelOnServer]);
 
@@ -359,7 +384,9 @@ export const useAppLogic = () => {
         isPlotReady, plotError, isSimulating, clickSelected, activeSim, liveFrameData,
         simulationFrames, isReplaying, replayInterval, onManagerReady,
         setReplayInterval, handleSelectionChange,
-        updateJsonData, handleStartRun, handleResetRun, updateJsonString, handleClearModel,
+        updateJsonData, 
+        setRunParameters,
+        handleStartRun, handleResetRun, updateJsonString, handleClearModel,
         getCurrentJsonData, getChemProtos, setActiveMenu,
         handleMorphologyFileChange,
         drawableVisibility, setDrawableVisibility,
@@ -369,10 +396,9 @@ export const useAppLogic = () => {
         handlePauseReplay,
         handleRewindReplay,
         handleSeekReplay,
-        // NEW: Pass down new state and handlers for Explode feature
         explodeAxis,
         handleExplodeAxisToggle,
-        onSceneBuilt: setModelBboxSize, // Pass the state setter as a callback
+        onSceneBuilt: setModelBboxSize,
         clientId,
     };
 };

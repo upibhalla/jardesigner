@@ -167,7 +167,7 @@ const ThreeDViewer = (props) => {
             {showReplayControls && (
                 <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 1, borderTop: '1px solid #ddd' }}>
                     {/* Replay Controls */}
-                    <Button variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay} startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}>{isReplaying ? "Pause" : "Start"}</Button>
+                    <Button variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay} startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}>{isReplaying ? "Pause" : "Replay"}</Button>
                     <TextField size="small" label="Frame Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
                     <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Typography variant="caption">0</Typography>

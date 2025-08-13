@@ -48,13 +48,14 @@ const InfoTooltip = ({ title }) => (
 
 const RunMenuBox = ({
     onConfigurationChange,
+    setRunParameters, // NEW: Receive the lightweight updater function
     currentConfig,
     onStartRun,
     onResetRun,
     isSimulating,
     activeSimPid,
     liveFrameData,
-    isReplaying, // This prop is kept to show the correct status message
+    isReplaying,
 }) => {
 
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
@@ -82,17 +83,14 @@ const RunMenuBox = ({
 
     const [currentTime, setCurrentTime] = useState(0.0);
     const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
+    const [startButtonText, setStartButtonText] = useState('Start');
 
+    // Use a ref to store the onConfigurationChange function to use in the cleanup effect
     const onConfigurationChangeRef = useRef(onConfigurationChange);
-    const runtimeRef = useRef(runtime);
-    const clocksRef = useRef(clocks);
-    const configSettingsRef = useRef(configSettings);
-
-    useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
-    useEffect(() => { runtimeRef.current = runtime; }, [runtime]);
-    useEffect(() => { clocksRef.current = clocks; }, [clocks]);
-    useEffect(() => { configSettingsRef.current = configSettings; }, [configSettings]);
-
+    useEffect(() => {
+        onConfigurationChangeRef.current = onConfigurationChange;
+    }, [onConfigurationChange]);
+    
     useEffect(() => {
         if (isReplaying) {
             setStatusMessage({ type: 'info', text: 'Replaying simulation in 3D viewer...' });
@@ -112,6 +110,16 @@ const RunMenuBox = ({
         }
     }, [liveFrameData]);
 
+    useEffect(() => {
+        const simHasFinished = !isSimulating && currentTime > 0;
+        if (simHasFinished) {
+            setStartButtonText('Continue');
+        } else {
+            setStartButtonText('Start');
+        }
+    }, [isSimulating, currentTime]);
+
+
     const handleRuntimeChange = (value) => setRuntime(value);
     const updateClock = (field, value) => setClocks((prev) => ({ ...prev, [field]: value }));
     const updateConfigSetting = (field, value) => setConfigSettings((prev) => ({ ...prev, [field]: value }));
@@ -122,41 +130,60 @@ const RunMenuBox = ({
         setRuntime(isTurningOff ? '100' : '0.3');
     };
 
-    const buildConfigPayload = useCallback((currentRuntimeStr, currentClocksObj, currentConfigObj) => {
+    const buildConfigPayload = useCallback(() => {
         const getOrDefaultNumeric = (valStr, defaultValStr) => parseFloat(valStr) || parseFloat(defaultValStr);
         const getOrDefaultInt = (valStr, defaultValStr) => parseInt(valStr, 10) || parseInt(defaultValStr, 10);
 
         return {
-            runtime: getOrDefaultNumeric(currentRuntimeStr, defaultRunConfig.runtime),
-            elecDt: getOrDefaultNumeric(currentClocksObj.elec, defaultRunConfig.elecDt),
-            elecPlotDt: getOrDefaultNumeric(currentClocksObj.elecPlot, defaultRunConfig.elecPlotDt),
-            chemDt: getOrDefaultNumeric(currentClocksObj.chem, defaultRunConfig.chemDt),
-            chemPlotDt: getOrDefaultNumeric(currentClocksObj.chemPlotDt, defaultRunConfig.chemPlotDt),
-            diffDt: getOrDefaultNumeric(currentClocksObj.diffusion, defaultRunConfig.diffDt),
-            funcDt: getOrDefaultNumeric(currentClocksObj.function, defaultRunConfig.funcDt),
-            statusDt: getOrDefaultNumeric(currentClocksObj.status, defaultRunConfig.statusDt),
-            randseed: getOrDefaultInt(currentConfigObj.randSeed, defaultRunConfig.randseed),
-            temperature: getOrDefaultNumeric(currentConfigObj.temperature, defaultRunConfig.temperature),
-            turnOffElec: currentConfigObj.turnOffElec,
-            useGssa: currentConfigObj.useGssa,
-            combineSegments: currentConfigObj.combineSegments,
-            stealCellFromLibrary: currentConfigObj.reuseLibraryCell,
-            modelPath: currentConfigObj.modelPath,
-            odeMethod: currentConfigObj.odeMethod,
+            runtime: getOrDefaultNumeric(runtime, defaultRunConfig.runtime),
+            elecDt: getOrDefaultNumeric(clocks.elec, defaultRunConfig.elecDt),
+            elecPlotDt: getOrDefaultNumeric(clocks.elecPlot, defaultRunConfig.elecPlotDt),
+            chemDt: getOrDefaultNumeric(clocks.chem, defaultRunConfig.chemDt),
+            chemPlotDt: getOrDefaultNumeric(clocks.chemPlotDt, defaultRunConfig.chemPlotDt),
+            diffDt: getOrDefaultNumeric(clocks.diffusion, defaultRunConfig.diffDt),
+            funcDt: getOrDefaultNumeric(clocks.function, defaultRunConfig.funcDt),
+            statusDt: getOrDefaultNumeric(clocks.status, defaultRunConfig.statusDt),
+            randseed: getOrDefaultInt(configSettings.randSeed, defaultRunConfig.randseed),
+            temperature: getOrDefaultNumeric(configSettings.temperature, defaultRunConfig.temperature),
+            turnOffElec: configSettings.turnOffElec,
+            useGssa: configSettings.useGssa,
+            combineSegments: configSettings.combineSegments,
+            stealCellFromLibrary: configSettings.reuseLibraryCell,
+            modelPath: configSettings.modelPath,
+            odeMethod: configSettings.odeMethod,
         };
-    }, []);
+    }, [runtime, clocks, configSettings]);
 
+    // This effect now only saves the config when the menu box is closed (unmounted).
     useEffect(() => {
+        const payload = buildConfigPayload();
         return () => {
             if (onConfigurationChangeRef.current) {
-                onConfigurationChangeRef.current(buildConfigPayload(runtimeRef.current, clocksRef.current, configSettingsRef.current));
+                onConfigurationChangeRef.current(payload);
             }
         };
     }, [buildConfigPayload]);
 
+    // FIX: This handler now implements the new conditional logic.
     const handleStart = () => {
+        const latestConfig = buildConfigPayload();
+        
+        // For a new "Start", trigger the full check-and-rebuild logic.
+        if (currentTime === 0) {
+            if (onConfigurationChange) {
+                onConfigurationChange(latestConfig);
+            }
+        } 
+        // For a "Continue", just update the params in the parent state without a rebuild.
+        else {
+            if (setRunParameters) {
+                setRunParameters(latestConfig);
+            }
+        }
+
+        // In both cases, start the run.
         if (onStartRun) {
-            onStartRun({ runtime: parseFloat(runtime) || 0 });
+            onStartRun();
         }
     };
 
@@ -174,7 +201,7 @@ const RunMenuBox = ({
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || !activeSimPid}>Start</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || !activeSimPid}>{startButtonText}</Button></Grid>
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!isSimulating}>Pause</Button></Grid>
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
             </Grid>
@@ -190,7 +217,7 @@ const RunMenuBox = ({
                 </Grid>
                 <Grid item xs={6}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TextField fullWidth size="small" label="Current Time (s)" type="number" value={isSimulating ? currentTime.toFixed(4) : "0.0000"} InputProps={{ readOnly: true }} variant="filled" />
+                        <TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" />
                         <InfoTooltip title={helpText.runControls.currentTime} />
                     </Box>
                 </Grid>

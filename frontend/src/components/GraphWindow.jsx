@@ -1,7 +1,7 @@
-import React, { memo } from 'react'; // Import 'memo'
+import React, { memo } from 'react';
 import { Box, Typography, Card, CardMedia, CardContent, Button, Alert } from '@mui/material';
+import LandingGraphic from '../assets/LandingGraphic.png';
 
-// The component is now wrapped in memo to prevent unnecessary re-renders.
 const GraphWindow = memo(({ svgPlotFilename, isPlotReady, plotError }) => {
   return (
     <Box
@@ -47,7 +47,7 @@ const GraphWindow = memo(({ svgPlotFilename, isPlotReady, plotError }) => {
             <CardMedia
               component="img"
               alt="Simulation Plot"
-              image={`${svgPlotFilename}?t=${new Date().getTime()}`} // Cache buster
+              image={`${svgPlotFilename}?t=${new Date().getTime()}`}
               sx={{
                 objectFit: 'contain',
                 maxWidth: '100%',
@@ -75,9 +75,17 @@ const GraphWindow = memo(({ svgPlotFilename, isPlotReady, plotError }) => {
         )}
 
         {!isPlotReady && !plotError && (
-          <Typography variant="body1" sx={{ color: '#757575' }}>
-            Plot will appear here when ready.
-          </Typography>
+          <CardMedia
+              component="img"
+              alt="Jardesigner Landing Graphic"
+              image={LandingGraphic}
+              sx={{
+                objectFit: 'contain',
+                maxWidth: '80%',
+                maxHeight: '80%',
+                // FIX: Opacity removed to make the image fully visible.
+              }}
+            />
         )}
       </Box>
     </Box>

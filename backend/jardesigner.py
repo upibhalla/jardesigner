@@ -1998,21 +1998,22 @@ def main():
         rdes.setupMooView.sendSceneGraph()
         print( "jardesigner.py: sent setup 3D scene" )
 
+    moose.reinit()
     # This loop will wait for commands from server.py via stdin
     for line in sys.stdin:
         try:
             # Parse the command, which is expected to be a JSON string
             command_data = json.loads(line)
             command = command_data.get("command")
-            print( "jardesigner.py: received command", command )
+            #print( "jardesigner.py: received command", command )
 
             if command == "start":
                 print("Received 'start' command.")
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
-                moose.reinit()
-                if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
-                    rdes.runMooView.sendSceneGraph()
-                    print( "jardesigner.py: sent runtime 3D scene" )
+                if moose.element( "/clock" ).currentTime == 0:
+                    if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
+                        rdes.runMooView.sendSceneGraph()
+                        print( "jardesigner.py: sent runtime 3D scene" )
 
                 moose.start(runtime)
                 print("Finished run.")

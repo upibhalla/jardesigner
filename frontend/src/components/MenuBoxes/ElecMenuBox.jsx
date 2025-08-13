@@ -14,30 +14,8 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import helpText from './ElecMenuBox.Help.json';
-
-/*
-// --- Placeholder for helpText from './ElecMenuBox.Help.json' ---
-const helpText = {
-  "headings": {
-    "prototypes": "This section is for defining the different types of ion channels. You can create multiple 'prototypes' from built-in models or load them from external NeuroML files.",
-    "distributions": "This section is for defining the rules that place your channel prototypes onto the neuron's surface and set their density."
-  },
-  "prototypes": {
-    "type": "Select the base model for the ion channel. Choosing 'File' allows you to specify a custom NeuroML channel definition.",
-    "file": "Specify the path to the NeuroML file defining the channel (e.g., 'MyChannels/NaV.channel.nml'). This is only used when the 'Type' is set to 'File'.",
-    "name": "A unique name for this channel prototype. It defaults to the 'Type' but can be edited to be more descriptive, which is useful if you have multiple versions of the same channel type."
-  },
-  "distributions": {
-    "prototype": "Select which of the defined channel prototypes to distribute with this rule.",
-    "path": "The morphological path where channels will be placed (e.g., 'soma', 'axon', 'dend', or a specific path like '/cell/dend[0]/branch[1]').",
-    "maxConductance": "The maximum conductance density (Gbar) for this channel at this location. The units depend on the specific channel model but are typically in Siemens per square meter (S/m^2).",
-    "caTau": "The time constant for calcium decay, in seconds (s). This parameter is only applicable when distributing a calcium concentration prototype ('Ca_conc')."
-  }
-};
-*/
-
 
 // --- Helper Functions ---
 const getChannelSourceString = (componentType) => {
@@ -99,7 +77,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ElecMenuBox = ({ onConfigurationChange, currentConfig }) => {
+const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chanProto?.map(p => {
             let componentType = p.source;
@@ -136,6 +114,9 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig }) => {
     useEffect(() => { prototypesRef.current = prototypes; }, [prototypes]);
     const distributionsRef = useRef(distributions);
     useEffect(() => { distributionsRef.current = distributions; }, [distributions]);
+
+    // NEW: Ref for the hidden file input.
+    const fileInputRef = useRef(null);
 
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultPrototype()]);
@@ -176,6 +157,39 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig }) => {
             )
         );
     }, []);
+
+    // NEW: Handler to programmatically click the hidden file input.
+    const handleFileSelect = () => fileInputRef.current.click();
+
+    // NEW: Handler to upload the file and update the state.
+    const handleFileChange = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !clientId) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('clientId', clientId);
+
+        try {
+            const uploadUrl = `http://${window.location.hostname}:5000/upload_file`;
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'File upload failed');
+            }
+            
+            // On success, update the 'file' field of the current prototype with the original filename.
+            updatePrototype(activePrototype, 'file', file.name);
+            
+        } catch (error) {
+            console.error("Error uploading channel file:", error);
+            alert(`Failed to upload the selected file: ${error.message}`);
+        }
+    };
 
     const addDistribution = useCallback(() => {
         setDistributions((prev) => [...prev, createDefaultDistribution()]);
@@ -241,9 +255,17 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig }) => {
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+            {/* NEW: Hidden file input for channel models */}
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                style={{ display: 'none' }} 
+                accept=".xml" 
+            />
+
             <Typography variant="h6" gutterBottom>Channel Definitions</Typography>
 
-            {/* === Prototypes Section === */}
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Prototypes</Typography>
                 <Tooltip title={helpText.headings.prototypes} placement="right">
@@ -263,15 +285,39 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig }) => {
                             <HelpField id="type" label="Type" value={prototypes[activePrototype].type} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.type} select>
                                 {prototypeTypeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
                             </HelpField>
-                            {prototypes[activePrototype].type === 'File' && (
-                                <Box mt={1}>
-                                    <HelpField id="file" label="NeuroML File" value={prototypes[activePrototype].file} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.file} required />
-                                </Box>
-                            )}
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <HelpField id="name" label="Prototype Name" value={prototypes[activePrototype].name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required />
                         </Grid>
+                        
+                        {/* MODIFIED: Replaced text field with file upload UI */}
+                        {prototypes[activePrototype].type === 'File' && (
+                           <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                                    <TextField 
+                                        fullWidth 
+                                        size="small" 
+                                        label="Source File (NeuroML)" 
+                                        variant="outlined"
+                                        value={prototypes[activePrototype].file} 
+                                        InputProps={{ readOnly: true }}
+                                        helperText="Click button to select file"
+                                    />
+                                    <Button 
+                                        variant="outlined" 
+                                        size="small" 
+                                        onClick={handleFileSelect}
+                                        startIcon={<UploadFileIcon />}
+                                        sx={{ flexShrink: 0, height: '40px' }}
+                                    >
+                                        Select...
+                                    </Button>
+                                    <Tooltip title={helpText.prototypes.file} placement="right">
+                                        <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
+                                    </Tooltip>
+                                </Box>
+                            </Grid>
+                        )}
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removePrototype(activePrototype)} sx={{ mt: 2 }}>
                         Remove '{prototypes[activePrototype].name}'
@@ -279,7 +325,6 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 </Box>
             )}
 
-            {/* === Distributions Section === */}
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 3 }}>
                  <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Distributions</Typography>
                  <Tooltip title={helpText.headings.distributions} placement="right">
