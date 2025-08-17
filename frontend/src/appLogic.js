@@ -345,11 +345,23 @@ export const useAppLogic = () => {
 
     const handleSelectionChange = useCallback((selection, isCtrlClick) => {
         setClickSelected(prev => {
+			const isSelected = prev.some(item => isSameSelection(item, selection));
+        	let newSelection; // Define a variable to hold the new state
+			if (isCtrlClick) {
+				newSelection = isSelected ? prev.filter(item => !isSameSelection(item, selection)) : [...prev, selection];
+			} else {
+				newSelection = (prev.length === 1 && isSameSelection(prev[0], selection)) ? [] : [selection];
+			}
+			return newSelection;
+
+
+			/*
             if (isCtrlClick) {
                 const isSelected = prev.some(item => isSameSelection(item, selection));
                 return isSelected ? prev.filter(item => !isSameSelection(item, selection)) : [...prev, selection];
             }
             return (prev.length === 1 && isSameSelection(prev[0], selection)) ? [] : [selection];
+			*/
         });
     }, []);
     

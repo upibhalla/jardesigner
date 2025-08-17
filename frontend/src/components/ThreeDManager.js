@@ -99,8 +99,11 @@ export default class ThreeDManager {
         }
         if (mesh) {
             mesh.userData = { 
-                entityName: entity.groupId, shapeIndex: i, originalValue: primitive.value,
+                entityName: entity.groupId, 
+				shapeIndex: i, 
+				originalValue: primitive.value,
                 originalPosition: mesh.position.clone(),
+                simPath: primitive.simPath,
             };
             if (mesh.geometry.type === 'SphereGeometry') {
                 mesh.scale.set(initialScale, initialScale, initialScale);
@@ -190,6 +193,8 @@ export default class ThreeDManager {
       const intersects = this.raycaster.intersectObjects(this.sceneMeshes);
       if (intersects.length > 0) {
           const firstIntersect = intersects[0].object;
+		  console.log("Clicked on object:", firstIntersect.userData);
+
           if (this.onSelectionChange && firstIntersect.userData) {
               this.onSelectionChange(firstIntersect.userData, event.ctrlKey);
           }
@@ -208,6 +213,7 @@ export default class ThreeDManager {
             const normalizedValue = isSelected(mesh) ? 1.0 : (mesh.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
             const newColor = getColor(normalizedValue, config.colormap, true);
             mesh.material.color.set(newColor);
+            mesh.material.needsUpdate = true;
         }
     });
   }

@@ -63,6 +63,9 @@ const ThreeDViewer = (props) => {
   const activeDrawable = useMemo(() => drawables.find(d => drawableVisibility[d.groupId]), [drawables, drawableVisibility]);
   const activeColorRange = colorRanges[activeDrawable?.groupId] || { vmin: '', vmax: '' };
 
+  // Derive the simPath from the last selected object.
+  const displayedSimPath = clickSelected.length > 0 ? clickSelected[clickSelected.length - 1].simPath : '';
+
   useEffect(() => {
     if (mountRef.current) {
         managerRef.current = new ThreeDManager(mountRef.current, onSelectionChange);
@@ -98,7 +101,10 @@ const ThreeDViewer = (props) => {
     }
   }, [threeDConfig, setDrawableVisibility, onSceneBuilt]);
 
-  useEffect(() => { if (managerRef.current) managerRef.current.updateSelectionVisuals(clickSelected); }, [clickSelected]);
+  useEffect(() => {
+      if (managerRef.current) managerRef.current.updateSelectionVisuals(clickSelected);
+  }, [clickSelected]);
+
   useEffect(() => {
     if (managerRef.current) {
         for (const groupId in colorRanges) {
@@ -108,6 +114,7 @@ const ThreeDViewer = (props) => {
         }
     }
   }, [colorRanges]);
+
   useEffect(() => {
       if (managerRef.current) {
           managerRef.current.setDrawableVisibility(drawableVisibility);
@@ -185,11 +192,22 @@ const ThreeDViewer = (props) => {
                             <Typography variant="caption">{replayInterval}ms</Typography>
                         </Box>
                     </Box>
-                    {/* Explode Controls */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 2, borderLeft: '1px solid #ddd' }}>
-                        <Typography variant="body2" sx={{fontWeight: 'bold'}}>Explode Cell:</Typography>
-                        <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X" />
-                        <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y" />
+                    
+                    {/* Explode and Path Controls */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pl: 2, borderLeft: '1px solid #ddd' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography variant="body2" sx={{fontWeight: 'bold'}}>Explode Cell:</Typography>
+                            <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X" />
+                            <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y" />
+                        </Box>
+                        <TextField
+                            label="Path"
+                            size="small"
+                            variant="outlined"
+                            value={displayedSimPath}
+                            InputProps={{ readOnly: true }}
+                            sx={{ minWidth: '20ch' }}
+                        />
                     </Box>
                 </Box>
             )}

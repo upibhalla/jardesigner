@@ -21,8 +21,9 @@ const DisplayWindow = (props) => {
     handlePauseReplay,
     handleRewindReplay,
     handleSeekReplay,
-    handleExplodeAxisToggle, // New handler
-    onSceneBuilt, // New handler
+    handleExplodeAxisToggle,
+    onSceneBuilt,
+    handleSelectionChange, // Destructured the missing prop
   } = props;
 
   const [tabIndex, setTabIndex] = useState(0);
@@ -64,6 +65,7 @@ const DisplayWindow = (props) => {
           onSeekReplay={handleSeekReplay}
           onExplodeAxisToggle={handleExplodeAxisToggle}
           onSceneBuilt={onSceneBuilt}
+          onSelectionChange={handleSelectionChange} // Passed the prop with the correct name
         />
       </Box>
     </Box>

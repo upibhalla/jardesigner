@@ -71,9 +71,20 @@ class Segment():
         return Path( path ).name
 
     @staticmethod
-    def trimMolPath( path ):
-        p = Path( path )
-        return str(Path( *p.parts[-2:] ))
+    def trimMolPath( mol, dendName = "" ):
+        p = Path( mol.path )
+        intermediates = p.parts[4:-1]
+        intermediatesPath = "/".join(intermediates)
+        myName = p.parts[-1]
+        chemComptName = p.parts[3] # Assumes /model/chem precede it.
+        if chemComptName[-3:] == "[0]":
+            chemComptName = chemComptName[:-3]
+        if len( intermediatesPath ) > 0:
+            ret = f"{dendName}/{chemComptName}/{intermediatesPath}/{myName}[{mol.dataIndex}]"
+        else:
+            ret = f"{dendName}/{chemComptName}/{myName}[{mol.dataIndex}]"
+        #print( ret )
+        return ret
     
     @staticmethod
     def simpleCompt( compt, idx ):
@@ -97,34 +108,35 @@ class Segment():
                 Segment.trimComptPath(compt.path), 1, idx)
 
     @staticmethod
-    def cylChemCompt( compt, idx ):
-        ret =  Segment( "cylinder", compt.coords, compt.id, 
-            Segment.trimMolPath( compt.path ), 0, idx )
+    def cylChemCompt( mol, idx ):
+        parentDendName = mol.parent.subTree[0].name
+        ret =  Segment( "cylinder", mol.coords, mol.id, 
+            Segment.trimMolPath( mol, parentDendName ), 0, idx )
         ret.diameter *= 2           # Moose puts radius in coords[6]
         return ret
 
     @staticmethod
-    def spineChemCompt( compt, idx ):
-        newc = compt.coords[:7]
-        newc[6] = compt.coords[9]   # For diameter
-        return Segment( "cylinder", newc, compt.id, 
-            Segment.trimMolPath( compt.path ), 0, idx )
+    def spineChemCompt( mol, idx ):
+        newc = mol.coords[:7]
+        newc[6] = mol.coords[9]   # For diameter
+        return Segment( "cylinder", newc, mol.id, 
+            Segment.trimMolPath( mol ), 0, idx )
 
     @staticmethod
-    def prsynChemCompt( compt, idx ):
-        newc = np.array(compt.coords[:7])
+    def prsynChemCompt( mol, idx ):
+        newc = np.array(mol.coords[:7])
         # Unit vector of cone direction ins in coords[3:6], dia in coords[6]
         newc[3:6] = newc[3:6]*newc[6] + newc[0:3]   
-        return Segment( "cone", newc, compt.id, 
-            Segment.trimMolPath( compt.path ), 0, idx )
+        return Segment( "cone", newc, mol.id, 
+            Segment.trimMolPath( mol ), 0, idx )
 
     @staticmethod
-    def endoChemCompt( compt, idx ):
-        newc = np.array(compt.coords[:7])
+    def endoChemCompt( mol, idx ):
+        newc = np.array(mol.coords[:7])
         newc[6] = newc[3] 
         newc[3:6] = newc[0:3]
-        return Segment( "sphere", newc, compt.id, 
-            Segment.trimMolPath( compt.path ), 0, idx )
+        return Segment( "sphere", newc, mol.id, 
+            Segment.trimMolPath( mol ), 0, idx )
 
 def extractUnits( text ):
     match = re.search(r'\((.*?)\)', text)

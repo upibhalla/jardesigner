@@ -46,7 +46,9 @@ export const AppLayout = (props) => {
     handleMorphologyFileChange,
     replayTime,
     clientId,
+    clickSelected,
   } = props;
+
 
   const menuComponents = useMemo(() => ({
     File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
