@@ -10,13 +10,23 @@ import { ReplayContext } from './ReplayContext';
 const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
     const gradient = useMemo(() => {
         const colormap = displayConfig?.colormap || 'jet';
-        // FIX: The value calculation is inverted to flip the color bar (red on top).
         const stops = Array.from({ length: 11 }, (_, i) => {
             const value = i / 10;
             return `${getColor(value, colormap)} ${i * 10}%`;
         }).join(', ');
         return `linear-gradient(to top, ${stops})`;
     }, [displayConfig?.colormap]);
+
+    const formatColorBarLabel = (num) => {
+        if (num === null || !isFinite(num)) return 'N/A';
+        const absNum = Math.abs(num);
+        // Use exponential format for very large or very small numbers
+        if (absNum > 0 && (absNum < 0.01 || absNum >= 10000)) {
+            return num.toExponential(1);
+        }
+        // Otherwise, use a floating point representation with limited precision
+        return parseFloat(num.toPrecision(3)).toString();
+    };
 
     if (!displayConfig || !entityConfig) {
         return null;
@@ -33,8 +43,8 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
         }}>
             <Box sx={{ width: '20px', height: '150px', background: gradient, border: '1px solid black', borderRadius: '4px' }} />
             <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '150px' }}>
-                <Typography variant="caption">{vmax ? vmax.toExponential(1) : 'N/A'}</Typography>
-                <Typography variant="caption">{vmin ? vmin.toExponential(1) : 'N/A'}</Typography>
+                <Typography variant="caption">{formatColorBarLabel(vmax)}</Typography>
+                <Typography variant="caption">{formatColorBarLabel(vmin)}</Typography>
             </Box>
         </Box>
     );
@@ -100,10 +110,6 @@ const ThreeDViewer = (props) => {
       setDisplayConfig(threeDConfig);
     }
   }, [threeDConfig, setDrawableVisibility, onSceneBuilt]);
-
-  useEffect(() => {
-      if (managerRef.current) managerRef.current.updateSelectionVisuals(clickSelected);
-  }, [clickSelected]);
 
   useEffect(() => {
     if (managerRef.current) {
@@ -174,7 +180,15 @@ const ThreeDViewer = (props) => {
             {showReplayControls && (
                 <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 1, borderTop: '1px solid #ddd' }}>
                     {/* Replay Controls */}
-                    <Button variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay} startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}>{isReplaying ? "Pause" : "Replay"}</Button>
+                    <Button 
+                        variant="outlined" 
+                        size="small" 
+                        onClick={isReplaying ? onPauseReplay : onStartReplay} 
+                        startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}
+                        sx={{ width: '110px', justifyContent: 'flex-start' }}
+                    >
+                        {isReplaying ? "Pause" : "Replay"}
+                    </Button>
                     <TextField size="small" label="Frame Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
                     <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Typography variant="caption">0</Typography>
@@ -184,7 +198,7 @@ const ThreeDViewer = (props) => {
                         <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
                     </Box>
                     <Box sx={{ width: '250px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Speed</Typography>
+                        <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Frame dt</Typography>
                         <Tooltip title="Playback Speed (Slower -> Faster)">
                             <Slider value={replayInterval} onChange={(e, newValue) => setReplayInterval(newValue)} aria-labelledby="replay-speed-slider" valueLabelDisplay="off" min={5} max={500} step={5} inverted />
                         </Tooltip>
@@ -199,6 +213,7 @@ const ThreeDViewer = (props) => {
                             <Typography variant="body2" sx={{fontWeight: 'bold'}}>Explode Cell:</Typography>
                             <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X" />
                             <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y" />
+                            <FormControlLabel control={<Checkbox checked={explodeAxis.z} onChange={() => onExplodeAxisToggle('z')} size="small" />} label="Z" />
                         </Box>
                         <TextField
                             label="Path"

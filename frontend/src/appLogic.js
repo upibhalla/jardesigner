@@ -100,10 +100,10 @@ export const useAppLogic = () => {
     const frameQueueRef = useRef([]);
     const animationFrameId = useRef();
     const [simulationFrames, setSimulationFrames] = useState([]);
-    const [replayInterval, setReplayInterval] = useState(100);
+    const [replayInterval, setReplayInterval] = useState(10);
     const [drawableVisibility, setDrawableVisibility] = useState({});
     
-    const [explodeAxis, setExplodeAxis] = useState({ x: false, y: false });
+    const [explodeAxis, setExplodeAxis] = useState({ x: false, y: false, z: false });
     const [modelBboxSize, setModelBboxSize] = useState({ x: 0, y: 0, z: 0 });
     const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0, z: 0 });
 
@@ -149,7 +149,7 @@ export const useAppLogic = () => {
         setExplodeOffset({
             x: explodeAxis.x ? offsetValue : 0,
             y: explodeAxis.y ? offsetValue : 0,
-            z: 0
+            z: explodeAxis.z ? offsetValue : 0
         });
     }, [explodeAxis, modelBboxSize]);
 
@@ -234,6 +234,12 @@ export const useAppLogic = () => {
             socketRef.current = null;
         };
     }, [clientId]);
+
+    useEffect(() => {
+        if (threeDManagerRef.current) {
+            threeDManagerRef.current.updateSelectionVisuals(clickSelected);
+        }
+    }, [clickSelected]);
     
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null);
@@ -345,23 +351,11 @@ export const useAppLogic = () => {
 
     const handleSelectionChange = useCallback((selection, isCtrlClick) => {
         setClickSelected(prev => {
-			const isSelected = prev.some(item => isSameSelection(item, selection));
-        	let newSelection; // Define a variable to hold the new state
-			if (isCtrlClick) {
-				newSelection = isSelected ? prev.filter(item => !isSameSelection(item, selection)) : [...prev, selection];
-			} else {
-				newSelection = (prev.length === 1 && isSameSelection(prev[0], selection)) ? [] : [selection];
-			}
-			return newSelection;
-
-
-			/*
+            const isSelected = prev.some(item => isSameSelection(item, selection));
             if (isCtrlClick) {
-                const isSelected = prev.some(item => isSameSelection(item, selection));
                 return isSelected ? prev.filter(item => !isSameSelection(item, selection)) : [...prev, selection];
             }
             return (prev.length === 1 && isSameSelection(prev[0], selection)) ? [] : [selection];
-			*/
         });
     }, []);
     

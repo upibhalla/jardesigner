@@ -193,7 +193,7 @@ export default class ThreeDManager {
       const intersects = this.raycaster.intersectObjects(this.sceneMeshes);
       if (intersects.length > 0) {
           const firstIntersect = intersects[0].object;
-		  console.log("Clicked on object:", firstIntersect.userData);
+		  // console.log("Clicked on object:", firstIntersect.userData);
 
           if (this.onSelectionChange && firstIntersect.userData) {
               this.onSelectionChange(firstIntersect.userData, event.ctrlKey);
