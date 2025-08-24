@@ -83,12 +83,19 @@ function compactJsonData(currentData, defaultData) {
 
 
 export const useAppLogic = () => {
+    // --- NEW: Detect standalone mode by checking for injected data ---
+    const isStandalone = !!(window.__JARDESIGNER_SCENE_CONFIG__ && window.__JARDESIGNER_SIMULATION_FRAMES__);
+
     const [activeMenu, setActiveMenu] = useState(null);
     const [jsonData, setJsonData] = useState(initialJsonData);
     const [jsonContent, setJsonContent] = useState(() => JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
-    const [threeDConfig, setThreeDConfig] = useState(null);
+    
+    // --- MODIFIED: Initialize state from injected data in standalone mode ---
+    const [threeDConfig, setThreeDConfig] = useState(() => isStandalone ? window.__JARDESIGNER_SCENE_CONFIG__ : null);
+    const [simulationFrames, setSimulationFrames] = useState(() => isStandalone ? window.__JARDESIGNER_SIMULATION_FRAMES__ : []);
+    
     const [svgPlotFilename, setSvgPlotFilename] = useState(null);
-    const [isPlotReady, setIsPlotReady] = useState(false);
+    const [isPlotReady, setIsPlotReady] = useState(isStandalone); // In standalone, plot is not applicable, but we mark it as "ready".
     const [plotError, setPlotError] = useState('');
     const [isSimulating, setIsSimulating] = useState(false);
     const [clickSelected, setClickSelected] = useState([]);
@@ -99,7 +106,6 @@ export const useAppLogic = () => {
     const threeDManagerRef = useRef(null);
     const frameQueueRef = useRef([]);
     const animationFrameId = useRef();
-    const [simulationFrames, setSimulationFrames] = useState([]);
     const [replayInterval, setReplayInterval] = useState(10);
     const [drawableVisibility, setDrawableVisibility] = useState({});
     
@@ -107,13 +113,10 @@ export const useAppLogic = () => {
     const [modelBboxSize, setModelBboxSize] = useState({ x: 0, y: 0, z: 0 });
     const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0, z: 0 });
 
-    // FIX: The total runtime is now dynamically calculated from the latest simulation frame.
     const totalRuntime = useMemo(() => {
         if (simulationFrames.length > 0) {
-            // The runtime is the timestamp of the last available frame.
             return simulationFrames[simulationFrames.length - 1].timestamp;
         }
-        // Fallback to the configured runtime if no frames are available.
         return jsonData.runtime || 0.3;
     }, [simulationFrames, jsonData.runtime]);
 
@@ -136,7 +139,7 @@ export const useAppLogic = () => {
         simulationFrames,
         drawableVisibility,
         threeDConfig,
-        totalRuntime, // This now passes the dynamic value to the replay logic
+        totalRuntime,
         replayInterval,
         threeDManagerRef,
         onReplayEnd: handleReplayEnd
@@ -184,7 +187,21 @@ export const useAppLogic = () => {
         activeSimRef.current = activeSim;
     }, [activeSim]);
     
+    // --- MODIFIED: All server communication is now conditional ---
     useEffect(() => {
+        // If in standalone mode, skip all server/socket connection logic.
+        if (isStandalone) {
+             // Set initial visibility for standalone data
+            if (threeDConfig) {
+                const initialVisibility = {};
+                (threeDConfig.drawables || []).forEach(d => {
+                    initialVisibility[d.groupId] = d.visible !== false;
+                });
+                setDrawableVisibility(initialVisibility);
+            }
+            return;
+        }
+
         const socket = io(API_BASE_URL, { path: '/socket.io', transports: ['websocket'] });
         socketRef.current = socket;
 
@@ -233,7 +250,7 @@ export const useAppLogic = () => {
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [clientId]);
+    }, [clientId, isStandalone, threeDConfig]); // Added isStandalone and threeDConfig
 
     useEffect(() => {
         if (threeDManagerRef.current) {
@@ -329,7 +346,7 @@ export const useAppLogic = () => {
         setIsSimulating(false);
         setSimulationFrames([]);
         setThreeDConfig(null);
-        setSvgPlotFilename(null);
+        setSvgPlotfilename(null);
         setIsPlotReady(false);
         setPlotError('');
         handleRewindReplay();
@@ -382,6 +399,8 @@ export const useAppLogic = () => {
     const getChemProtos = useCallback(() => {
         return jsonData?.chemProto?.map(p => p?.name).filter(Boolean) || [];
     }, [jsonData?.chemProto]);
+
+
 
     const toggleMenu = (menu) => setActiveMenu(prev => (prev === menu ? null : menu));
 
