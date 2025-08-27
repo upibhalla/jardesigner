@@ -3,9 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <title>JarDesigner 3D Viewer</title>
+    <style>
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/standalone.jsx"></script>
+
+    <script>
+      window.__JARDESIGNER_SCENE_CONFIG__ = '__PLACEHOLDER_FOR_SCENE_CONFIG__';
+      window.__JARDESIGNER_SIMULATION_FRAMES__ = '__PLACEHOLDER_FOR_SIMULATION_FRAMES__';
+    </script>
+
+    <script type="module" src="/src/standalone.jsx"></script> 
   </body>
 </html>

@@ -922,7 +922,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     ################################################################
     # Here we call any extra building function supplied by user.
-    # It has to take rdes as an argument.
     ################################################################
 
     def _buildExtras( self ):
@@ -1251,7 +1250,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         moose.reinit()
         moose.start( dm["runtime"] )
         self._save()                                            
-        jarmoogli.notifySimulationEnd(self.dataChannelId)
+        self.runMooView.notifySimulationEnd(self.dataChannelId)
         if dm["block"] or self.plotFile != None:
             self.display( len( self.moogNames ) + 1)
         while True:
@@ -1970,7 +1969,7 @@ def randomPlacementFunc( numModels, idx ):
 
 
 def main():
-    global rdes
+    global rdes # Needed for the function called by the clocked functions.
     parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
     parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
     parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
@@ -1978,7 +1977,7 @@ def main():
     parser.add_argument( '--placementFunc', type=str, help='Optional: Pick a builtin placement function for multiple models. Options: squareGrid, random. Default: None' )
     parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
     parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
-    parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface.')
+    parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface. If not set we are in standalone mode.')
     parser.add_argument('--session-path', type=str, help='Temp directory for model and plot files, used in server mode for jardesigner interface.')
     args = parser.parse_args()
     rdes = rdesigneur( args.file, plotFile = args.plotFile, 
@@ -1999,6 +1998,14 @@ def main():
         print( "jardesigner.py: sent setup 3D scene" )
 
     moose.reinit()
+    if args.run and args.data_channel_id == None: # local run
+        print( "Running locally")
+        moose.start( rdes.runtime )
+        rdes.display()
+        if rdes.runMooView:
+            rdes.runMooView.sendSceneGraph()
+            rdes.runMooView.notifySimulationEnd( None )
+
     # This loop will wait for commands from server.py via stdin
     for line in sys.stdin:
         try:
@@ -2021,7 +2028,7 @@ def main():
                 rdes.display()
                 print("Finished display.")
                 time.sleep(0.1) # Give the filesystem time to flush
-                jarmoogli.notifySimulationEnd( rdes.dataChannelId )
+                rdes.runMooView.notifySimulationEnd( rdes.dataChannelId )
                 # After running, you might want to send the plot file info
                 '''
                 if rdes.plotFile and rdes.dataChannelId:
@@ -2045,14 +2052,6 @@ def main():
         # Ensure the output buffer is flushed so the server sees the prints
         sys.stdout.flush()
 
-    '''
-    args.run = True
-    if args.run:
-        if not rdes._displayMoogli():
-            rdes._display() 
-
-    jarmoogli.notifySimulationEnd()
-    '''
 
 
 if __name__ == "__main__":

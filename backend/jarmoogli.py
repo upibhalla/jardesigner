@@ -8,6 +8,10 @@ import moose
 import re
 import requests
 import json
+import webbrowser
+import pathlib
+import os
+import sys
 
 # Define the URL for the internal server endpoint
 FLASK_SERVER_URL = "http://127.0.0.1:5000/internal/push_data"
@@ -270,6 +274,9 @@ class MooView:
     def __init__( self, dataChannelId, displayConfig = None ):
         self.drawables = []
         self.dataChannelId = dataChannelId
+        self.standalone = ( dataChannelId == None )
+        self.standaloneFrames = []
+        self.standaloneSceneGraph = None
         if displayConfig:
             self.displayConfig = displayConfig
         else:
@@ -305,12 +312,14 @@ class MooView:
             "data_channel_id": self.dataChannelId,
             "payload": payload,
         }
-        try:
-            # --- MODIFIED: Use the session object and print errors ---
-            http_session.post(FLASK_SERVER_URL, json=requestBody, timeout=0.5)
-        except Exception as e:
-            # This will now print any network errors to the server console
-            print(f"ERROR in updateValues: Failed to send data frame. {e}")
+        if self.standalone:
+            self.standaloneFrames.append( payload )
+        else:
+            try:
+                http_session.post(FLASK_SERVER_URL, json=requestBody, timeout=0.5)
+            except Exception as e:
+                # This will now print any network errors to the server console
+                print(f"ERROR in updateValues: Failed to send data frame. {e}")
 
 
     def makeMoogli(self, mooObj, fdict, groupId ):
@@ -337,37 +346,102 @@ class MooView:
             "data_channel_id": self.dataChannelId,
             "payload": payload
         }
-        try:
-            print("Attempting to send initial scene graph to server...")
-            requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
-            print("Successfully sent initial scene graph.")
-        except Exception as e:
-            print(f"FATAL ERROR: Could not send initial scene graph to server. {e}")
+        if self.standalone:
+            self.standaloneSceneGraph = payload['scene']
+        else:
+            try:
+                print("Attempting to send initial scene graph to server...")
+                requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
+                print("Successfully sent initial scene graph.")
+            except Exception as e:
+                print(f"FATAL ERROR: Could not send initial scene graph to server. {e}")
+    
 
-
-#### Global function for ending simulation. ####
-
-def notifySimulationEnd( dataChannelId ):
-    """
-    Sends a final message to the client to signal that the simulation
-    has completed.
-    """
-    print("Sending simulation end notification to client...")
-    payload = {
-        "type": "sim_end",
-        "message": "Simulation has finished."
-    }
-    requestBody = {
-        "data_channel_id": dataChannelId,
-        "payload": payload
-    }
-    try:
-        requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
-        print("Successfully sent simulation end notification.")
-    except Exception as e:
-        print(f"Warning: Could not send simulation end notification. {e}")
-        # This was malformed. Correcting it.
-        http_session.post(FLASK_SERVER_URL, json={
+    def notifySimulationEnd( self, dataChannelId ):
+        """
+        Sends a final message to the client to signal that the simulation
+        has completed.
+        """
+        if self.standalone:
+            self.generateStandaloneHtml()
+            return
+        print("Sending simulation end notification to client...")
+        payload = {
+            "type": "sim_end",
+            "message": "Simulation has finished."
+        }
+        requestBody = {
             "data_channel_id": dataChannelId,
-            "payload": {"type": "error", "message": str(e)}
-        })
+            "payload": payload
+        }
+        try:
+            requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
+            print("Successfully sent simulation end notification.")
+        except Exception as e:
+            print(f"Warning: Could not send simulation end notification. {e}")
+            # This was malformed. Correcting it.
+            http_session.post(FLASK_SERVER_URL, json={
+                "data_channel_id": dataChannelId,
+                "payload": {"type": "error", "message": str(e)}
+            })
+
+
+
+
+
+
+    def generateStandaloneHtml(self, 
+            templatePath ="jardes3Dtemplate.html", 
+            outputPath = "jardes3Doutput.html"):
+        """
+        Generates a single, self-contained HTML file with embedded simulation data.
+
+        Args:
+            templatePath (str): The filename of the HTML template, assumed to be
+                                in the same directory as the script.
+            outputPath (str): The filename for the output HTML, which will be saved
+                              in the current working directory.
+        """
+        print("Generating standalone 3D view...")
+        try:
+            # --- MODIFIED: Resolve paths based on the new assumptions ---
+            # Resolve the template path relative to the location of the script
+            scriptDir = os.path.dirname(os.path.realpath(sys.argv[0]))
+            absoluteTemplatePath = os.path.join(scriptDir, templatePath)
+
+            # Resolve the output path relative to the current working directory
+            absoluteOutputPath = os.path.join(os.getcwd(), outputPath)
+
+            # 1. Read the HTML template file
+            with open(absoluteTemplatePath, 'r') as f:
+                templateContent = f.read()
+
+            # 2. Serialize the collected data into JSON strings
+            sceneGraphJson = json.dumps(self.standaloneSceneGraph)
+            framesJson = json.dumps(self.standaloneFrames)
+
+            # 3. Inject the data by replacing placeholders in the template
+            # NOTE: The placeholders in your template should now match exactly,
+            # including the single quotes.
+            content = templateContent.replace(
+                "'__PLACEHOLDER_FOR_SCENE_CONFIG__'", sceneGraphJson
+            )
+            content = content.replace(
+                "'__PLACEHOLDER_FOR_SIMULATION_FRAMES__'", framesJson
+            )
+
+            # 4. Save the new, data-filled HTML file
+            with open(absoluteOutputPath, 'w') as f:
+                f.write(content)
+
+            print(f"Successfully generated standalone view at: {absoluteOutputPath}")
+
+            # 5. Open the generated file in the default web browser
+            fileUrl = pathlib.Path(absoluteOutputPath).resolve().as_uri()
+            print("Opening view in default web browser...")
+            webbrowser.open(fileUrl)
+
+        except FileNotFoundError:
+            print(f"FATAL ERROR: HTML template not found at '{absoluteTemplatePath}'")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")

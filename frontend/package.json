@@ -10,23 +10,22 @@
     "@mui/material": "^6.4.1",
     "ajv": "^8.17.1",
     "cra-template": "1.2.0",
+    "lodash": "^4.17.21",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-file-picker": "^0.0.6",
     "react-markdown": "^10.1.0",
-    "react-scripts": "5.0.1",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1",
     "three": "^0.178.0",
+    "uuid": "^11.1.0",
     "web-vitals": "^4.2.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-	"dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+      "dev": "vite",
+      "build": "vite build --config vite.config.js",
+      "build:standalone": "vite build --config vite.config.standalone.js",
+      "preview": "vite preview"
   },
   "eslintConfig": {
     "extends": [
@@ -48,6 +47,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vite-plugin-singlefile": "^2.3.0"
   }
 }

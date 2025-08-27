@@ -417,6 +417,13 @@ export const useAppLogic = () => {
         drawableVisibility, setDrawableVisibility,
         replayTime,
         totalRuntime,
+		onStartReplay: handleStartReplay,
+        onPauseReplay: handlePauseReplay,
+        onRewindReplay: handleRewindReplay, // Note: ThreeDViewer doesn't use this, but good practice
+        onSeekReplay: handleSeekReplay,
+
+        // Explode Alias
+        onExplodeAxisToggle: handleExplodeAxisToggle,
         handleStartReplay,
         handlePauseReplay,
         handleRewindReplay,
