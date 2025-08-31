@@ -109,7 +109,7 @@ export const useAppLogic = () => {
     const [replayInterval, setReplayInterval] = useState(10);
     const [drawableVisibility, setDrawableVisibility] = useState({});
     
-    const [explodeAxis, setExplodeAxis] = useState({ x: false, y: false, z: false });
+    const [explodeAxis, setExplodeAxis] = useState({ x: false, y: true, z: false });
     const [modelBboxSize, setModelBboxSize] = useState({ x: 0, y: 0, z: 0 });
     const [explodeOffset, setExplodeOffset] = useState({ x: 0, y: 0, z: 0 });
 

@@ -1,13 +1,16 @@
 import React, { useRef, useEffect, useMemo, useState, memo, useContext } from 'react';
-import { Box, Button, Typography, TextField, FormControlLabel, Checkbox, Slider, Tooltip } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { 
+    Box, Button, Typography, TextField, FormControlLabel, Checkbox, Slider, 
+    Tooltip, Drawer, IconButton, Divider, Radio, RadioGroup, FormControl, FormLabel
+} from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
+import SettingsIcon from '@mui/icons-material/Settings';
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
 import { ReplayContext } from './ReplayContext';
 
-const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
+const ColorBar = ({ displayConfig, entityConfig, currentRange, readoutTitle }) => {
     const gradient = useMemo(() => {
         const colormap = displayConfig?.colormap || 'jet';
         const stops = Array.from({ length: 11 }, (_, i) => {
@@ -20,11 +23,9 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
     const formatColorBarLabel = (num) => {
         if (num === null || !isFinite(num)) return 'N/A';
         const absNum = Math.abs(num);
-        // Use exponential format for very large or very small numbers
         if (absNum > 0 && (absNum < 0.01 || absNum >= 10000)) {
             return num.toExponential(1);
         }
-        // Otherwise, use a floating point representation with limited precision
         return parseFloat(num.toPrecision(3)).toString();
     };
 
@@ -37,14 +38,16 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
 
     return (
         <Box sx={{
-            position: 'absolute', left: '16px', top: '16px', display: 'flex',
-            alignItems: 'center', gap: 1, color: 'black', textShadow: '0 0 2px white',
-            pointerEvents: 'none'
+            position: 'absolute', left: '16px', top: '16px', display: 'flex', flexDirection: 'column',
+            gap: 1, color: 'black', textShadow: '0 0 2px white', pointerEvents: 'none'
         }}>
-            <Box sx={{ width: '20px', height: '150px', background: gradient, border: '1px solid black', borderRadius: '4px' }} />
-            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '150px' }}>
-                <Typography variant="caption">{formatColorBarLabel(vmax)}</Typography>
-                <Typography variant="caption">{formatColorBarLabel(vmin)}</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{readoutTitle}</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: '20px', height: '150px', background: gradient, border: '1px solid black', borderRadius: '4px' }} />
+                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '150px' }}>
+                    <Typography variant="caption">{formatColorBarLabel(vmax)}</Typography>
+                    <Typography variant="caption">{formatColorBarLabel(vmin)}</Typography>
+                </Box>
             </Box>
         </Box>
     );
@@ -52,52 +55,45 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange }) => {
 
 const ThreeDViewer = (props) => {
   const {
-    isSimulating, threeDConfig, setActiveMenu, clickSelected, onSelectionChange, onManagerReady,
+    isSimulating, threeDConfig, onSelectionChange, onManagerReady,
     simulationFrames, drawableVisibility, setDrawableVisibility,
-    // Replay props
     isReplaying, onStartReplay, onPauseReplay, onSeekReplay, replayInterval, setReplayInterval, totalRuntime,
-    // Explode props
     explodeAxis, onExplodeAxisToggle, onSceneBuilt,
+    clickSelected
   } = props;
 
-  // Consume the high-frequency time directly from the context for the UI
   const { replayTime } = useContext(ReplayContext);
 
   const mountRef = useRef(null);
   const managerRef = useRef(null);
   const [colorRanges, setColorRanges] = useState({});
   const [displayConfig, setDisplayConfig] = useState(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [activeDrawableId, setActiveDrawableId] = useState(null);
   
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
   const drawables = useMemo(() => threeDConfig?.drawables || [], [threeDConfig]);
-  const activeDrawable = useMemo(() => drawables.find(d => drawableVisibility[d.groupId]), [drawables, drawableVisibility]);
+  
+  const activeDrawable = useMemo(() => drawables.find(d => d.groupId === activeDrawableId), [drawables, activeDrawableId]);
+  
   const activeColorRange = colorRanges[activeDrawable?.groupId] || { vmin: '', vmax: '' };
-
-  // Derive the simPath from the last selected object.
   const displayedSimPath = clickSelected.length > 0 ? clickSelected[clickSelected.length - 1].simPath : '';
 
   useEffect(() => {
     if (mountRef.current) {
         managerRef.current = new ThreeDManager(mountRef.current, onSelectionChange);
-        if (onManagerReady) {
-            onManagerReady(managerRef.current);
-        }
+        if (onManagerReady) onManagerReady(managerRef.current);
     }
     return () => {
         managerRef.current?.dispose();
-        if (onManagerReady) {
-            onManagerReady(null);
-        }
+        if (onManagerReady) onManagerReady(null);
     };
   }, [onSelectionChange, onManagerReady]);
 
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
       managerRef.current.buildScene(threeDConfig);
-      // After building the scene, report the bounding box size back up to the main logic
-      if (onSceneBuilt) {
-        onSceneBuilt(managerRef.current.getBoundingBoxSize());
-      }
+      if (onSceneBuilt) onSceneBuilt(managerRef.current.getBoundingBoxSize());
       
       const initialVisibility = {};
       const initialColorRanges = {};
@@ -108,6 +104,10 @@ const ThreeDViewer = (props) => {
       setDrawableVisibility(initialVisibility);
       setColorRanges(initialColorRanges);
       setDisplayConfig(threeDConfig);
+
+      if (threeDConfig.drawables && threeDConfig.drawables.length > 0) {
+        setActiveDrawableId(threeDConfig.drawables[0].groupId);
+      }
     }
   }, [threeDConfig, setDrawableVisibility, onSceneBuilt]);
 
@@ -124,11 +124,10 @@ const ThreeDViewer = (props) => {
   useEffect(() => {
       if (managerRef.current) {
           managerRef.current.setDrawableVisibility(drawableVisibility);
-          managerRef.current.setActiveGroupId(activeDrawable?.groupId || null);
+          managerRef.current.setActiveGroupId(activeDrawableId);
       }
-  }, [drawableVisibility, activeDrawable]);
+  }, [drawableVisibility, activeDrawableId]);
 
-  const handleUpdateClick = () => { if (setActiveMenu) setActiveMenu(null); };
   const handleAutoscale = () => {
       if (!simulationFrames || simulationFrames.length === 0 || !activeDrawable) return;
       const targetGroupId = activeDrawable.groupId;
@@ -152,86 +151,107 @@ const ThreeDViewer = (props) => {
 
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-            
-            {/* Line 1: Main Controls and Visibility */}
-            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                <Button variant="contained" onClick={handleUpdateClick} startIcon={<AutoAwesomeIcon />}>Update</Button>
-                {showReplayControls && (
-                    <>
-                        <Button variant="outlined" size="small" onClick={handleAutoscale} disabled={!activeDrawable}>Autoscale</Button>
-                        <TextField label="Vmin" size="small" variant="outlined" value={activeColorRange.vmin} onChange={(e) => handleColorRangeChange('vmin', e.target.value)} sx={{ width: '100px' }} disabled={!activeDrawable} />
-                        <TextField label="Vmax" size="small" variant="outlined" value={activeColorRange.vmax} onChange={(e) => handleColorRangeChange('vmax', e.target.value)} sx={{ width: '100px' }} disabled={!activeDrawable} />
-                    </>
-                )}
+        {/* Main Control Bar (Always Visible) */}
+        {showReplayControls && (
+            <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                <Button 
+                    variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay} 
+                    startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}
+                    sx={{ width: '140px', justifyContent: 'flex-start' }}
+                >
+                    {isReplaying ? "Pause" : "Replay"}
+                </Button>
+                <TextField size="small" label="Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
+                <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="caption">0</Typography>
+                    <Slider min={0} max={totalRuntime} step={Math.max(totalRuntime/1000, 1e-6)} value={Math.min(replayTime, totalRuntime)} onChangeCommitted={(e, v)=> onSeekReplay(v)} aria-label="progress slider"
+                        sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MuiSlider-track': { transition: 'none' } }}
+                    />
+                    <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
+                </Box>
+                <TextField
+                    label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
+                    InputProps={{ readOnly: true }} sx={{ minWidth: '20ch' }}
+                />
+
+                <Box sx={{ flexGrow: 1 }} />
+                <Tooltip title="View Options">
+                    <IconButton onClick={() => setIsPanelOpen(true)}>
+                        <SettingsIcon />
+                    </IconButton>
+                </Tooltip>
+            </Box>
+        )}
+
+        {/* The Collapsible Side Panel (Drawer) */}
+        <Drawer anchor="left" open={isPanelOpen} onClose={() => setIsPanelOpen(false)}>
+            <Box sx={{ width: 350, p: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <Typography variant="h6">View Options</Typography>
+                <Divider />
+
                 {drawables.length > 0 && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: 2, borderLeft: '1px solid #ddd' }}>
-                        <Typography variant="body2" sx={{fontWeight: 'bold'}}>Visible:</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Visible Readouts:</Typography>
                         {drawables.map(d => (
-                            <FormControlLabel key={d.groupId} control={ <Checkbox checked={drawableVisibility[d.groupId] ?? true} onChange={(e) => handleVisibilityChange(d.groupId, e.target.checked)} size="small" /> }
+                            <FormControlLabel key={d.groupId} control={<Checkbox checked={drawableVisibility[d.groupId] ?? true} onChange={(e) => handleVisibilityChange(d.groupId, e.target.checked)} size="small" />}
                                 label={<Typography variant="body2">{d.title || d.groupId}</Typography>}
                             />
                         ))}
                     </Box>
                 )}
-            </Box>
+                <Divider />
 
-            {/* Line 2: Replay and Explode Controls */}
-            {showReplayControls && (
-                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2, pt: 1, borderTop: '1px solid #ddd' }}>
-                    {/* Replay Controls */}
-                    <Button 
-                        variant="outlined" 
-                        size="small" 
-                        onClick={isReplaying ? onPauseReplay : onStartReplay} 
-                        startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}
-                        sx={{ width: '110px', justifyContent: 'flex-start' }}
-                    >
-                        {isReplaying ? "Pause" : "Replay"}
-                    </Button>
-                    <TextField size="small" label="Frame Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
-                    <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="caption">0</Typography>
-                        <Slider min={0} max={totalRuntime} step={Math.max(totalRuntime/1000, 1e-6)} value={Math.min(replayTime, totalRuntime)} onChangeCommitted={(e, v)=> onSeekReplay(v)} aria-label="progress slider"
-                            sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MuiSlider-track': { transition: 'none' } }}
-                        />
-                        <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
-                    </Box>
-                    <Box sx={{ width: '250px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Frame dt</Typography>
-                        <Tooltip title="Playback Speed (Slower -> Faster)">
-                            <Slider value={replayInterval} onChange={(e, newValue) => setReplayInterval(newValue)} aria-labelledby="replay-speed-slider" valueLabelDisplay="off" min={5} max={500} step={5} inverted />
-                        </Tooltip>
-                        <Box sx={{ minWidth: '55px', textAlign: 'center', border: '1px solid #ccc', borderRadius: '4px', p: '4px' }}>
-                            <Typography variant="caption">{replayInterval}ms</Typography>
-                        </Box>
-                    </Box>
-                    
-                    {/* Explode and Path Controls */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pl: 2, borderLeft: '1px solid #ddd' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Typography variant="body2" sx={{fontWeight: 'bold'}}>Explode Cell:</Typography>
-                            <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X" />
-                            <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y" />
-                            <FormControlLabel control={<Checkbox checked={explodeAxis.z} onChange={() => onExplodeAxisToggle('z')} size="small" />} label="Z" />
-                        </Box>
-                        <TextField
-                            label="Path"
-                            size="small"
-                            variant="outlined"
-                            value={displayedSimPath}
-                            InputProps={{ readOnly: true }}
-                            sx={{ minWidth: '20ch' }}
-                        />
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Readout Colorbar Range:</Typography>
+                    <FormControl>
+                        <FormLabel id="readout-select-label" sx={{fontSize: '0.8rem', mb: 1}}>Select Readout</FormLabel>
+                        <RadioGroup
+                            aria-labelledby="readout-select-label"
+                            name="readout-select-group"
+                            value={activeDrawableId}
+                            onChange={(e) => setActiveDrawableId(e.target.value)}
+                        >
+                            {drawables.map(d => (
+                                <FormControlLabel key={d.groupId} value={d.groupId} control={<Radio size="small" />} label={<Typography variant="body2">{d.title || d.groupId}</Typography>} />
+                            ))}
+                        </RadioGroup>
+                    </FormControl>
+                    <Button variant="outlined" size="small" onClick={handleAutoscale} disabled={!activeDrawable}>Autoscale</Button>
+                    <TextField label="Vmin" size="small" variant="outlined" value={activeColorRange.vmin} onChange={(e) => handleColorRangeChange('vmin', e.target.value)} disabled={!activeDrawable} />
+                    <TextField label="Vmax" size="small" variant="outlined" value={activeColorRange.vmax} onChange={(e) => handleColorRangeChange('vmax', e.target.value)} disabled={!activeDrawable} />
+                </Box>
+                <Divider />
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Explode Cell:</Typography>
+                    <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X-Axis" />
+                    <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y-Axis" />
+                    <FormControlLabel control={<Checkbox checked={explodeAxis.z} onChange={() => onExplodeAxisToggle('z')} size="small" />} label="Z-Axis" />
+                </Box>
+                <Divider />
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Frame dt</Typography>
+                    <Tooltip title="Playback Speed (Slower -> Faster)">
+                        <Slider value={replayInterval} onChange={(e, newValue) => setReplayInterval(newValue)} aria-labelledby="replay-speed-slider" valueLabelDisplay="off" min={5} max={500} step={5} inverted />
+                    </Tooltip>
+                    <Box sx={{ minWidth: '55px', textAlign: 'center', border: '1px solid #ccc', borderRadius: '4px', p: '4px' }}>
+                        <Typography variant="caption">{replayInterval}ms</Typography>
                     </Box>
                 </Box>
-            )}
-        </Box>
+            </Box>
+        </Drawer>
 
+        {/* 3D Viewer Area */}
         <Box sx={{ position: 'relative', flexGrow: 1 }}>
             <Box ref={mountRef} sx={{ height: '100%', width: '100%', background: '#FFFFFF' }} />
             {((isSimulating || simulationFrames.length > 0) && activeDrawable) && (
-                <ColorBar displayConfig={displayConfig} entityConfig={activeDrawable} currentRange={activeColorRange} />
+                <ColorBar 
+                    displayConfig={displayConfig} 
+                    entityConfig={activeDrawable} 
+                    currentRange={activeColorRange}
+                    readoutTitle={activeDrawable.title || activeDrawable.groupId}
+                />
             )}
         </Box>
     </Box>
