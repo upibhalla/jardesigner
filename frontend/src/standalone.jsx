@@ -11,7 +11,7 @@ const StandaloneApp = () => {
   // We only render the 3D viewer and its context provider
   return (
     <ReplayContext.Provider value={{ replayTime: props.replayTime }}>
-      <ThreeDViewer {...props} />
+      <ThreeDViewer {...props} onSelectionChange={props.handleSelectionChange} />
     </ReplayContext.Provider>
   );
 };
