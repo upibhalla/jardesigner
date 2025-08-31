@@ -127,7 +127,7 @@ class Segment():
             Segment.trimMolPath( mol ), 0, idx )
 
     @staticmethod
-    def prsynChemCompt( mol, idx ):
+    def presynChemCompt( mol, idx ):
         newc = np.array(mol.coords[:7])
         # Unit vector of cone direction ins in coords[3:6], dia in coords[6]
         newc[3:6] = newc[3:6]*newc[6] + newc[0:3]   

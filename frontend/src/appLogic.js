@@ -250,7 +250,7 @@ export const useAppLogic = () => {
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [clientId, isStandalone, threeDConfig]); // Added isStandalone and threeDConfig
+    }, [clientId, isStandalone]); // Added isStandalone
 
     useEffect(() => {
         if (threeDManagerRef.current) {

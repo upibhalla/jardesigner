@@ -1152,11 +1152,39 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             moose.setClock( pr.tick, fdict['dt'] )
             self.runMooView.makeMoogli( dendObj, fdict, groupId )
 
+    def getFirstMol( self, protoName ):
+        mols = moose.wildcardFind(f"/library/{protoName}/##[ISA=PoolBase]")
+        if len(mols) == 0:
+            return ""
+        return mols[0].name
+
+
     def _buildSetupMoogli( self ):
         self.setupMooView = jarmoogli.MooView( self.dataChannelId )
-        elecGroupId = "{}_{}_{}".format( "#", "Vm", 0 )
-        compts = moose.wildcardFind( self.elecid.path + "/#[ISA=CompartmentBase]" )
-        self.setupMooView.makeMoogli( compts, DefaultFdict, elecGroupId )
+        comptGroupId = "{}_{}_{}".format( "compt", "Vm", 0 )
+        spineGroupId = "{}_{}_{}".format( "spine", "Vm", 0 )
+        allcompts = moose.wildcardFind( self.elecid.path + "/#[ISA=CompartmentBase]" )
+        spines = moose.wildcardFind( "{0}/shaft#,{0}/head#".format(self.elecid.path ) )
+        compts = list( set( allcompts ) - set( spines ) )
+
+        self.setupMooView.makeMoogli( compts, DefaultFdict, comptGroupId )
+        if len( spines ) > 0:
+            sdict = dict( DefaultFdict )
+            sdict['title'] = 'Spines'
+            self.setupMooView.makeMoogli( spines, DefaultFdict, spineGroupId )
+
+        cdict = dict( DefaultFdict )
+        if hasattr( self, 'comptDict' ):
+            for protoName, meshPath in self.comptDict.items():
+                mname = self.getFirstMol( protoName )
+                if mname == "":
+                    print( f"Warning, no molecules found for {protoName}")
+                    continue
+                molGroupId = f"{protoName}_conc_0"
+                mols = moose.wildcardFind( f"{meshPath}/{mname}[]" )
+                print( "NUM MOLS = ", len(mols), "mesh = ", meshPath, "mol = ", mname )
+                cdict['title'] = f"Chem: {protoName}"
+                self.setupMooView.makeMoogli( mols, cdict, molGroupId )
 
         # Later also check for any chem, stim, plot etc and add those.
 
@@ -1378,8 +1406,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     # Here we get the time-series data and write to various formats
     ################################################################
     '''
-    The original author of the functions -- [_savePlots(), _writeXML(), _writeCSV(), _save()] is
-    Sarthak Sharma.
+    The original author of the functions -- [_savePlots(), _writeXML(), _writeCSV(), _save()] is Sarthak Sharma.
     Email address: sarthaks442@gmail.com
     Heavily modified by U.S. Bhalla
     '''
@@ -1993,9 +2020,8 @@ def main():
     print( "jardesigner.py: built model" )
     if rdes.dataChannelId:
         rdes._buildSetupMoogli()
-        print( "jardesigner.py: built setup 3D" )
         rdes.setupMooView.sendSceneGraph()
-        print( "jardesigner.py: sent setup 3D scene" )
+        # print( "jardesigner.py: sent setup 3D scene" )
 
     moose.reinit()
     if args.run and args.data_channel_id == None: # local run
@@ -2012,7 +2038,6 @@ def main():
             # Parse the command, which is expected to be a JSON string
             command_data = json.loads(line)
             command = command_data.get("command")
-            #print( "jardesigner.py: received command", command )
 
             if command == "start":
                 print("Received 'start' command.")
@@ -2020,21 +2045,12 @@ def main():
                 if moose.element( "/clock" ).currentTime == 0:
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
                         rdes.runMooView.sendSceneGraph()
-                        print( "jardesigner.py: sent runtime 3D scene" )
 
                 moose.start(runtime)
-                print("Finished run.")
                 # Notify client that the run is finished
                 rdes.display()
-                print("Finished display.")
                 time.sleep(0.1) # Give the filesystem time to flush
                 rdes.runMooView.notifySimulationEnd( rdes.dataChannelId )
-                # After running, you might want to send the plot file info
-                '''
-                if rdes.plotFile and rdes.dataChannelId:
-                    self.display()
-                    jarmoogli.notifySimulationEnd()
-                '''
 
             elif command == "reset":
                 print("Received 'reset' command.")

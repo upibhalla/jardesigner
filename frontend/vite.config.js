@@ -1,16 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
 
+// No need for 'resolve' from 'path' unless you add path aliases later
 export default defineConfig({
   plugins: [react()],
-  base: './',
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html'),
-      },
-    },
-  },
+  // The 'base' and 'build' options can be removed for a standard setup.
+  base: '/jardesigner/',
 });
-

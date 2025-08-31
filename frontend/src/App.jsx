@@ -4,7 +4,6 @@ import { AppLayout } from './AppLayout.jsx';
 
 const App = () => {
   const appStateAndHandlers = useAppLogic();
-
   return <AppLayout {...appStateAndHandlers} />;
 };
 
