@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useMemo, useState, memo, useContext } from 'react';
-import { 
-    Box, Button, Typography, TextField, FormControlLabel, Checkbox, Slider, 
+import {
+    Box, Button, Typography, TextField, FormControlLabel, Checkbox, Slider,
     Tooltip, Drawer, IconButton, Divider, Radio, RadioGroup, FormControl, FormLabel
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -70,12 +70,12 @@ const ThreeDViewer = (props) => {
   const [displayConfig, setDisplayConfig] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [activeDrawableId, setActiveDrawableId] = useState(null);
-  
+
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
   const drawables = useMemo(() => threeDConfig?.drawables || [], [threeDConfig]);
-  
+
   const activeDrawable = useMemo(() => drawables.find(d => d.groupId === activeDrawableId), [drawables, activeDrawableId]);
-  
+
   const activeColorRange = colorRanges[activeDrawable?.groupId] || { vmin: '', vmax: '' };
   const displayedSimPath = clickSelected.length > 0 ? clickSelected[clickSelected.length - 1].simPath : '';
 
@@ -94,7 +94,7 @@ const ThreeDViewer = (props) => {
     if (managerRef.current && threeDConfig) {
       managerRef.current.buildScene(threeDConfig);
       if (onSceneBuilt) onSceneBuilt(managerRef.current.getBoundingBoxSize());
-      
+
       const initialVisibility = {};
       const initialColorRanges = {};
       (threeDConfig?.drawables || []).forEach(d => {
@@ -149,13 +149,21 @@ const ThreeDViewer = (props) => {
   };
   const handleVisibilityChange = (groupId, isChecked) => { setDrawableVisibility(prev => ({ ...prev, [groupId]: isChecked })); };
 
+  const keybindingsText = `Arrow keys: move display
+<>,. : zoom in and out.
+Dd: scale diameter of selected readout.
+Pp: Pitch
+Yy: Yaw
+Rr: Roll
+Aa: Auto-position`;
+
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Main Control Bar (Always Visible) */}
         {showReplayControls && (
             <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                <Button 
-                    variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay} 
+                <Button
+                    variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay}
                     startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}
                     sx={{ width: '140px', justifyContent: 'flex-start' }}
                 >
@@ -223,13 +231,15 @@ const ThreeDViewer = (props) => {
                 <Divider />
 
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Explode Cell:</Typography>
-                    <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X-Axis" />
-                    <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y-Axis" />
-                    <FormControlLabel control={<Checkbox checked={explodeAxis.z} onChange={() => onExplodeAxisToggle('z')} size="small" />} label="Z-Axis" />
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Explode cell on axis:</Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-around' }}>
+                        <FormControlLabel control={<Checkbox checked={explodeAxis.x} onChange={() => onExplodeAxisToggle('x')} size="small" />} label="X" />
+                        <FormControlLabel control={<Checkbox checked={explodeAxis.y} onChange={() => onExplodeAxisToggle('y')} size="small" />} label="Y" />
+                        <FormControlLabel control={<Checkbox checked={explodeAxis.z} onChange={() => onExplodeAxisToggle('z')} size="small" />} label="Z" />
+                    </Box>
                 </Box>
                 <Divider />
-                
+
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>Frame dt</Typography>
                     <Tooltip title="Playback Speed (Slower -> Faster)">
@@ -239,6 +249,14 @@ const ThreeDViewer = (props) => {
                         <Typography variant="caption">{replayInterval}ms</Typography>
                     </Box>
                 </Box>
+                <Divider />
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Keybindings</Typography>
+                    <Typography variant="caption" sx={{ whiteSpace: 'pre-line' }}>
+                        {keybindingsText}
+                    </Typography>
+                </Box>
             </Box>
         </Drawer>
 
@@ -246,9 +264,9 @@ const ThreeDViewer = (props) => {
         <Box sx={{ position: 'relative', flexGrow: 1 }}>
             <Box ref={mountRef} sx={{ height: '100%', width: '100%', background: '#FFFFFF' }} />
             {((isSimulating || simulationFrames.length > 0) && activeDrawable) && (
-                <ColorBar 
-                    displayConfig={displayConfig} 
-                    entityConfig={activeDrawable} 
+                <ColorBar
+                    displayConfig={displayConfig}
+                    entityConfig={activeDrawable}
                     currentRange={activeColorRange}
                     readoutTitle={activeDrawable.title || activeDrawable.groupId}
                 />
