@@ -413,8 +413,8 @@
               "proto": { "type": "string" },
               "path": { "type": "string" },
               "type": { "const": "presyn_spine" },
-              "radius": { "type": "number", "default": 0.5e-6 },
-              "radiusSdev": { "type": "number", "default": 0 }
+              "radiusByPsd": { "type": "number", "default": 1 },
+              "radiusByPsdSdev": { "type": "number", "default": 0 }
             },
             "required": ["proto", "path", "type"],
             "additionalProperties": false
@@ -429,7 +429,7 @@
               "radiusSdev": { "type": "number", "default": 0 },
               "spacing": { "type": "number", "default": 10e-6 }
             },
-            "required": ["proto", "path", "type"],
+            "required": ["proto", "path", "type", "spacing"],
             "additionalProperties": false
           },
           {

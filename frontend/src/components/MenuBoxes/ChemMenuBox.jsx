@@ -60,11 +60,19 @@ const createDefaultChemPrototype = () => ({
     source: '',
     manualName: false,
 });
+
 const createDefaultChemDistribution = () => ({
     prototype: '',
     location: locationOptions[0],
     path: 'soma',
     diffusionLength_um: '',
+    parent: '',
+    radius_um: '',
+    radiusSdev_um: '',
+    spacing_um: '',
+    radiusRatio: '',
+    radiusByPsd: '',
+    radiusByPsdSdev: '',
 });
 
 
@@ -114,16 +122,39 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
             }
         };
         const initialDists = currentConfig?.chemDistrib?.map(d => {
-            let diffusionLength_um = '';
-            if (d.diffusionLength !== undefined && d.diffusionLength !== null && !isNaN(Number(d.diffusionLength))) {
-                diffusionLength_um = formatFloat(Number(d.diffusionLength) * 1e6);
-            }
-            return {
+            const baseDist = {
+                ...createDefaultChemDistribution(),
                 prototype: d.proto,
                 location: mapSchemaDistribTypeToLocation(d.type),
                 path: d.path,
-                diffusionLength_um: diffusionLength_um,
             };
+
+            switch (d.type) {
+                case 'dend':
+                    if (d.diffusionLength !== undefined) baseDist.diffusionLength_um = formatFloat(Number(d.diffusionLength) * 1e6);
+                    break;
+                case 'spine':
+                case 'psd':
+                    if (d.parent !== undefined) baseDist.parent = d.parent;
+                    break;
+                case 'endo':
+                     if (d.parent !== undefined) baseDist.parent = d.parent;
+                     if (d.radiusRatio !== undefined) baseDist.radiusRatio = String(d.radiusRatio);
+                     if (d.spacing !== undefined) baseDist.spacing_um = formatFloat(Number(d.spacing) * 1e6);
+                    break;
+                case 'presyn_spine':
+                    if (d.radiusByPsd !== undefined) baseDist.radiusByPsd = String(d.radiusByPsd);
+                    if (d.radiusByPsdSdev !== undefined) baseDist.radiusByPsdSdev = String(d.radiusByPsdSdev);
+                    break;
+                case 'presyn_dend':
+                    if (d.radius !== undefined) baseDist.radius_um = formatFloat(Number(d.radius) * 1e6);
+                    if (d.radiusSdev !== undefined) baseDist.radiusSdev_um = formatFloat(Number(d.radiusSdev) * 1e6);
+                    if (d.spacing !== undefined) baseDist.spacing_um = formatFloat(Number(d.spacing) * 1e6);
+                    break;
+                default:
+                    break;
+            }
+            return baseDist;
         }) || [];
         return initialDists.length > 0 ? initialDists : [createDefaultChemDistribution()];
     });
@@ -254,35 +285,69 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
             }).filter(p => p !== null);
 
             const chemDistribData = currentDistributions.map(distState => {
-                let schemaDistribType = 'dend';
-                switch(distState.location) {
-                    case 'Dendrite': schemaDistribType = 'dend'; break;
-                    case 'Spine': schemaDistribType = 'spine'; break;
-                    case 'PSD': schemaDistribType = 'psd'; break;
-                    case 'Endo': schemaDistribType = 'endo'; break;
-                    case 'Presyn_spine': schemaDistribType = 'presyn_spine'; break;
-                    case 'Presyn_dend': schemaDistribType = 'presyn_dend'; break;
-                    default: schemaDistribType = 'dend';
-                }
-
                 const selectedProtoExists = chemProtoData.some(p => p.name === distState.prototype);
                 if (!selectedProtoExists || !distState.prototype || !distState.path) return null;
 
-                const length_um_str = distState.diffusionLength_um;
-                let diffusionLengthProp = {};
-                if (length_um_str !== undefined && length_um_str !== null && length_um_str.trim() !== '') {
-                    const length_um = parseFloat(length_um_str);
-                    if (!isNaN(length_um) && length_um >= 0) {
-                        diffusionLengthProp = { diffusionLength: length_um * 1e-6 };
-                    }
-                }
-
-                return {
+                const baseDistrib = {
                     proto: distState.prototype,
                     path: distState.path,
-                    type: schemaDistribType,
-                    ...diffusionLengthProp
                 };
+                
+                const umToSI = (um_val) => {
+                    if (um_val === undefined || um_val === null || String(um_val).trim() === '') return undefined;
+                    const num = parseFloat(um_val);
+                    return isNaN(num) ? undefined : num * 1e-6;
+                };
+
+                const parseFloatOrUndefined = (val) => {
+                     if (val === undefined || val === null || String(val).trim() === '') return undefined;
+                     const num = parseFloat(val);
+                     return isNaN(num) ? undefined : num;
+                }
+
+                switch(distState.location) {
+                    case 'Dendrite':
+                        baseDistrib.type = 'dend';
+                        const diffLen = umToSI(distState.diffusionLength_um);
+                        if (diffLen !== undefined) baseDistrib.diffusionLength = diffLen;
+                        break;
+                    case 'Spine':
+                        baseDistrib.type = 'spine';
+                        if (distState.parent) baseDistrib.parent = distState.parent;
+                        break;
+                    case 'PSD':
+                        baseDistrib.type = 'psd';
+                        if (distState.parent) baseDistrib.parent = distState.parent;
+                        break;
+                    case 'Endo':
+                        baseDistrib.type = 'endo';
+                        if (distState.parent) baseDistrib.parent = distState.parent;
+                        const radiusRatio = parseFloatOrUndefined(distState.radiusRatio);
+                        if (radiusRatio !== undefined) baseDistrib.radiusRatio = radiusRatio;
+                        const endoSpacing = umToSI(distState.spacing_um);
+                        if (endoSpacing !== undefined) baseDistrib.spacing = endoSpacing;
+                        break;
+                    case 'Presyn_spine':
+                        baseDistrib.type = 'presyn_spine';
+                        const radiusByPsd = parseFloatOrUndefined(distState.radiusByPsd);
+                        if (radiusByPsd !== undefined) baseDistrib.radiusByPsd = radiusByPsd;
+                        const radiusByPsdSdev = parseFloatOrUndefined(distState.radiusByPsdSdev);
+                        if (radiusByPsdSdev !== undefined) baseDistrib.radiusByPsdSdev = radiusByPsdSdev;
+                        break;
+                    case 'Presyn_dend':
+                        baseDistrib.type = 'presyn_dend';
+                        const pdRadius = umToSI(distState.radius_um);
+                        if (pdRadius !== undefined) baseDistrib.radius = pdRadius;
+                        const pdRadiusSdev = umToSI(distState.radiusSdev_um);
+                        if (pdRadiusSdev !== undefined) baseDistrib.radiusSdev = pdRadiusSdev;
+                        const pdSpacing = umToSI(distState.spacing_um);
+                        if (pdSpacing !== undefined) baseDistrib.spacing = pdSpacing;
+                        break;
+                    default:
+                        return null; 
+                }
+
+                return baseDistrib;
             }).filter(item => item !== null);
 
             return { chemProto: chemProtoData, chemDistrib: chemDistribData };
@@ -333,7 +398,6 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
                             <HelpField id="name" label="Prototype Name" value={activeProtoData.name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required/>
                          </Grid>
                          
-                         {/* FIX: New full-width row for the source file input */}
                          {['SBML', 'kkit'].includes(activeProtoData.type) && (
                             <Grid item xs={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -387,6 +451,7 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
             {activeDistribData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={2}>
+                         {/* --- Common Fields --- */}
                          <Grid item xs={12} sm={6}>
                              <HelpField id="prototype" label="Prototype" select required value={activeDistribData.prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
                                 <MenuItem value=""><em>Select...</em></MenuItem>
@@ -396,14 +461,63 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
                           <Grid item xs={12} sm={6}>
                              <HelpField id="path" label="Path" required value={activeDistribData.path} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.path} />
                          </Grid>
-                          <Grid item xs={12} sm={6}>
+                          <Grid item xs={12}>
                               <HelpField id="location" label="Location" select required value={activeDistribData.location} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.location}>
                                  {locationOptions.map(loc => <MenuItem key={loc} value={loc}>{loc}</MenuItem>)}
                              </HelpField>
                           </Grid>
-                          <Grid item xs={12} sm={6}>
-                              <HelpField id="diffusionLength_um" label="Diffusion Length (μm)" type="number" value={activeDistribData.diffusionLength_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.diffusionLength} />
-                          </Grid>
+                         
+                         {/* --- Location-Specific Fields --- */}
+                         {activeDistribData.location === 'Dendrite' && (
+                             <Grid item xs={12} sm={6}>
+                                 <HelpField id="diffusionLength_um" label="Diffusion Length (μm)" type="number" value={activeDistribData.diffusionLength_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.diffusionLength} />
+                             </Grid>
+                         )}
+
+                         {(activeDistribData.location === 'Spine' || activeDistribData.location === 'PSD') && (
+                             <Grid item xs={12} sm={6}>
+                                 <HelpField id="parent" label="Parent" value={activeDistribData.parent} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.parent} />
+                             </Grid>
+                         )}
+
+                         {activeDistribData.location === 'Endo' && (
+                             <>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="parent" label="Parent" value={activeDistribData.parent} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.parent} />
+                                 </Grid>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="radiusRatio" label="Radius Ratio" type="number" value={activeDistribData.radiusRatio} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radiusRatio} />
+                                 </Grid>
+                                  <Grid item xs={12} sm={6}>
+                                     <HelpField id="spacing_um" label="Spacing (μm)" type="number" value={activeDistribData.spacing_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing} />
+                                 </Grid>
+                             </>
+                         )}
+
+                         {activeDistribData.location === 'Presyn_spine' && (
+                             <>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="radiusByPsd" label="Radius by PSD" type="number" value={activeDistribData.radiusByPsd} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radiusByPsd} />
+                                 </Grid>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="radiusByPsdSdev" label="Radius by PSD Sdev" type="number" value={activeDistribData.radiusByPsdSdev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radiusByPsdSdev} />
+                                 </Grid>
+                             </>
+                         )}
+
+                         {activeDistribData.location === 'Presyn_dend' && (
+                             <>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="radius_um" label="Radius (μm)" type="number" value={activeDistribData.radius_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radius} />
+                                 </Grid>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="radiusSdev_um" label="Radius Sdev (μm)" type="number" value={activeDistribData.radiusSdev_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radiusSdev} />
+                                 </Grid>
+                                 <Grid item xs={12} sm={6}>
+                                     <HelpField id="spacing_um" label="Spacing (μm)" type="number" value={activeDistribData.spacing_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing} />
+                                 </Grid>
+                             </>
+                         )}
                      </Grid>
                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeDistribution(activeDistribution)} sx={{ mt: 2 }}>
                          Remove Distribution

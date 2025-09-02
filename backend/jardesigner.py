@@ -790,14 +790,16 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         elecPath = argList['path']
         meshType = argList['type']
         mesh = moose.PresynMesh( newChemId.path + '/' + chemSrc )
-        presynRadius = float( argList["radius"] )
-        presynRadiusSdev = float( argList["radiusSdev"] )
         pair = elecPath + " " + geom
         if meshType == 'presyn_dend':
+            presynRadius = float( argList["radius"] )
+            presynRadiusSdev = float( argList["radiusSdev"] )
             presynSpacing = float( argList["spacing"] )
             elecList = self.elecid.compartmentsFromExpression[ pair ]
             mesh.buildOnDendrites( elecList, presynSpacing )
         else:
+            presynRadius = float( argList["radiusByPsd"] )
+            presynRadiusSdev = float( argList["radiusByPsdSdev"] )
             elecList = self.elecid.compartmentsFromExpression[ pair ]
             mesh.buildOnSpineHeads( elecList )
         mesh.setRadiusStats( presynRadius, presynRadiusSdev )
