@@ -30,9 +30,13 @@ import matplotlib.pyplot as plt
 import argparse
 import requests
 import csv
-import jarmoogli
+from . import jarmoogli
+from . import jardesignerProtos as jp
+import moose.fixXreacs as fixXreacs
 
-rdes = None # later overridden as a global.
+from moose.neuroml.NeuroML import NeuroML
+from moose.neuroml.ChannelML import ChannelML
+from . import context
 
 knownFieldInfo = {
     'Vm': {'fieldScale': 1000, 'dataUnits': 'mV', 
@@ -79,12 +83,6 @@ class DictToClass:
     def __init__(self, input_dict):
         for key, value in input_dict.items():
             setattr(self, key, value)
-
-from rdesigneur.rdesigneurProtos import *
-import moose.fixXreacs as fixXreacs
-
-from moose.neuroml.NeuroML import NeuroML
-from moose.neuroml.ChannelML import ChannelML
 
 # In python3, cElementTree is deprecated. We do not plan to support python <2.7
 # in future, so other imports have been removed.
@@ -177,8 +175,8 @@ def addDefaultsRecursive(instance, schema):
 
     return instance
 
-class rdesigneur:
-    """The rdesigneur class is used to build models incorporating
+class JarDesigner:
+    """The JarDesigner class is used to build models incorporating
     reaction-diffusion and electrical signaling in neurons.
     It takes two arguments: Arg 1 is model specifier which can either be
     a string with the model as a dict, or a filename for a json file.
@@ -233,7 +231,7 @@ class rdesigneur:
         except jsonschema.exceptions.ValidationError as e:
             print(f"{jsonFile} fails to pass schema: {e}")
             quit()
-        #### Now we load in all the fields of the rdesigneur class
+        #### Now we load in all the fields of the jardesigner class
         for key, value in data.items():
             setattr(self, key, value)
         #### Check for command line overrides of content in json file.
@@ -257,7 +255,7 @@ class rdesigneur:
             self.buildSpineProto()
             self.buildChemProto()
         except BuildError as msg:
-            print("Error: rdesigneur: Prototype build failed:", msg)
+            print("Error: jardesigner: Prototype build failed:", msg)
             quit()
 
 
@@ -265,7 +263,7 @@ class rdesigneur:
     def _printModelStats( self ):
         if not self.verbose:
             return
-        print("Rdesigneur: Elec model has",
+        print("jardesigner: Elec model has",
             self.elecid.numCompartments, "compartments and",
             self.elecid.numSpines, "spines on",
             len( self.comptDict ), "compartments.")
@@ -279,7 +277,7 @@ class rdesigneur:
     def buildModel( self, modelPath = '/model', numModels = 1, 
             placementFunc = None, tweakFunc = None ):
         if moose.exists( modelPath ):
-            print("rdesigneur::buildModel: Build failed. Model '",
+            print("jardesigner::buildModel: Build failed. Model '",
                 modelPath, "' already exists.")
             return False
         self.model = moose.Neutral( modelPath )
@@ -306,7 +304,7 @@ class rdesigneur:
             try:
                 _func()
             except BuildError as msg:
-                print("Error: rdesigneur: model build failed:", msg)
+                print("Error: jardesigner: model build failed:", msg)
                 moose.delete(self.model)
                 return False
             t = time.time() - t0
@@ -409,11 +407,18 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 moduleFile.close()
             return False
             '''
-        if not func[0:bracePos] in globals():
+        # Globally defined function
+        fname = func[0:bracePos]
+        if fname in globals():
+            globals().get( fname )( protoName )
+            return True
+        elif hasattr(jp, fname):
+            getattr( jp, fname )( protoName )
+            return True
+        else:
             raise BuildError( \
                 protoName + " Proto: global function '" +func+"' not known.")
-        globals().get( func[0:bracePos] )( protoName )
-        return True
+        return False
 
     # Class or file options. True if extension is found in
     def isKnownClassOrFile( self, name, suffices ):
@@ -597,11 +602,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def _buildElecBallAndStick( self, args ):
         parms = [ 'ballAndStick', 'cell', 10e-6, 10e-6, 4e-6, 200e-6, 1 ] # somaDia, somaLen, dendDia, dendLen, dendNumSeg
         cell = moose.Neuron( '/library/cell' )
-        prev = buildCompt( cell, 'soma', dia = args['somaDia'], dx = args['somaLen'] )
+        prev = jp.buildCompt( cell, 'soma', dia = args['somaDia'], dx = args['somaLen'] )
         dx = args['dendLen']/args['dendNumSeg']
         x = prev.x
         for i in range( args['dendNumSeg'] ):
-            compt = buildCompt( cell, 'dend' + str(i), x = x, dx = dx, dia = args['dendDia'] )
+            compt = jp.buildCompt( cell, 'dend' + str(i), x = x, dx = dx, dia = args['dendDia'] )
             moose.connect( prev, 'axial', compt, 'raxial' )
             prev = compt
             x += dx
@@ -988,7 +993,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         # Put in stuff to go through fields if the target is a chem object
         field = plotDict['field']
         if not field in knownFields:
-            print("Warning: Rdesigneur::_parseComptField: Unknown field '{}'".format( field ) )
+            print("Warning: jardesigner::_parseComptField: Unknown field '{}'".format( field ) )
             return (), ""
 
         kf = knownFields[field] # Find the field to decide type.
@@ -1117,6 +1122,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             return
         knownFields = knownFieldsDefault
         moogliBase = moose.Neutral( self.modelPath + '/moogli' )
+        print( "Creating self.runMooView on:", self )
         self.runMooView = jarmoogli.MooView( self.dataChannelId )
         for idx, i in enumerate( self.moogli ):
             path = i['path'].split('/')[-1]
@@ -1132,7 +1138,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             numMoogli = len( dendObj )
             iObj = DictToClass( i ) # Used as 'args' in makeMoogli
             pr = moose.PyRun( '/model/moogli_' + groupId )
-            pr.runString = "rdes.runMooView.updateMoogliViewer({})".format(idx)
+            pr.runString = "import jardesigner.context; rdes = jardesigner.context.getContext(); rdes.runMooView.updateMoogliViewer({})".format(idx)
             pr.tick = idx + 20
             #moose.setClock( pr.tick, i["dt"] )
             fdict = i.copy()
@@ -1633,7 +1639,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         nmdarList = moose.wildcardFind( ep + '/##[ISA=NMDAChan]' )
 
         self.comptList = moose.wildcardFind( ep + '/#[ISA=CompartmentBase]')
-        print("Rdesigneur: Elec model has ", len( self.comptList ),
+        print("jardesigner: Elec model has ", len( self.comptList ),
             " compartments and ", len( self.spineList ),
             " spines with ", len( nmdarList ), " NMDARs")
 
@@ -1998,7 +2004,7 @@ def randomPlacementFunc( numModels, idx ):
 
 
 def main():
-    global rdes # Needed for the function called by the clocked functions.
+    #global rdes # Needed for the function called by the clocked functions.
     parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
     parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
     parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
@@ -2009,20 +2015,25 @@ def main():
     parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface. If not set we are in standalone mode.')
     parser.add_argument('--session-path', type=str, help='Temp directory for model and plot files, used in server mode for jardesigner interface.')
     args = parser.parse_args()
-    rdes = rdesigneur( args.file, plotFile = args.plotFile, 
+    print( "jardesigner.py: parsed args" )
+    rdes = JarDesigner( args.file, plotFile = args.plotFile, 
         jsonData = None, dataChannelId = args.data_channel_id, 
         sessionDir = args.session_path,
         verbose = args.verbose )
+    context.setContext( rdes )
+    print( "jardesigner.py: made rdes" )
     pf = None
     if args.placementFunc == "squareGrid":
         pf = squareGridPlacementFunc
     elif args.placementFunc == "random":
         pf = randomPlacementFunc
     rdes.buildModel( numModels = args.numModels, placementFunc = pf )
-    print( "jardesigner.py: built model" )
+    print( "jardesigner.py: built model on:", rdes )
     if rdes.dataChannelId:
         rdes._buildSetupMoogli()
+        print( "jardesigner.py: sendSceneGraph1 on:", rdes )
         rdes.setupMooView.sendSceneGraph()
+        print( "jardesigner.py: sent SceneGraph1 on:", rdes )
         # print( "jardesigner.py: sent setup 3D scene" )
 
     moose.reinit()
@@ -2048,6 +2059,7 @@ def main():
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
                         rdes.runMooView.sendSceneGraph()
 
+                print( "starting on rdes = ", rdes )
                 moose.start(runtime)
                 # Notify client that the run is finished
                 rdes.display()
@@ -2071,6 +2083,6 @@ def main():
         sys.stdout.flush()
 
 
-
 if __name__ == "__main__":
     main()
+

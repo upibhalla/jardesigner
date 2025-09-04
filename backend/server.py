@@ -140,8 +140,10 @@ def launch_simulation():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Could not save config file: {e}"}), 500
     
+    '''
     if not os.path.exists(MOOSE_SCRIPT_PATH):
         return jsonify({"status": "error", "message": f"MOOSE script '{MOOSE_SCRIPT_NAME}' not found."}), 500
+    '''
 
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
     os.makedirs(session_dir, exist_ok=True)
@@ -150,8 +152,8 @@ def launch_simulation():
     data_channel_id = str(uuid.uuid4())
     
     command = [
-        "python", "-u",
-        MOOSE_SCRIPT_PATH,
+        "python", "-u", "-m",
+        "jardesigner.jardesigner",
         temp_file_path,
         "--plotFile", svg_filepath,
         "--data-channel-id", data_channel_id,
@@ -159,9 +161,15 @@ def launch_simulation():
     ]
     
     try:
+        env = os.environ.copy() # Copy local environment varialbs
+        if 'PYTHONPATH' in env:
+            env['PYTHONPATH'] = f"{BASE_DIR}:{env['PYTHONPATH']}"
+        else:
+            env['PYTHONPATH'] = BASE_DIR
         process = subprocess.Popen(
-            command, cwd=BASE_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, bufsize=1
+            command, cwd=BASE_DIR, stdin=subprocess.PIPE, 
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, bufsize=1, env = env
         )
 
         running_processes[process.pid] = {

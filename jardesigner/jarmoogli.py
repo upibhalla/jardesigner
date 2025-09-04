@@ -12,6 +12,7 @@ import webbrowser
 import pathlib
 import os
 import sys
+import importlib.resources
 
 # Define the URL for the internal server endpoint
 FLASK_SERVER_URL = "http://127.0.0.1:5000/internal/push_data"
@@ -404,8 +405,11 @@ class MooView:
         """
         print("Generating standalone 3D view...")
         try:
-            # --- MODIFIED: Resolve paths based on the new assumptions ---
-            # Resolve the template path relative to the location of the script
+            absoluteOutputPath = os.path.join(os.getcwd(), outputPath)
+
+            # 1. Read the HTML template file
+            templateContent = importlib.resources.read_text('jardesigner', 'jardes3Dtemplate.html')
+            '''
             scriptDir = os.path.dirname(os.path.realpath(sys.argv[0]))
             absoluteTemplatePath = os.path.join(scriptDir, templatePath)
 
@@ -415,6 +419,7 @@ class MooView:
             # 1. Read the HTML template file
             with open(absoluteTemplatePath, 'r') as f:
                 templateContent = f.read()
+            '''
 
             # 2. Serialize the collected data into JSON strings
             sceneGraphJson = json.dumps(self.standaloneSceneGraph)
