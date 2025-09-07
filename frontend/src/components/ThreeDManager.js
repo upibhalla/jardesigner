@@ -89,7 +89,7 @@ export default class ThreeDManager {
             const end = new THREE.Vector3(...primitive.C2);
             const length = start.distanceTo(end);
             const d1 = primitive.diameter;
-            const d2 = (primitive.type === 'cone') ? primitive.diameter2 : d1;
+			const d2 = (primitive.type === 'cone') ? 0 : d1;
             const geometry = new THREE.CylinderGeometry(d2 / 2, d1 / 2, length, 16);
             mesh = new THREE.Mesh(geometry, material);
             const direction = new THREE.Vector3().subVectors(end, start);

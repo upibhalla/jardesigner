@@ -203,20 +203,20 @@ def push_data():
 # MODIFIED: Restored the detailed diagnostic logging on connect.
 @socketio.on('connect')
 def handle_connect():
-    print("-------------------------------------------")
-    print(f"SERVER LOG: Client attempting to connect with sid: {request.sid}")
+    #print("-------------------------------------------")
+    #print(f"SERVER LOG: Client attempting to connect with sid: {request.sid}")
     headers = dict(request.headers)
     upgrade = headers.get("Upgrade", "Not found").lower()
     connection = headers.get("Connection", "Not found").lower()
-    print(f"SERVER LOG: Request Headers => {headers}")
-    print(f"SERVER LOG: 'Upgrade' header value => '{upgrade}'")
-    print(f"SERVER LOG: 'Connection' header value => '{connection}'")
+    #print(f"SERVER LOG: Request Headers => {headers}")
+    #print(f"SERVER LOG: 'Upgrade' header value => '{upgrade}'")
+    #print(f"SERVER LOG: 'Connection' header value => '{connection}'")
     if "websocket" not in upgrade:
         print("SERVER LOG: >>> FATAL: 'Upgrade: websocket' header is MISSING.")
     else:
         print("SERVER LOG: >>> SUCCESS: 'Upgrade: websocket' header found.")
-    print("-------------------------------------------")
-    print(f"Client connected: {request.sid}")
+    #print("-------------------------------------------")
+    #print(f"Client connected: {request.sid}")
 
 
 @socketio.on('register_client')
@@ -250,7 +250,7 @@ def handle_join_sim_channel(data):
     channel_id = data.get('data_channel_id')
     if not channel_id: return
     join_room(channel_id)
-    print(f"Client {request.sid} joined data channel (room): {channel_id}")
+    #print(f"Client {request.sid} joined data channel (room): {channel_id}")
 
 @app.route('/simulation_status/<int:pid>', methods=['GET'])
 def simulation_status(pid):

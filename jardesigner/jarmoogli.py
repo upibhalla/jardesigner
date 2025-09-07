@@ -44,11 +44,59 @@ knownFieldInfo = {
     'n': {'fieldScale': 1, 'dataUnits': '#', 
         'dataType': '# of molecules', 'vmin':0.0, 'vmax':200.0 },
     'volume': {'fieldScale': 1e18, 'dataUnits': 'um^3', 
-        'dataType': 'Volume', 'vmin':0.0, 'vmax':1000.0 }
+        'dataType': 'Volume', 'vmin':0.0, 'vmax':1000.0 },
+    'other': {'fieldScale': 1, 'dataUnits': '#', 
+        'dataType': 'plot', 'vmin':0.0, 'vmax':1.0 },
 }
 
+def objPath( obj, splitLevel ):
+    split = obj.path.split('/')
+    if splitLevel == 1:
+        ret = split[-1]
+    elif splitLevel == 2:
+        if len( split ) >= 2:
+            ret = f"{split[-2]}/{split[-1]}"
+        else:
+            return objPath( obj, 1 )
+    elif splitLevel == 3:
+        if len( split ) >= 3:
+            ret = f"{split[-3]}/{split[-2]}/{split[-1]}"
+        else:
+            return objPath( obj, 2 )
+
+    if obj.dataIndex > 0 and ret[-1] != ']':
+        return f"{ret}[{obj.dataIndex}]"
+    elif obj.dataIndex == 0 and ret[-1] == ']':
+        idx = ret.rfind( '[' )
+        return ret[:idx]
+    else:
+        return ret
+
+def getObjListInfo( objList ):
+    ''' Returns a list of paths and a list of [x,y,z,dia] of the centers 
+    of each object in the objList '''
+
+    if len( objList ) == 0:
+        return [], []
+    elm = objList[0]
+    if elm.isA["PoolBase"]:
+        paths = [objPath( ee, 3 ) for ee in objList ]
+        coords = [ ee.coords for ee in objList ]
+        for cc in coords:
+            cc[6] *= 2
+    elif elm.isA["CompartmentBase"]:
+        paths = [objPath( ee, 1 ) for ee in objList ]
+        coords = [ ee.coords for ee in objList ]
+    elif elm.isA["ChanBase"] or elm.isA["CaConcBase"]:
+        paths = [objPath( ee, 2 ) for ee in objList ]
+        coords = [ ee.parent.coords  for ee in objList ]
+    else:
+        return [], []
+
+    return paths, coords
+    
 class Segment():
-    def __init__( self, shape, coords, simId, simPath, swcType, idx ):
+    def __init__( self, shape, coords, simId, simPath, swcType, idx, value = 0 ):
         self.shape = shape
         self.C = list(coords[3:6]) if shape == 'sphere' else list(coords[0:3])
         self.C2 = list(coords[3:6])
@@ -57,6 +105,7 @@ class Segment():
         self.simPath = simPath
         self.swcType = swcType
         self.shapeIdx = idx
+        self.value = value
 
     def toDict( self ):
         return {
@@ -64,10 +113,10 @@ class Segment():
             "C": self.C,
             "C2": self.C2,
             "diameter": self.diameter,
-            "value": 0,
+            "value": self.value,
             "swcType": self.swcType,
             "shapeIdx": self.shapeIdx,
-            "simId": self.simId.idValue,
+            "simId": self.simId,
             "simPath": self.simPath
         }
     
@@ -94,10 +143,10 @@ class Segment():
     @staticmethod
     def simpleCompt( compt, idx ):
         if compt.name == "soma":
-            return Segment( "sphere", compt.coords, compt.id, 
+            return Segment( "sphere", compt.coords, compt.id.idValue, 
                 Segment.trimComptPath( compt.path ), 1, idx )
         else:
-            return Segment( "cylinder", compt.coords, compt.id, 
+            return Segment( "cylinder", compt.coords, compt.id.idValue, 
                 Segment.trimComptPath( compt.path ), 4, idx )
 
     # === NEW: Method to represent IntFire objects as spheres ===
@@ -109,13 +158,13 @@ class Segment():
         new_coords[0:3] = coords[0:3]
         new_coords[3:6] = coords[0:3] # Sphere C2 is same as C
         new_coords[6] = 10e-6 # Default diameter of 10 microns
-        return Segment("sphere", new_coords, compt.id,
+        return Segment("sphere", new_coords, compt.id.idValue,
                 Segment.trimComptPath(compt.path), 1, idx)
 
     @staticmethod
     def cylChemCompt( mol, idx ):
         parentDendName = mol.parent.subTree[0].name
-        ret =  Segment( "cylinder", mol.coords, mol.id, 
+        ret =  Segment( "cylinder", mol.coords, mol.id.idValue, 
             Segment.trimMolPath( mol, parentDendName ), 0, idx )
         ret.diameter *= 2           # Moose puts radius in coords[6]
         return ret
@@ -124,15 +173,15 @@ class Segment():
     def spineChemCompt( mol, idx ):
         newc = mol.coords[:7]
         newc[6] = mol.coords[9]   # For diameter
-        return Segment( "cylinder", newc, mol.id, 
+        return Segment( "cylinder", newc, mol.id.idValue, 
             Segment.trimMolPath( mol ), 0, idx )
 
     @staticmethod
     def presynChemCompt( mol, idx ):
         newc = np.array(mol.coords[:7])
-        # Unit vector of cone direction ins in coords[3:6], dia in coords[6]
+        # Unit vector of cone direction is in coords[3:6], dia in coords[6]
         newc[3:6] = newc[3:6]*newc[6] + newc[0:3]   
-        return Segment( "cone", newc, mol.id, 
+        return Segment( "cone", newc, mol.id.idValue, 
             Segment.trimMolPath( mol ), 0, idx )
 
     @staticmethod
@@ -140,8 +189,77 @@ class Segment():
         newc = np.array(mol.coords[:7])
         newc[6] = newc[3] 
         newc[3:6] = newc[0:3]
-        return Segment( "sphere", newc, mol.id, 
+        return Segment( "sphere", newc, mol.id.idValue, 
             Segment.trimMolPath( mol ), 0, idx )
+
+    @staticmethod
+    def trodeBase( path, newc, simId, idx, theta, value ):
+        # Unit vector of cone direction is in coords[3:6], dia in coords[6]
+        # Cone is 5 microns and is aligned in along unit vector towards y.
+        # It touches cylinder at its surface.
+        dx = np.cos( theta + idx * 0.1 )
+        dy = np.sin( theta + idx * 0.1 )
+        if path == "soma":
+            newc[0:3] = newc[3:6]
+        else:
+            newc[3:6] = (newc[3:6] + newc[0:3])/2
+            newc[0:3] = newc[3:6]
+        newc[4] += newc[6]*dx * 0.55 # Just a small offset from the surface.
+        newc[5] += newc[6]*dy * 0.55 # Just a small offset from the surface.
+        newc[1] = newc[4] + dx * (0.5*newc[6] + 5e-6)
+        newc[2] = newc[5] + dy * (0.5*newc[6] + 5e-6)
+        return Segment( "cone", newc, simId, path, 0, idx, value = value )
+
+    @staticmethod
+    def plotTrode( path, newc, simId, idx ):
+        return Segment.trodeBase( path, newc, simId, idx, 0, 0 )
+
+    @staticmethod
+    def stimTrode( path, newc, simId, idx ):
+        # Same as above, except cone is along z.
+        return Segment.trodeBase( path, newc, simId, idx, np.pi/2, -0.1 )
+        '''
+        if path == "soma":
+            newc[0:3] = newc[3:6]
+        else:
+            newc[3:6] = (newc[3:6] + newc[0:3])/2
+            newc[0:3] = newc[3:6]
+        newc[5] += newc[6] * 0.55 # Just a small offset from the surface.
+        newc[2] = newc[5] + newc[6]/2 + 5e-6   
+        return Segment( "cone", newc, simId, path, 0, idx, value = -0.1 )
+        '''
+        '''
+        newc[3:6] = newc[0:3]
+        newc[5] += newc[6]
+        newc[2] = newc[5] + newc[6] + 5e-6   
+        return Segment( "cone", newc, simId, path, 0, idx, value = 0.5 )
+        '''
+
+    @staticmethod
+    def moogTrode( path, newc, simId, idx ):
+        # Here I would really like to draw a little box, distinct icon.
+        # For now, a cone at a different angle.
+        return Segment.trodeBase( path, newc, simId, idx, np.pi* 1.25,0.05 )
+
+
+        '''
+        if path == "soma":
+            newc[0:3] = newc[3:6]
+        else:
+            newc[3:6] = (newc[3:6] + newc[0:3])/2
+            newc[0:3] = newc[3:6]
+        newc[4] -= newc[6] * 0.55 # Just a small offset from the surface.
+        newc[5] -= newc[6] * 0.55 # Just a small offset from the surface.
+        newc[1] = newc[4] + newc[6]/2 - 5e-6   
+        newc[2] = newc[5] + newc[6]/2 - 5e-6   
+        return Segment( "cone", newc, simId, path, 0, idx, value = 0.05 )
+        newc[3:6] = newc[0:3]
+        newc[4] += newc[6]
+        newc[5] += newc[6]
+        newc[1] = newc[4] + newc[6] - 5e-6   
+        newc[2] = newc[5] + newc[6] - 5e-6   
+        return Segment( "cone", newc, simId, path, 0, idx, value = 1 )
+        '''
 
 def extractUnits( text ):
     match = re.search(r'\((.*?)\)', text)
@@ -271,6 +389,34 @@ class MooseChemDataWrapper( DataWrapper ):
             "data": values
         }
 
+class MooseTrodeDataWrapper( DataWrapper ):
+    def __init__( self, objList, fdict, groupId ):
+        fdict['transparency'] = fdict.get('transparency', 0.8)
+        super().__init__(fdict, groupId )
+        self.objList_ = objList
+        if not objList:
+            return
+        
+        objType = fdict['dataType']
+        paths, coords = getObjListInfo( objList )
+        if objType == "plot":
+            self.segmentList = [ Segment.plotTrode( pp, cc, obj.id.idValue, idx ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+        elif objType == "stim":
+            self.segmentList = [ Segment.stimTrode( pp, cc, obj.id.idValue, idx ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+        elif objType == "moogli":
+            self.segmentList = [ Segment.moogTrode( pp, cc, obj.id.idValue, idx ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+        '''
+        '''
+
+    def getDataFrame( self, timestamp ): # Dummy function, returns zeros.
+        return {
+            "filetype": "jardesignerDataFrame",
+            "version": "1.0",
+            "timestamp": float(timestamp),
+            "groupId": self.groupId,
+            "data": [0]* len( self.objList_ )
+        }
+
 class MooView:
     def __init__( self, dataChannelId, displayConfig = None ):
         self.drawables = []
@@ -327,6 +473,8 @@ class MooView:
         mooField = fdict.get('field', 'Vm')
         if mooField in ['n', 'conc']: # mooObj is the wildcard list
             dw = MooseChemDataWrapper(mooObj, fdict, groupId)
+        elif mooField == 'other': # mooObj is objList
+            dw = MooseTrodeDataWrapper(mooObj, fdict, groupId)
         else:
             dw = MooseNeuronDataWrapper(mooObj, fdict, groupId)
         self.drawables.append(dw)
@@ -351,9 +499,8 @@ class MooView:
             self.standaloneSceneGraph = payload['scene']
         else:
             try:
-                print("Attempting to send initial scene graph to server...")
                 requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
-                print("Successfully sent initial scene graph.")
+                #print( "Sent Scene Graph: \n", requestBody )
             except Exception as e:
                 print(f"FATAL ERROR: Could not send initial scene graph to server. {e}")
     
@@ -366,7 +513,6 @@ class MooView:
         if self.standalone:
             self.generateStandaloneHtml()
             return
-        print("Sending simulation end notification to client...")
         payload = {
             "type": "sim_end",
             "message": "Simulation has finished."
@@ -377,7 +523,7 @@ class MooView:
         }
         try:
             requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
-            print("Successfully sent simulation end notification.")
+            print("Sent simulation end notification.")
         except Exception as e:
             print(f"Warning: Could not send simulation end notification. {e}")
             # This was malformed. Correcting it.
@@ -403,7 +549,6 @@ class MooView:
             outputPath (str): The filename for the output HTML, which will be saved
                               in the current working directory.
         """
-        print("Generating standalone 3D view...")
         try:
             absoluteOutputPath = os.path.join(os.getcwd(), outputPath)
 
@@ -439,7 +584,7 @@ class MooView:
             with open(absoluteOutputPath, 'w') as f:
                 f.write(content)
 
-            print(f"Successfully generated standalone view at: {absoluteOutputPath}")
+            print(f"Generated standalone view at: {absoluteOutputPath}")
 
             # 5. Open the generated file in the default web browser
             fileUrl = pathlib.Path(absoluteOutputPath).resolve().as_uri()

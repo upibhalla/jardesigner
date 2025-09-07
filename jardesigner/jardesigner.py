@@ -1150,6 +1150,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             plotObj, plotField = self._parseComptField( dendCompts, i, knownFields )
             numPlots = sum( q != dummy for q in plotObj )
             #print( "PlotList: {0}: numobj={1}, field ={2}, nd={3}, ns={4}".format( pair, numPlots, plotField, len( dendCompts ), len( spineCompts ) ) )
+            objList = [] # Used to fill in ObjIds of plotted objects.
             if numPlots > 0:
                 tabname = graphs.path + '/plot' + str(k)
                 scale = knownFields[i['field']][2]
@@ -1159,9 +1160,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 else:
                     title = i['path'] + "." + i['field']
                 if i['mode'] == 'wave':
-                    self.wavePlotNames.append( [ tabname, title, k, scale, units, i ] )
+                    self.wavePlotNames.append( [ tabname, title, k, scale, units, i, objList ] )
                 elif i['mode'] == 'time': 
-                    self.plotNames.append( [ tabname, title, k, scale, units, i['field'], i['ymin'], i['ymax'] ] )
+                    self.plotNames.append( [ tabname, title, k, scale, units, i['field'], i['ymin'], i['ymax'], objList ] )
                 else:
                     print( "Can't handle {} plots".format(i['mode']) )
 
@@ -1179,6 +1180,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             for p in [ x for x in plotObj if x != dummy ]:
                 #print( p.path, plotField, q )
                 moose.connect( vtabs[q], 'requestOut', p, plotField )
+                objList.append( p )
                 q += 1
 
     def _buildMoogli( self ):
@@ -1186,7 +1188,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             return
         knownFields = knownFieldsDefault
         moogliBase = moose.Neutral( self.modelPath + '/moogli' )
-        print( "Creating self.runMooView on:", self )
         self.runMooView = jarmoogli.MooView( self.dataChannelId )
         for idx, i in enumerate( self.moogli ):
             path = i['path'].split('/')[-1]
@@ -1223,6 +1224,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
             moose.setClock( pr.tick, fdict['dt'] )
             self.runMooView.makeMoogli( dendObj, fdict, groupId )
+            # Here we set aside info for setupMooView
+            i['moogliObjList'] = dendObj
+
 
     def getFirstMol( self, protoName ):
         mols = moose.wildcardFind(f"/library/{protoName}/##[ISA=PoolBase]")
@@ -1254,11 +1258,34 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     continue
                 molGroupId = f"{protoName}_conc_0"
                 mols = moose.wildcardFind( f"{meshPath}/{mname}[]" )
-                print( "NUM MOLS = ", len(mols), "mesh = ", meshPath, "mol = ", mname )
+                #print( "NUM MOLS = ", len(mols), "mesh = ", meshPath, "mol = ", mname )
                 cdict['title'] = f"Chem: {protoName}"
                 self.setupMooView.makeMoogli( mols, cdict, molGroupId )
 
         # Later also check for any chem, stim, plot etc and add those.
+        # PlotName entry has  [ tabname, title, idx_of_tab, scale, units, 
+        #                       field, ymin, ymax, objList ]
+        pdict = dict( DefaultFdict )
+        pdict["field"] = "other"
+        pdict["dataType"] = "plot"
+        for pp in self.plotNames:
+            pdict["title"] = "plot_" + pp[1]
+            plotGroupId = f"{pp[1]}.{pp[5]}.{pp[2]}" # title.field.idx
+            self.setupMooView.makeMoogli( pp[8], pdict, plotGroupId )
+
+        pdict["field"] = "other"
+        pdict["dataType"] = "stim"
+        for idx, ss in enumerate( self.stims ):
+            pdict["title"] = "stim_" + ss['path']
+            stimGroupId = f"{ss['path']}.{idx}" # path.idx
+            self.setupMooView.makeMoogli( ss['stimObjList'], pdict, stimGroupId )
+
+        pdict["field"] = "other"
+        pdict["dataType"] = "moogli"
+        for idx, mm in enumerate( self.moogli ):
+            pdict["title"] = "moogli_" + mm['title']
+            moogliGroupId = f"{mm['path']}.{idx}" # path.idx
+            self.setupMooView.makeMoogli( mm['moogliObjList'], pdict, moogliGroupId )
 
 
     def _buildFileOutput( self ):
@@ -1583,7 +1610,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         elecid = moose.element( model.path + '/elec' )
         #expr = model.path[7] + "e-8*(t>0.1)*(t<0.2)" if len(model.path)>7 else "0"
         k = 0
-        # rstim class has {fname, path, field, dt, flush_steps }
         for i in self.stims:
             stimType = i['type']
             if stimType == 'field':
@@ -1605,6 +1631,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 stimObj, stimField = self._parseComptField( dendCompts, i, knownFields )
                 #print( "STIM OBJ: ", [k.dataIndex for k in stimObj] )
                 #print( "STIM OBJ: ", [k.coords[0] for k in stimObj] )
+            i['stimObjList'] = stimObj
             numStim = len( stimObj )
             if numStim > 0:
                 funcname = stims.path + '/stim' + str(k)
@@ -2079,30 +2106,26 @@ def main():
     parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface. If not set we are in standalone mode.')
     parser.add_argument('--session-path', type=str, help='Temp directory for model and plot files, used in server mode for jardesigner interface.')
     args = parser.parse_args()
-    print( "jardesigner.py: parsed args" )
     rdes = JarDesigner( args.file, plotFile = args.plotFile, 
         jsonData = None, dataChannelId = args.data_channel_id, 
         sessionDir = args.session_path,
         verbose = args.verbose )
     context.setContext( rdes )
-    print( "jardesigner.py: made rdes" )
     pf = None
     if args.placementFunc == "squareGrid":
         pf = squareGridPlacementFunc
     elif args.placementFunc == "random":
         pf = randomPlacementFunc
     rdes.buildModel( numModels = args.numModels, placementFunc = pf )
-    print( "jardesigner.py: built model on:", rdes )
+    #print( "jardesigner.py: built model" )
     if rdes.dataChannelId:
         rdes._buildSetupMoogli()
-        print( "jardesigner.py: sendSceneGraph1 on:", rdes )
         rdes.setupMooView.sendSceneGraph()
-        print( "jardesigner.py: sent SceneGraph1 on:", rdes )
-        # print( "jardesigner.py: sent setup 3D scene" )
+        #print( "jardesigner.py: sent SceneGraph1 on:", rdes )
 
     moose.reinit()
     if args.run and args.data_channel_id == None: # local run
-        print( "Running locally")
+        #print( "Running locally")
         moose.start( rdes.runtime )
         rdes.display()
         if rdes.runMooView:
@@ -2117,7 +2140,6 @@ def main():
             command = command_data.get("command")
 
             if command == "start":
-                print("Received 'start' command.")
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
                 if moose.element( "/clock" ).currentTime == 0:
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
@@ -2131,7 +2153,6 @@ def main():
                 rdes.runMooView.notifySimulationEnd( rdes.dataChannelId )
 
             elif command == "reset":
-                print("Received 'reset' command.")
                 moose.reinit()
 
             elif command == "quit":
