@@ -1,2 +1,2 @@
 # -*- coding: utf-8 -*-
-#from .jardesigner import JarDesigner
+from .jardesigner import JarDesigner
