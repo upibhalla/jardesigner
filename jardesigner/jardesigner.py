@@ -129,6 +129,8 @@ class BuildError(Exception):
         return repr(self.value)
 
 #######################################################################
+## Functions for managing the json dicts.
+#######################################################################
 
 def addDefaultsRecursive(instance, schema):
     """
@@ -175,6 +177,66 @@ def addDefaultsRecursive(instance, schema):
 
     return instance
 
+
+def applyModifiers(sourceDict: dict, modifierDict: dict) -> None:
+    """
+    Applies modifications from a sparse modifier dict to a source dict 
+    in-place. This function modifies the source dictionary directly based 
+    on a modifier dictionary, following specific rules for different 
+    types of keys (Protos, Distribs, and top-level properties).
+
+    Args:
+        sourceDict: The original dictionary to be modified in-place.
+        modifierDict: A sparse dictionary containing the changes.
+    """
+    # Define the unique lookup keys for different 'Distrib' lists
+    distribLookupKeys = {
+        'passiveDistrib': ['path'],
+        'spineDistrib': ['proto', 'path'],
+        'chanDistrib': ['proto', 'path'],
+        'chemDistrib': ['proto', 'path']
+    }
+
+    for key, modValue in modifierDict.items():
+        # --- Handle Protos (e.g., 'chanProto', 'spineProto') ---
+        if key.endswith('Proto') and isinstance(modValue, list):
+            sourceList = sourceDict.get(key, [])
+            for modItem in modValue:
+                modName = modItem.get('name')
+                if not modName:
+                    continue  # Skip if the modifier item lacks a name for lookup
+
+                # Find the matching item in the source list by 'name'
+                for sourceItem in sourceList:
+                    if sourceItem.get('name') == modName:
+                        if 'source' in modItem:
+                            sourceItem['source'] = modItem['source']
+                        break # Found and updated, move to the next modItem
+
+        # --- Handle Distribs (e.g., 'chanDistrib', 'passiveDistrib') ---
+        elif key.endswith('Distrib') and isinstance(modValue, list):
+            sourceList = sourceDict.get(key, [])
+            lookupFields = distribLookupKeys.get(key)
+            if not lookupFields:
+                continue # Skip if we don't know how to look this up
+
+            for modItem in modValue:
+                # Find the matching item in the source list using the 
+                # defined lookup keys
+                for sourceItem in sourceList:
+                    if all(sourceItem.get(field) == modItem.get(field) for field in lookupFields):
+                        # Found a match, update it from the modifier item
+                        sourceItem.update(modItem)
+                        break # Found and updated, move to the next modItem
+
+        # --- Handle top-level properties (e.g., 'elecPlotDt') ---
+        else:
+            if key in sourceDict:
+                sourceDict[key] = modValue
+
+################################################################
+
+
 class JarDesigner:
     """The JarDesigner class is used to build models incorporating
     reaction-diffusion and electrical signaling in neurons.
@@ -184,7 +246,8 @@ class JarDesigner:
     """
     ################################################################
     def __init__(self, jsonFile = None, plotFile = None, jsonData = None,
-            verbose = False, dataChannelId = None, sessionDir = None):
+            verbose = False, dataChannelId = None, sessionDir = None,
+            modifiers = {} ):
         schemaFile = "jardesignerSchema.json"
         self.verbose = verbose
         self.dataChannelId = dataChannelId # Used for server-mode jardes
@@ -225,12 +288,13 @@ class JarDesigner:
         if jsonData:
             data = jsonData
         try:
-            #jsonschema.validate(instance=data, schema=schema)
             data = addDefaultsRecursive( data, schema )
             jsonschema.validate(instance=data, schema=schema)
+            applyModifiers( data, modifiers )
         except jsonschema.exceptions.ValidationError as e:
             print(f"{jsonFile} fails to pass schema: {e}")
             quit()
+
         #### Now we load in all the fields of the jardesigner class
         for key, value in data.items():
             setattr(self, key, value)
@@ -257,7 +321,6 @@ class JarDesigner:
         except BuildError as msg:
             print("Error: jardesigner: Prototype build failed:", msg)
             quit()
-
 
     ################################################################
     def _printModelStats( self ):
@@ -795,7 +858,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         elecPath = argList['path']
         meshType = argList['type']
         mesh = moose.PresynMesh( newChemId.path + '/' + chemSrc )
-        pair = elecPath + " " + geom
+        #pair = elecPath + " " + geom
+        pair = elecPath + " 1"
         if meshType == 'presyn_dend':
             presynRadius = float( argList["radius"] )
             presynRadiusSdev = float( argList["radiusSdev"] )
