@@ -1417,7 +1417,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         fig, axes = plt.subplots( nrows = nrows, ncols = ncols, 
             figsize = (sx, sy), squeeze = False )
-        print( "NROWS=", nrows, "   NCOLS=", ncols, sx, sy )
         for idx, i in enumerate( self.plotNames ):
             ax = axes[idx % nrows, idx // nrows]
             ax.set_title( i[1], fontsize = 18 )
@@ -2120,7 +2119,7 @@ def main():
     #print( "jardesigner.py: built model" )
     if rdes.dataChannelId:
         rdes._buildSetupMoogli()
-        rdes.setupMooView.sendSceneGraph()
+        rdes.setupMooView.sendSceneGraph( "setup" )
         #print( "jardesigner.py: sent SceneGraph1 on:", rdes )
 
     moose.reinit()
@@ -2129,7 +2128,7 @@ def main():
         moose.start( rdes.runtime )
         rdes.display()
         if rdes.runMooView:
-            rdes.runMooView.sendSceneGraph()
+            rdes.runMooView.sendSceneGraph( "run" )
             rdes.runMooView.notifySimulationEnd( None )
 
     # This loop will wait for commands from server.py via stdin
@@ -2143,7 +2142,7 @@ def main():
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
                 if moose.element( "/clock" ).currentTime == 0:
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
-                        rdes.runMooView.sendSceneGraph()
+                        rdes.runMooView.sendSceneGraph( "run" )
 
                 print( "starting on rdes = ", rdes )
                 moose.start(runtime)

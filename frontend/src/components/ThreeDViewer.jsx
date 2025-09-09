@@ -160,36 +160,40 @@ Aa: Auto-position`;
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Main Control Bar (Always Visible) */}
-        {showReplayControls && (
-            <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-                <Button
-                    variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay}
-                    startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}
-                    sx={{ width: '140px', justifyContent: 'flex-start' }}
-                >
-                    {isReplaying ? "Pause" : "Replay"}
-                </Button>
-                <TextField size="small" label="Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
-                <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Typography variant="caption">0</Typography>
-                    <Slider min={0} max={totalRuntime} step={Math.max(totalRuntime/1000, 1e-6)} value={Math.min(replayTime, totalRuntime)} onChangeCommitted={(e, v)=> onSeekReplay(v)} aria-label="progress slider"
-                        sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MuiSlider-track': { transition: 'none' } }}
+        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            {/* Replay controls are now inside their own fragment and conditional */}
+            {showReplayControls && (
+                <>
+                    <Button
+                        variant="outlined" size="small" onClick={isReplaying ? onPauseReplay : onStartReplay}
+                        startIcon={isReplaying ? <PauseIcon /> : <PlayArrowIcon />}
+                        sx={{ width: '140px', justifyContent: 'flex-start' }}
+                    >
+                        {isReplaying ? "Pause" : "Replay"}
+                    </Button>
+                    <TextField size="small" label="Time (s)" value={replayTime.toFixed(4)} InputProps={{ readOnly: true }} sx={{ width: '120px' }}/>
+                    <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="caption">0</Typography>
+                        <Slider min={0} max={totalRuntime} step={Math.max(totalRuntime/1000, 1e-6)} value={Math.min(replayTime, totalRuntime)} onChangeCommitted={(e, v)=> onSeekReplay(v)} aria-label="progress slider"
+                            sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MuiSlider-track': { transition: 'none' } }}
+                        />
+                        <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
+                    </Box>
+                    <TextField
+                        label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
+                        InputProps={{ readOnly: true }} sx={{ minWidth: '20ch' }}
                     />
-                    <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
-                </Box>
-                <TextField
-                    label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
-                    InputProps={{ readOnly: true }} sx={{ minWidth: '20ch' }}
-                />
+                </>
+            )}
 
-                <Box sx={{ flexGrow: 1 }} />
-                <Tooltip title="View Options">
-                    <IconButton onClick={() => setIsPanelOpen(true)}>
-                        <SettingsIcon />
-                    </IconButton>
-                </Tooltip>
-            </Box>
-        )}
+            {/* Spacer and Settings Icon are now outside the conditional block */}
+            <Box sx={{ flexGrow: 1 }} />
+            <Tooltip title="View Options">
+                <IconButton onClick={() => setIsPanelOpen(true)}>
+                    <SettingsIcon />
+                </IconButton>
+            </Tooltip>
+        </Box>
 
         {/* The Collapsible Side Panel (Drawer) */}
         <Drawer anchor="left" open={isPanelOpen} onClose={() => setIsPanelOpen(false)}>

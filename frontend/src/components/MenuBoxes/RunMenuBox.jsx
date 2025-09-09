@@ -103,12 +103,12 @@ const RunMenuBox = ({
         }
     }, [isSimulating, isReplaying, activeSimPid]);
 
-
-    useEffect(() => {
-        if (liveFrameData && typeof liveFrameData.timestamp === 'number') {
-            setCurrentTime(liveFrameData.timestamp);
-        }
-    }, [liveFrameData]);
+	useEffect(() => {
+    	const frameForRunView = liveFrameData?.run;
+    	if (frameForRunView && typeof frameForRunView.timestamp === 'number') {
+        	setCurrentTime(frameForRunView.timestamp);
+    	}
+	}, [liveFrameData]);
 
     useEffect(() => {
         const simHasFinished = !isSimulating && currentTime > 0;
@@ -164,7 +164,6 @@ const RunMenuBox = ({
         };
     }, [buildConfigPayload]);
 
-    // FIX: This handler now implements the new conditional logic.
     const handleStart = () => {
         const latestConfig = buildConfigPayload();
         

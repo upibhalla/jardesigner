@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useCallback } from 'react'; // Ensure useCallback is imported
 import { Box, Tabs, Tab } from '@mui/material';
 import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
@@ -16,14 +16,18 @@ const DisplayWindow = (props) => {
     svgPlotFilename,
     isPlotReady,
     plotError,
-    // Destructure handlers to pass them explicitly
+    threeDConfigs,
+    simulationFrames,
+    drawableVisibility, setDrawableVisibility,
+    clickSelected,
+    explodeAxis,
+    handleSelectionChange,
+    onManagerReady,
+    onExplodeAxisToggle,
+    onSceneBuilt,
     handleStartReplay,
     handlePauseReplay,
-    handleRewindReplay,
     handleSeekReplay,
-    handleExplodeAxisToggle,
-    onSceneBuilt,
-    handleSelectionChange, // Destructured the missing prop
   } = props;
 
   const [tabIndex, setTabIndex] = useState(0);
@@ -31,6 +35,27 @@ const DisplayWindow = (props) => {
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
   };
+  
+  // --- FIX: Wrap these state setters in useCallback ---
+  const setSetupDrawableVisibility = useCallback((updater) => {
+      setDrawableVisibility(prev => ({ ...prev, setup: typeof updater === 'function' ? updater(prev.setup) : updater }));
+  }, [setDrawableVisibility]);
+
+  const setRunDrawableVisibility = useCallback((updater) => {
+      setDrawableVisibility(prev => ({ ...prev, run: typeof updater === 'function' ? updater(prev.run) : updater }));
+  }, [setDrawableVisibility]);
+
+  // Stable callbacks for event handlers
+  const onManagerReadySetup = useCallback((manager) => onManagerReady('setup', manager), [onManagerReady]);
+  const onSelectionChangeSetup = useCallback((selection, isCtrlClick) => handleSelectionChange('setup', selection, isCtrlClick), [handleSelectionChange]);
+  const onExplodeAxisToggleSetup = useCallback((axis) => onExplodeAxisToggle('setup', axis), [onExplodeAxisToggle]);
+  const onSceneBuiltSetup = useCallback((bbox) => onSceneBuilt('setup', bbox), [onSceneBuilt]);
+
+  const onManagerReadyRun = useCallback((manager) => onManagerReady('run', manager), [onManagerReady]);
+  const onSelectionChangeRun = useCallback((selection, isCtrlClick) => handleSelectionChange('run', selection, isCtrlClick), [handleSelectionChange]);
+  const onExplodeAxisToggleRun = useCallback((axis) => onExplodeAxisToggle('run', axis), [onExplodeAxisToggle]);
+  const onSceneBuiltRun = useCallback((bbox) => onSceneBuilt('run', bbox), [onSceneBuilt]);
+
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f5', borderRadius: '8px', overflow: 'hidden' }}>
@@ -39,7 +64,8 @@ const DisplayWindow = (props) => {
           <Tab label="Graph" />
           <Tab label="Model JSON" />
           <Tab label="Documentation" />
-          <Tab label="3D" />
+          <Tab label="Setup 3D" />
+          <Tab label="Run 3D" />
         </Tabs>
       </Box>
 
@@ -54,19 +80,48 @@ const DisplayWindow = (props) => {
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 2 ? 'block' : 'none' }}>
         <MemoizedMarkdownText />
       </Box>
-
+      
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>
-        <ThreeDViewer
-          {...props}
-          // Standardize prop names passed to the final UI component
-          onStartReplay={handleStartReplay}
-          onPauseReplay={handlePauseReplay}
-          onRewindReplay={handleRewindReplay}
-          onSeekReplay={handleSeekReplay}
-          onExplodeAxisToggle={handleExplodeAxisToggle}
-          onSceneBuilt={onSceneBuilt}
-          onSelectionChange={handleSelectionChange} // Passed the prop with the correct name
-        />
+        {threeDConfigs?.setup && (
+            <ThreeDViewer
+              {...props}
+              threeDConfig={threeDConfigs.setup}
+              simulationFrames={simulationFrames.setup}
+              drawableVisibility={drawableVisibility.setup}
+              setDrawableVisibility={setSetupDrawableVisibility}
+              clickSelected={clickSelected.setup}
+              explodeAxis={explodeAxis.setup}
+              onManagerReady={onManagerReadySetup}
+              onSelectionChange={onSelectionChangeSetup}
+              onExplodeAxisToggle={onExplodeAxisToggleSetup}
+              onSceneBuilt={onSceneBuiltSetup}
+              isReplaying={false}
+              onStartReplay={() => {}}
+              onPauseReplay={() => {}}
+              onSeekReplay={() => {}}
+            />
+        )}
+      </Box>
+
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 4 ? 'block' : 'none', position: 'relative' }}>
+        {threeDConfigs?.run && (
+            <ThreeDViewer
+              {...props}
+              threeDConfig={threeDConfigs.run}
+              simulationFrames={simulationFrames.run}
+              drawableVisibility={drawableVisibility.run}
+              setDrawableVisibility={setRunDrawableVisibility}
+              clickSelected={clickSelected.run}
+              explodeAxis={explodeAxis.run}
+              onManagerReady={onManagerReadyRun}
+              onSelectionChange={onSelectionChangeRun}
+              onExplodeAxisToggle={onExplodeAxisToggleRun}
+              onSceneBuilt={onSceneBuiltRun}
+              onStartReplay={handleStartReplay}
+              onPauseReplay={handlePauseReplay}
+              onSeekReplay={handleSeekReplay}
+            />
+        )}
       </Box>
     </Box>
   );

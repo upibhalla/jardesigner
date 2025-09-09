@@ -356,6 +356,7 @@ class MooseNeuronDataWrapper( DataWrapper ):
         return {
             "filetype": "jardesignerDataFrame",
             "version": "1.0",
+            "viewId": "run",
             "timestamp": float(timestamp),
             "groupId": self.groupId,
             "data": values
@@ -384,6 +385,7 @@ class MooseChemDataWrapper( DataWrapper ):
         return {
             "filetype": "jardesignerDataFrame",
             "version": "1.0",
+            "viewId": "run",
             "timestamp": float(timestamp),
             "groupId": self.groupId,
             "data": values
@@ -486,9 +488,10 @@ class MooView:
         #print( "called updateMoogliViewer for {} at {:.3f}".format( idx, simTime ) )
         self.updateValues( simTime, idx )
 
-    def sendSceneGraph( self ):
+    def sendSceneGraph( self, viewId ):
         payload = {
             "type": "scene_init",
+            "viewId": viewId,
             "scene": self.getSceneGraph()
         }
         requestBody = {
