@@ -254,6 +254,8 @@ class JarDesigner:
         self.sessionDir = sessionDir # Used for server-mode jardes
         self.runMooView = None      # Used for runtime display
         self.setupMooView = None    # Used to see model during construction
+        self.stims = []
+        self.moogli = []
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -576,7 +578,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             ''' Make HH squid model sized compartment:
             len and dia 500 microns. CM = 0.01 F/m^2, RA =
             '''
-            self.elecid = makePassiveHHsoma( name = 'cell' )
+            self.elecid = jp.makePassiveHHsoma( name = 'cell' )
             assert( moose.exists( '/library/cell/soma' ) )
             self.soma = moose.element( '/library/cell/soma' )
             return
@@ -657,7 +659,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     ################################################################
     def _buildElecSoma( self, dia, dx ):
         cell = moose.Neuron( '/library/cell' )
-        buildCompt( cell, 'soma', dia = dia, dx = dx )
+        jp.buildCompt( cell, 'soma', dia = dia, dx = dx )
         self.elecid = cell
         return cell
         
@@ -679,11 +681,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     ################################################################
     def _buildElecBranchedCell( self, args ):
         cell = moose.Neuron( '/library/cell' )
-        prev = buildCompt( cell, 'soma', dia = args["somaDia"], dx = args["somaLen"] )
+        prev = jp.buildCompt( cell, 'soma', dia = args["somaDia"], dx = args["somaLen"] )
         dx = args["dendLen"]/args["dendNumSeg"]
         x = prev.x
         for i in range( args["dendNumSeg"] ):
-            compt = buildCompt( cell, 'dend' + str(i), x = x, dx = dx, dia = args["dendDia"] )
+            compt = jp.buildCompt( cell, 'dend' + str(i), x = x, dx = dx, dia = args["dendDia"] )
             moose.connect( prev, 'axial', compt, 'raxial' )
             prev = compt
             x += dx
@@ -692,7 +694,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         y = prev.y
         dxy = (args["branchLen"]/float(args["branchNumSeg"])) * np.sqrt( 1.0/2.0 )
         for i in range( args["branchNumSeg"] ):
-            compt = buildCompt( cell, 'branch1_' + str(i), 
+            compt = jp.buildCompt( cell, 'branch1_' + str(i), 
                     x = x, dx = dxy, y = y, dy = dxy, 
                     dia = args["branchDia"] )
             moose.connect( prev, 'axial', compt, 'raxial' )
@@ -704,7 +706,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         y = primaryBranchEnd.y
         prev = primaryBranchEnd
         for i in range( args["branchNumSeg"] ):
-            compt = buildCompt( cell, 'branch2_' + str(i), 
+            compt = jp.buildCompt( cell, 'branch2_' + str(i), 
                     x = x, dx = dxy, y = y, dy = -dxy, 
                     dia = args["branchDia"] )
             moose.connect( prev, 'axial', compt, 'raxial' )
@@ -719,7 +721,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def _buildVclampOnCompt( self, dendCompts, spineCompts ):
         stimObj = []
         for i in dendCompts + spineCompts:
-            vclamp = make_vclamp( name = 'vclamp', parent = i.path )
+            vclamp = jp.make_vclamp( name = 'vclamp', parent = i.path )
 
             # Assume SI units. Scale by Cm to get reasonable gain.
             vclamp.gain = i.Cm * 1e4 
@@ -735,7 +737,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         for i in dendCompts + spineCompts:
             path = i.path + '/' + stimInfo['relpath'] + '/sh/synapse[0]'
             if moose.exists( path ):
-                synInput = make_synInput( name='synInput', parent=path )
+                synInput = jp.make_synInput( name='synInput', parent=path )
                 synInput.doPeriodic = doPeriodic
                 moose.element(path).weight = synWeight
                 moose.connect( synInput, 'spikeOut', path, 'addSpike' )
