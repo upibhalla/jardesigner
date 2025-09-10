@@ -144,10 +144,10 @@ class Segment():
     def simpleCompt( compt, idx ):
         if compt.name == "soma":
             return Segment( "sphere", compt.coords, compt.id.idValue, 
-                Segment.trimComptPath( compt.path ), 1, idx )
+                Segment.trimComptPath( compt.path ), 1, idx, value = -0.1 )
         else:
             return Segment( "cylinder", compt.coords, compt.id.idValue, 
-                Segment.trimComptPath( compt.path ), 4, idx )
+                Segment.trimComptPath( compt.path ), 4, idx, value = -0.1 )
 
     # === NEW: Method to represent IntFire objects as spheres ===
     @staticmethod
@@ -165,7 +165,7 @@ class Segment():
     def cylChemCompt( mol, idx ):
         parentDendName = mol.parent.subTree[0].name
         ret =  Segment( "cylinder", mol.coords, mol.id.idValue, 
-            Segment.trimMolPath( mol, parentDendName ), 0, idx )
+            Segment.trimMolPath( mol, parentDendName ), 0, idx, value = -0.04 )
         ret.diameter *= 2           # Moose puts radius in coords[6]
         return ret
 
@@ -212,54 +212,18 @@ class Segment():
 
     @staticmethod
     def plotTrode( path, newc, simId, idx ):
-        return Segment.trodeBase( path, newc, simId, idx, 0, 0 )
+        return Segment.trodeBase( path, newc, simId, idx, 0, -0.01 )
 
     @staticmethod
     def stimTrode( path, newc, simId, idx ):
         # Same as above, except cone is along z.
-        return Segment.trodeBase( path, newc, simId, idx, np.pi/2, -0.1 )
-        '''
-        if path == "soma":
-            newc[0:3] = newc[3:6]
-        else:
-            newc[3:6] = (newc[3:6] + newc[0:3])/2
-            newc[0:3] = newc[3:6]
-        newc[5] += newc[6] * 0.55 # Just a small offset from the surface.
-        newc[2] = newc[5] + newc[6]/2 + 5e-6   
-        return Segment( "cone", newc, simId, path, 0, idx, value = -0.1 )
-        '''
-        '''
-        newc[3:6] = newc[0:3]
-        newc[5] += newc[6]
-        newc[2] = newc[5] + newc[6] + 5e-6   
-        return Segment( "cone", newc, simId, path, 0, idx, value = 0.5 )
-        '''
+        return Segment.trodeBase( path, newc, simId, idx, np.pi/2, 0.02 )
 
     @staticmethod
     def moogTrode( path, newc, simId, idx ):
         # Here I would really like to draw a little box, distinct icon.
         # For now, a cone at a different angle.
         return Segment.trodeBase( path, newc, simId, idx, np.pi* 1.25,0.05 )
-
-
-        '''
-        if path == "soma":
-            newc[0:3] = newc[3:6]
-        else:
-            newc[3:6] = (newc[3:6] + newc[0:3])/2
-            newc[0:3] = newc[3:6]
-        newc[4] -= newc[6] * 0.55 # Just a small offset from the surface.
-        newc[5] -= newc[6] * 0.55 # Just a small offset from the surface.
-        newc[1] = newc[4] + newc[6]/2 - 5e-6   
-        newc[2] = newc[5] + newc[6]/2 - 5e-6   
-        return Segment( "cone", newc, simId, path, 0, idx, value = 0.05 )
-        newc[3:6] = newc[0:3]
-        newc[4] += newc[6]
-        newc[5] += newc[6]
-        newc[1] = newc[4] + newc[6] - 5e-6   
-        newc[2] = newc[5] + newc[6] - 5e-6   
-        return Segment( "cone", newc, simId, path, 0, idx, value = 1 )
-        '''
 
 def extractUnits( text ):
     match = re.search(r'\((.*?)\)', text)
