@@ -1,11 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { getColor } from './colormap';
+import { createShape } from './ShapeFactory'; // <-- NEW IMPORT
+
+// In ThreeDManager.js
 
 export default class ThreeDManager {
-  constructor(container, onSelectionChange) {
+  constructor(container, onSelectionChange, defaultDiaScale = 1.0) {
     this.container = container;
     this.onSelectionChange = onSelectionChange;
+    
+    // This line now correctly uses the passed-in value or defaults to 1.0
+    this.defaultDiaScale = defaultDiaScale; 
+    
     this.activeGroupId = null;
     this.diameterScales = new Map();
 
@@ -22,7 +29,7 @@ export default class ThreeDManager {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
     dirLight.position.set(5, 5, 5);
     this.scene.add(dirLight);
@@ -71,32 +78,19 @@ export default class ThreeDManager {
           title: entity.title, vmin: entity.vmin, vmax: entity.vmax,
           colormap: config.colormap, transparency: entity.transparency || 1.0
       });
-      const initialScale = entity.diaScale ?? 1.0;
+      const initialScale = entity.diaScale ?? this.defaultDiaScale;
       this.diameterScales.set(entity.groupId, initialScale);
+      
+      // REFACTORED SHAPE CREATION LOGIC
       entity.shape.forEach((primitive, i) => {
-        let mesh;
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
         const materialColor = getColor(normalizedValue, config.colormap, true);
         const material = new THREE.MeshStandardMaterial({
             color: materialColor, transparent: true, opacity: entity.transparency || 1.0,
         });
-        if (primitive.type === 'sphere') {
-            const geometry = new THREE.SphereGeometry(primitive.diameter / 2, 16, 8);
-            mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(...primitive.C);
-        } else if (primitive.type === 'cylinder' || primitive.type === 'cone') {
-            const start = new THREE.Vector3(...primitive.C);
-            const end = new THREE.Vector3(...primitive.C2);
-            const length = start.distanceTo(end);
-            const d1 = primitive.diameter;
-			const d2 = (primitive.type === 'cone') ? 0 : d1;
-            const geometry = new THREE.CylinderGeometry(d2 / 2, d1 / 2, length, 16);
-            mesh = new THREE.Mesh(geometry, material);
-            const direction = new THREE.Vector3().subVectors(end, start);
-            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
-            mesh.quaternion.copy(quaternion);
-            mesh.position.copy(start).add(direction.multiplyScalar(0.5));
-        }
+
+        const mesh = createShape(primitive, material); // <-- CALL TO FACTORY
+
         if (mesh) {
             mesh.userData = { 
                 entityName: entity.groupId, 
@@ -105,6 +99,7 @@ export default class ThreeDManager {
                 originalPosition: mesh.position.clone(),
                 simPath: primitive.simPath,
             };
+            // Apply initial diameter scaling for spheres and cylinders/cones
             if (mesh.geometry.type === 'SphereGeometry') {
                 mesh.scale.set(initialScale, initialScale, initialScale);
             } else if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'ConeGeometry') {

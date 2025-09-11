@@ -49,6 +49,11 @@ knownFieldInfo = {
         'dataType': 'plot', 'vmin':0.0, 'vmax':1.0 },
 }
 
+unitX = np.array( [1.0, 0.0, 0.0] )
+unitY = np.array( [0.0, 1.0, 0.0] )
+unitZ = np.array( [0.0, 0.0, 1.0] )
+DefaultDiaScale = 2.0
+
 def objPath( obj, splitLevel ):
     split = obj.path.split('/')
     if splitLevel == 1:
@@ -98,7 +103,7 @@ def getObjListInfo( objList ):
 class Segment():
     def __init__( self, shape, coords, simId, simPath, swcType, idx, value = 0 ):
         self.shape = shape
-        self.C = list(coords[3:6]) if shape == 'sphere' else list(coords[0:3])
+        self.C = list(coords[0:3])
         self.C2 = list(coords[3:6])
         self.diameter = coords[6]
         self.simId = simId
@@ -143,7 +148,9 @@ class Segment():
     @staticmethod
     def simpleCompt( compt, idx ):
         if compt.name == "soma":
-            return Segment( "sphere", compt.coords, compt.id.idValue, 
+            newc = np.array( compt.coords )
+            newc[0:3] = (newc[0:3] + newc[3:6])/2
+            return Segment( "sphere", newc, compt.id.idValue, 
                 Segment.trimComptPath( compt.path ), 1, idx, value = -0.1 )
         else:
             return Segment( "cylinder", compt.coords, compt.id.idValue, 
@@ -193,10 +200,98 @@ class Segment():
             Segment.trimMolPath( mol ), 0, idx )
 
     @staticmethod
-    def trodeBase( path, newc, simId, idx, theta, value ):
-        # Unit vector of cone direction is in coords[3:6], dia in coords[6]
-        # Cone is 5 microns and is aligned in along unit vector towards y.
+    def chanBase( icon, path, newc, simId, idx, iconNum, value ):
+        theta = idx * 0.1 + iconNum * np.pi * 2 / 8
+        axis = np.array( newc[0:3] - newc[3:6] )
+        axLen = Segment.normToCylAxis( newc, theta, path=="soma" )
+        # Position channels along the length of the axis to reduce clutter
+        newc[0:3] = newc[0:3] - axis/2 + axis*(2+iconNum)*0.05 + newc[3:6] * newc[6] * 0.5 * DefaultDiaScale
+        newc[6] = max( 2e-6, newc[6] * DefaultDiaScale * 0.2 )
+        return Segment( icon, newc, simId, path, 0, idx, value = value )
+
+    @staticmethod
+    def normToCylAxis( newc, theta, isSoma ):
+        # This places a unit vector normal to the cyl axis in newc[3:6]
+        # It replaces newc[0:3] with the middle of the cyl or soma.
+        dx = np.cos( theta )
+        dy = np.sin( theta )
+        if isSoma:
+            newc[0:3] = (newc[0:3]+newc[3:6])/2
+            newc[3] = 0
+            newc[4] = dx
+            newc[5] = dy
+            return newc[6]
+        else:
+            axisLength = np.linalg.norm(newc[3:6]-newc[0:3])
+            axis = (newc[3:6]-newc[0:3])/axisLength
+            if abs(np.dot( axis, unitX )) < 0.99:
+                perp = np.cross( axis, unitX )
+                perp2 = np.cross( axis, perp )
+            elif abs(np.dot( axis, unitY )) < 0.99:
+                perp = np.cross( axis, unitY )
+                perp2 = np.cross( axis, perp )
+            else:
+                perp = np.cross( axis, unitZ )
+                perp2 = np.cross( axis, perp )
+            perp = perp/np.linalg.norm( perp )
+            perp2 = perp2/np.linalg.norm( perp2 )
+            newc[0:3] = (newc[3:6] + newc[0:3])/2
+            newc[3:6] = perp*dx + perp2*dy
+            return axisLength
+
+    @staticmethod
+    def chanx( path, newc, simId, idx, iconNum ):
+        return Segment.chanBase( f"chan{iconNum%4}", path, newc, simId, 
+            idx, iconNum, -0.1 + iconNum*0.02)
+
+    @staticmethod
+    def plotTrode( path, newc, simId, idx, iconNum ):
+        # dia in coords[6]
+        # cone is 4 microns and is aligned radially away from center
+        # of cylinder/sphere, which it touches at its surface.
+        theta = idx*0.1 + iconNum*np.pi/8
+        axLen = Segment.normToCylAxis( newc, theta, path == "soma")
+        start = np.array(newc[0:3]) # Middle of compartment.
+        axis = np.array(newc[3:6]) #unit vector of cone direction.
+        trodeLen = max( 4e-6, np.sqrt( axLen * newc[6] )*DefaultDiaScale )
+        # This is the sharp end, end touching the compartment
+        newc[3:6] = start + axis * newc[6] * 0.55 * DefaultDiaScale
+        newc[0:3] = newc[3:6] + axis * trodeLen # This is the fat end
+        #newc[3:6] = start
+        #newc[0:3] = start + axis * trodeLen # This is the fat end
+
+        newc[6] = trodeLen / 3
+        return Segment( "cone", newc, simId, path, 0, idx, value = -0.01 )
+
+    @staticmethod
+    def stimTrode( path, newc, simId, idx, iconNum ):
+        # I now have a lathe-shape for the stim. dia in coords[6]
+        theta = idx*0.1 + np.pi/2 + iconNum*np.pi/8
+        axLen = Segment.normToCylAxis( newc, theta, path == "soma")
+        start = np.array(newc[0:3]) # Middle of compartment.
+        axis = np.array(newc[3:6]) #unit vector of cone direction.
+        trodeLen = max( 4e-6, np.sqrt( axLen * newc[6] )*DefaultDiaScale )
+        # This is the sharp end, end touching the compartment
+        newc[0:3] = start + axis * newc[6] * 0.55 * DefaultDiaScale
+        #newc[0:3] = start
+        newc[3:6] = axis
+        newc[6] = max( 4e-6, np.sqrt( axLen * newc[6] )*DefaultDiaScale )
+        return Segment( "stim", newc, simId, path, 0, idx, value = 0.02 )
+
+    @staticmethod
+    def moogTrode( path, newc, simId, idx, iconNum ):
+        # square: C is centre, C2 is normal.
+        # If diameter is smaller than segment length, then smaller of
+        #   (Segmentlength, 5 microns.)
+        # If diameter is > segment length, then go with segment length.
         # It touches cylinder at its surface.
+        theta = np.pi * 5/2
+        vec = newc[0:3] - newc[3:6]
+        segmentLength = np.sqrt( np.sum( vec*vec) )
+        if newc[6] < segmentLength:
+            side = min( segmentLength, 5e-6)
+        else:
+            side = segmentLength
         dx = np.cos( theta + idx * 0.1 )
         dy = np.sin( theta + idx * 0.1 )
         if path == "soma":
@@ -204,26 +299,11 @@ class Segment():
         else:
             newc[3:6] = (newc[3:6] + newc[0:3])/2
             newc[0:3] = newc[3:6]
-        newc[4] += newc[6]*dx * 0.55 # Just a small offset from the surface.
-        newc[5] += newc[6]*dy * 0.55 # Just a small offset from the surface.
-        newc[1] = newc[4] + dx * (0.5*newc[6] + 5e-6)
-        newc[2] = newc[5] + dy * (0.5*newc[6] + 5e-6)
-        return Segment( "cone", newc, simId, path, 0, idx, value = value )
-
-    @staticmethod
-    def plotTrode( path, newc, simId, idx ):
-        return Segment.trodeBase( path, newc, simId, idx, 0, -0.01 )
-
-    @staticmethod
-    def stimTrode( path, newc, simId, idx ):
-        # Same as above, except cone is along z.
-        return Segment.trodeBase( path, newc, simId, idx, np.pi/2, 0.02 )
-
-    @staticmethod
-    def moogTrode( path, newc, simId, idx ):
-        # Here I would really like to draw a little box, distinct icon.
-        # For now, a cone at a different angle.
-        return Segment.trodeBase( path, newc, simId, idx, np.pi* 1.25,0.05 )
+        newc[4] = dy    # Normal parallel to axis
+        newc[5] = -dx   # Normal parallel to axis
+        newc[1] += side*dx * 0.55 # Just a small offset from the surface.
+        newc[2] += side*dy * 0.55 # Just a small offset from the surface.
+        return Segment( "moogli", newc, simId, path, 0, idx, value = 0.05 )
 
 def extractUnits( text ):
     match = re.search(r'\((.*?)\)', text)
@@ -357,20 +437,26 @@ class MooseChemDataWrapper( DataWrapper ):
 
 class MooseTrodeDataWrapper( DataWrapper ):
     def __init__( self, objList, fdict, groupId ):
-        fdict['transparency'] = fdict.get('transparency', 0.8)
+        fdict['transparency'] = 1
         super().__init__(fdict, groupId )
         self.objList_ = objList
         if not objList:
             return
         
         objType = fdict['dataType']
+        iconNum = fdict['iconNum']
         paths, coords = getObjListInfo( objList )
+        #print( f"mooseTrodeDataWrapper: objList = {len( objList)}, class = {objList[0].className}" )
+        #print( f"mooseTrodeDataWrapper: paths = {len( paths)}, coords = {len(coords )}" )
+        #print( f"mooseTrodeDataWrapper: isa = {objList[0].isA['HHChannelBase']}, isachanbase = {objList[0].isA['ChanBase']}" )
         if objType == "plot":
-            self.segmentList = [ Segment.plotTrode( pp, cc, obj.id.idValue, idx ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+            self.segmentList = [ Segment.plotTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType == "stim":
-            self.segmentList = [ Segment.stimTrode( pp, cc, obj.id.idValue, idx ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+            self.segmentList = [ Segment.stimTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType == "moogli":
-            self.segmentList = [ Segment.moogTrode( pp, cc, obj.id.idValue, idx ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+            self.segmentList = [ Segment.moogTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+        elif objType == "chan":
+            self.segmentList = [ Segment.chanx( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         '''
         '''
 

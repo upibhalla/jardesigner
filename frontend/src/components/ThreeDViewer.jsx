@@ -59,6 +59,7 @@ const ThreeDViewer = (props) => {
     simulationFrames, drawableVisibility, setDrawableVisibility,
     isReplaying, onStartReplay, onPauseReplay, onSeekReplay, replayInterval, setReplayInterval, totalRuntime,
     explodeAxis, onExplodeAxisToggle, onSceneBuilt,
+    defaultDiaScale,
     clickSelected
   } = props;
 
@@ -72,6 +73,7 @@ const ThreeDViewer = (props) => {
   const [activeDrawableId, setActiveDrawableId] = useState(null);
 
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
+  const showSetupControls = !isSimulating && simulationFrames.length === 0;
   const drawables = useMemo(() => threeDConfig?.drawables || [], [threeDConfig]);
 
   const activeDrawable = useMemo(() => drawables.find(d => d.groupId === activeDrawableId), [drawables, activeDrawableId]);
@@ -81,14 +83,14 @@ const ThreeDViewer = (props) => {
 
   useEffect(() => {
     if (mountRef.current) {
-        managerRef.current = new ThreeDManager(mountRef.current, onSelectionChange);
+        managerRef.current = new ThreeDManager(mountRef.current, onSelectionChange, defaultDiaScale);
         if (onManagerReady) onManagerReady(managerRef.current);
     }
     return () => {
         managerRef.current?.dispose();
         if (onManagerReady) onManagerReady(null);
     };
-  }, [onSelectionChange, onManagerReady]);
+  }, [onSelectionChange, onManagerReady, defaultDiaScale]);
 
   useEffect(() => {
     if (managerRef.current && threeDConfig) {
@@ -161,7 +163,7 @@ Aa: Auto-position`;
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Main Control Bar (Always Visible) */}
         <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-            {/* Replay controls are now inside their own fragment and conditional */}
+            {/* Replay controls */}
             {showReplayControls && (
                 <>
                     <Button
@@ -186,7 +188,15 @@ Aa: Auto-position`;
                 </>
             )}
 
-            {/* Spacer and Settings Icon are now outside the conditional block */}
+            {/* Setup controls */}
+            {showSetupControls && (
+                <TextField
+                    label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
+                    InputProps={{ readOnly: true }} sx={{ minWidth: '30ch' }}
+                />
+            )}
+
+            {/* Spacer and Settings Icon */}
             <Box sx={{ flexGrow: 1 }} />
             <Tooltip title="View Options">
                 <IconButton onClick={() => setIsPanelOpen(true)}>

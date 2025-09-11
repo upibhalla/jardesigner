@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 
-// Define the constant points for the lathe shape once
-const lathePoints = [
+// Define the constant points for the lathe shapes once
+const chan3LathePoints = [
     [0.2, 0], [0.2, 1], [1, 1], [1, 0.6], [0.5, 0.3], [0.5, 0], [0.2, 0]
+].map(p => new THREE.Vector2(p[0], p[1]));
+
+// Profile updated to be 50% taller
+const stimLathePoints = [
+    [0, 0], [0, 1], [0.15, 1], [0.07, 0.5], [0.15, 0.5], [0, 0]
 ].map(p => new THREE.Vector2(p[0], p[1]));
 
 
@@ -37,6 +42,7 @@ export function createShape(primitive, material) {
         case 'moogli': { // Square Plane
             geometry = new THREE.PlaneGeometry(primitive.diameter, primitive.diameter);
             mesh = new THREE.Mesh(geometry, material);
+            mesh.material.side = THREE.DoubleSide; 
             mesh.position.set(...primitive.C);
             const normal = new THREE.Vector3(...primitive.C2).normalize();
             const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
@@ -44,23 +50,45 @@ export function createShape(primitive, material) {
             break;
         }
 
-        case 'stim': { // Octahedron
-            geometry = new THREE.OctahedronGeometry(primitive.diameter / 2);
+        case 'stim': { // Custom Lathe shape
+            geometry = new THREE.LatheGeometry(stimLathePoints, 16);
             mesh = new THREE.Mesh(geometry, material);
+            
+            // 1. Scale the mesh
+            const scale = primitive.diameter;
+            mesh.scale.set(scale, scale, scale);
+            
+            // 2. Orient the mesh along the C2 vector
             const direction = new THREE.Vector3(...primitive.C2).normalize();
-            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-            mesh.quaternion.copy(quaternion);
-            // Position the mesh center so one vertex is at C
-            const centerOffset = direction.clone().multiplyScalar(primitive.diameter / 2);
-            const centerPosition = new THREE.Vector3(...primitive.C).add(centerOffset);
-            mesh.position.copy(centerPosition);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+
+            // 3. Position the mesh's base at C
+            mesh.position.set(...primitive.C);
             break;
         }
 
-        case 'chan1': // Torus with square tube
-        case 'chan2': { // Torus with triangular tube
-            const tubularSegments = (primitive.type === 'chan1') ? 4 : 3;
-            geometry = new THREE.TorusGeometry(primitive.diameter / 2, primitive.diameter / 3, 16, tubularSegments);
+        case 'chan0':
+        case 'chan1':
+        case 'chan2': { 
+            let radialSegments = 16;
+            let tubularSegments = 16;
+
+            switch (primitive.type) {
+                case 'chan0':
+                    radialSegments = 4;
+                    tubularSegments = 16;
+                    break;
+                case 'chan1':
+                    radialSegments = 16;
+                    tubularSegments = 4;
+                    break;
+                case 'chan2':
+                    radialSegments = 16;
+                    tubularSegments = 3;
+                    break;
+            }
+            
+            geometry = new THREE.TorusGeometry(primitive.diameter / 2, primitive.diameter / 3, radialSegments, tubularSegments);
             mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(...primitive.C);
             const axis = new THREE.Vector3(...primitive.C2).normalize();
@@ -70,8 +98,14 @@ export function createShape(primitive, material) {
         }
 
         case 'chan3': { // Custom Lathe shape
-            geometry = new THREE.LatheGeometry(lathePoints, 32);
+            geometry = new THREE.LatheGeometry(chan3LathePoints, 32);
             mesh = new THREE.Mesh(geometry, material);
+            
+            // Force opaque and double-sided rendering
+            mesh.material.opacity = 1.0;
+            mesh.material.transparent = false;
+            mesh.material.side = THREE.DoubleSide;
+
             // Scale, Orient, then Position
             const scale = primitive.diameter / 2;
             mesh.scale.set(scale, scale, scale);

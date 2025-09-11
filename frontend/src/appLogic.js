@@ -107,7 +107,7 @@ export const useAppLogic = () => {
     const [liveFrameData, setLiveFrameData] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
     const [clickSelected, setClickSelected] = useState({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
     const [drawableVisibility, setDrawableVisibility] = useState({ [VIEW_IDS.SETUP]: {}, [VIEW_IDS.RUN]: {} });
-    const [explodeAxis, setExplodeAxis] = useState({ [VIEW_IDS.SETUP]: { x: false, y: true, z: false }, [VIEW_IDS.RUN]: { x: false, y: true, z: false } });
+    const [explodeAxis, setExplodeAxis] = useState({ [VIEW_IDS.SETUP]: { x: false, y: false, z: false }, [VIEW_IDS.RUN]: { x: false, y: true, z: false } });
     const [modelBboxSize, setModelBboxSize] = useState({ [VIEW_IDS.SETUP]: { x: 0, y: 0, z: 0 }, [VIEW_IDS.RUN]: { x: 0, y: 0, z: 0 } });
     const [explodeOffset, setExplodeOffset] = useState({ [VIEW_IDS.SETUP]: { x: 0, y: 0, z: 0 }, [VIEW_IDS.RUN]: { x: 0, y: 0, z: 0 } });
     const threeDManagerRefs = useRef({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });

@@ -71,7 +71,8 @@ DefaultFdict = { "title": "Elec compartments",
     "dataType": "voltage",
     "dataUnits": "mV",
     "vmin": -0.1,
-    "vmax": 0.05
+    "vmax": 0.05,
+    "iconNum": 0 
 }
 
 class AnimationEvent():
@@ -256,6 +257,7 @@ class JarDesigner:
         self.setupMooView = None    # Used to see model during construction
         self.stims = []
         self.moogli = []
+        self.chanDistrib = []
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -1270,8 +1272,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         pdict = dict( DefaultFdict )
         pdict["field"] = "other"
         pdict["dataType"] = "plot"
-        for pp in self.plotNames:
+        for idx, pp in enumerate( self.plotNames ):
             pdict["title"] = "plot_" + pp[1]
+            pdict["iconNum"] = idx
             plotGroupId = f"{pp[1]}.{pp[5]}.{pp[2]}" # title.field.idx
             self.setupMooView.makeMoogli( pp[8], pdict, plotGroupId )
 
@@ -1279,6 +1282,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         pdict["dataType"] = "stim"
         for idx, ss in enumerate( self.stims ):
             pdict["title"] = "stim_" + ss['path']
+            pdict["iconNum"] = idx
             stimGroupId = f"{ss['path']}.{idx}" # path.idx
             self.setupMooView.makeMoogli( ss['stimObjList'], pdict, stimGroupId )
 
@@ -1286,8 +1290,19 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         pdict["dataType"] = "moogli"
         for idx, mm in enumerate( self.moogli ):
             pdict["title"] = "moogli_" + mm['title']
+            pdict["iconNum"] = idx
             moogliGroupId = f"{mm['path']}.{idx}" # path.idx
             self.setupMooView.makeMoogli( mm['moogliObjList'], pdict, moogliGroupId )
+
+        pdict["field"] = "other"
+        pdict["dataType"] = "chan"
+        for idx, cc in enumerate( self.chanDistrib ):
+            pdict["title"] = "chan_" + cc['proto']
+            pdict["iconNum"] = idx
+            chanGroupId = f"{cc['proto']}.{idx}" # proto.idx
+            # Note this finds the path of the parent compts, not chans.
+            objList = moose.wildcardFind( f"/model/elec/{cc['path']}" )
+            self.setupMooView.makeMoogli( objList, pdict, chanGroupId )
 
 
     def _buildFileOutput( self ):

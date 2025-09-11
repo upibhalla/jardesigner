@@ -85,6 +85,7 @@ const DisplayWindow = (props) => {
         {threeDConfigs?.setup && (
             <ThreeDViewer
               {...props}
+              defaultDiaScale={2.5}
               threeDConfig={threeDConfigs.setup}
               simulationFrames={simulationFrames.setup}
               drawableVisibility={drawableVisibility.setup}
