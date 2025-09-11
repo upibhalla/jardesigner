@@ -1,4 +1,4 @@
-import React, { useState, memo, useCallback } from 'react'; // Ensure useCallback is imported
+import React, { useState, memo, useCallback, useEffect, useRef } from 'react'; // Ensure useCallback is imported
 import { Box, Tabs, Tab } from '@mui/material';
 import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
@@ -31,6 +31,17 @@ const DisplayWindow = (props) => {
   } = props;
 
   const [tabIndex, setTabIndex] = useState(0);
+  const prevThreeDConfigSetup = useRef();
+
+  useEffect(() => {
+    const hasNewSetupConfig = threeDConfigs?.setup && !prevThreeDConfigSetup.current;
+    if (hasNewSetupConfig) {
+      // Switch to the "Setup 3D" tab (index 3)
+      setTabIndex(3);
+    }
+    // Keep track of the current config for the next render
+    prevThreeDConfigSetup.current = threeDConfigs?.setup;
+  }, [threeDConfigs?.setup]); // Dependency array watches for config changes
 
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
