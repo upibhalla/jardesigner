@@ -1297,6 +1297,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         pdict["field"] = "other"
         pdict["dataType"] = "chan"
         for idx, cc in enumerate( self.chanDistrib ):
+            pdict["relpath"] = cc['proto']
             pdict["title"] = "chan_" + cc['proto']
             pdict["iconNum"] = idx
             chanGroupId = f"{cc['proto']}.{idx}" # proto.idx

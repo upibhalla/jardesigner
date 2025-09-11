@@ -59,51 +59,63 @@ export default class ThreeDManager {
     if (!config || !config.drawables) {
         return;
     }
-
+  
     this.sceneMeshes = [];
     this.entityConfigs.clear();
-    this.diameterScales.clear();
+    // this.diameterScales.clear(); // <-- CRITICAL: This line has been removed to preserve your scales.
+    
     while(this.scene.children.length > 2){
         const child = this.scene.children[2];
         this.scene.remove(child);
         if(child.geometry) child.geometry.dispose();
         if(child.material) child.material.dispose();
     }
-
+  
     this.renderer.setClearColor(new THREE.Color(config.bg === 'default' ? '#FFFFFF' : config.bg || '#FFFFFF'));
     this.boundingBox.makeEmpty();
-
+  
     config.drawables.forEach(entity => {
       this.entityConfigs.set(entity.groupId, {
           title: entity.title, vmin: entity.vmin, vmax: entity.vmax,
           colormap: config.colormap, transparency: entity.transparency || 1.0
       });
-      const initialScale = entity.diaScale ?? this.defaultDiaScale;
-      this.diameterScales.set(entity.groupId, initialScale);
+  
+      // --- REVISED SCALE LOGIC ---
+      // 1. Check for a pre-existing (user-modified) scale first.
+      const userModifiedScale = this.diameterScales.get(entity.groupId);
+  
+      // 2. If no user scale exists, get it from the config or use 2.5 as a fallback.
+      const configScale = entity.diaScale ?? 2.5;
+  
+      // 3. The final scale prioritizes your modification.
+      const finalScale = userModifiedScale ?? configScale;
+  
+      // 4. Ensure the map is up-to-date with the scale we're actually using.
+      this.diameterScales.set(entity.groupId, finalScale);
+      // --- END REVISED LOGIC ---
       
-      // REFACTORED SHAPE CREATION LOGIC
       entity.shape.forEach((primitive, i) => {
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
         const materialColor = getColor(normalizedValue, config.colormap, true);
         const material = new THREE.MeshStandardMaterial({
             color: materialColor, transparent: true, opacity: entity.transparency || 1.0,
         });
-
-        const mesh = createShape(primitive, material); // <-- CALL TO FACTORY
-
+  
+        const mesh = createShape(primitive, material);
+  
         if (mesh) {
             mesh.userData = { 
                 entityName: entity.groupId, 
-				shapeIndex: i, 
-				originalValue: primitive.value,
+                shapeIndex: i, 
+                originalValue: primitive.value,
                 originalPosition: mesh.position.clone(),
                 simPath: primitive.simPath,
             };
-            // Apply initial diameter scaling for spheres and cylinders/cones
+            // Apply the final determined scale
             if (mesh.geometry.type === 'SphereGeometry') {
-                mesh.scale.set(initialScale, initialScale, initialScale);
+                mesh.scale.set(finalScale, finalScale, finalScale);
             } else if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'ConeGeometry') {
-                mesh.scale.set(initialScale, 1, initialScale);
+                mesh.scale.set(finalScale, 1, finalScale);
             }
             this.scene.add(mesh);
             this.sceneMeshes.push(mesh);
@@ -114,6 +126,7 @@ export default class ThreeDManager {
     this.focusCamera();
     setTimeout(() => this.onWindowResize(), 0);
   }
+
 
   applyExplodeView(isExploded, offset, drawableOrder) {
     if (this.sceneMeshes.length === 0) return;

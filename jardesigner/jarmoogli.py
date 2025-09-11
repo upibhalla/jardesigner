@@ -285,6 +285,16 @@ class Segment():
         #   (Segmentlength, 5 microns.)
         # If diameter is > segment length, then go with segment length.
         # It touches cylinder at its surface.
+        theta = idx*0.1 + 3*np.pi/2 + iconNum*np.pi/8
+        comptAxis = np.array( newc[0:3] - newc[3:6] )
+        axLen = Segment.normToCylAxis( newc, theta, path == "soma")
+        start = np.array(newc[0:3] + comptAxis * 0.25 )
+        planeNormal = np.cross( newc[3:6], comptAxis )
+        newc[0:3] = start + newc[3:6]*newc[6]*DefaultDiaScale
+        newc[3:6] = planeNormal / np.linalg.norm( planeNormal )
+        newc[6] = newc[6]*DefaultDiaScale * 1.2
+
+        '''
         theta = np.pi * 5/2
         vec = newc[0:3] - newc[3:6]
         segmentLength = np.sqrt( np.sum( vec*vec) )
@@ -303,6 +313,7 @@ class Segment():
         newc[5] = -dx   # Normal parallel to axis
         newc[1] += side*dx * 0.55 # Just a small offset from the surface.
         newc[2] += side*dy * 0.55 # Just a small offset from the surface.
+        '''
         return Segment( "moogli", newc, simId, path, 0, idx, value = 0.05 )
 
 def extractUnits( text ):
@@ -438,6 +449,7 @@ class MooseChemDataWrapper( DataWrapper ):
 class MooseTrodeDataWrapper( DataWrapper ):
     def __init__( self, objList, fdict, groupId ):
         fdict['transparency'] = 1
+        fdict['diaScale'] = 2.5
         super().__init__(fdict, groupId )
         self.objList_ = objList
         if not objList:
@@ -450,12 +462,18 @@ class MooseTrodeDataWrapper( DataWrapper ):
         #print( f"mooseTrodeDataWrapper: paths = {len( paths)}, coords = {len(coords )}" )
         #print( f"mooseTrodeDataWrapper: isa = {objList[0].isA['HHChannelBase']}, isachanbase = {objList[0].isA['ChanBase']}" )
         if objType == "plot":
+            paths = [ "plot_"+pp for pp in paths]
             self.segmentList = [ Segment.plotTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType == "stim":
+            paths = [ "stim_"+pp for pp in paths]
             self.segmentList = [ Segment.stimTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType == "moogli":
+            paths = [ "moogli_"+pp for pp in paths]
             self.segmentList = [ Segment.moogTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType == "chan":
+            frel = fdict['relpath']
+            if len(frel) > 0 and frel != ".":
+                paths = [ pp+"/"+frel for pp in paths]
             self.segmentList = [ Segment.chanx( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         '''
         '''
