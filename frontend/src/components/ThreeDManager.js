@@ -1,18 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { getColor } from './colormap';
-import { createShape } from './ShapeFactory'; // <-- NEW IMPORT
-
-// In ThreeDManager.js
+import { createShape } from './ShapeFactory';
 
 export default class ThreeDManager {
-  constructor(container, onSelectionChange, defaultDiaScale = 1.0) {
+  constructor(container, onSelectionChange) {
     this.container = container;
     this.onSelectionChange = onSelectionChange;
-    
-    // This line now correctly uses the passed-in value or defaults to 1.0
-    this.defaultDiaScale = defaultDiaScale; 
-    
     this.activeGroupId = null;
     this.diameterScales = new Map();
 
@@ -23,13 +17,13 @@ export default class ThreeDManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     this.boundingBox = new THREE.Box3();
-    this.sceneMeshes = [];
+    this.sceneObjects = [];
     this.entityConfigs = new Map();
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
     dirLight.position.set(5, 5, 5);
     this.scene.add(dirLight);
@@ -44,7 +38,6 @@ export default class ThreeDManager {
     this.animate();
   }
   
-  // NEW: Method to get the size of the bounding box
   getBoundingBoxSize() {
     const size = new THREE.Vector3();
     this.boundingBox.getSize(size);
@@ -59,67 +52,59 @@ export default class ThreeDManager {
     if (!config || !config.drawables) {
         return;
     }
-  
-    this.sceneMeshes = [];
+
+    this.sceneObjects = [];
     this.entityConfigs.clear();
-    // this.diameterScales.clear(); // <-- CRITICAL: This line has been removed to preserve your scales.
-    
+    this.diameterScales.clear();
     while(this.scene.children.length > 2){
         const child = this.scene.children[2];
         this.scene.remove(child);
         if(child.geometry) child.geometry.dispose();
         if(child.material) child.material.dispose();
     }
-  
+
     this.renderer.setClearColor(new THREE.Color(config.bg === 'default' ? '#FFFFFF' : config.bg || '#FFFFFF'));
     this.boundingBox.makeEmpty();
-  
+
     config.drawables.forEach(entity => {
       this.entityConfigs.set(entity.groupId, {
           title: entity.title, vmin: entity.vmin, vmax: entity.vmax,
           colormap: config.colormap, transparency: entity.transparency || 1.0
       });
-  
-      // --- REVISED SCALE LOGIC ---
-      // 1. Check for a pre-existing (user-modified) scale first.
-      const userModifiedScale = this.diameterScales.get(entity.groupId);
-  
-      // 2. If no user scale exists, get it from the config or use 2.5 as a fallback.
-      const configScale = entity.diaScale ?? 2.5;
-  
-      // 3. The final scale prioritizes your modification.
-      const finalScale = userModifiedScale ?? configScale;
-  
-      // 4. Ensure the map is up-to-date with the scale we're actually using.
-      this.diameterScales.set(entity.groupId, finalScale);
-      // --- END REVISED LOGIC ---
+      const initialScale = entity.diaScale ?? 1.0;
+      this.diameterScales.set(entity.groupId, initialScale);
       
       entity.shape.forEach((primitive, i) => {
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
         const materialColor = getColor(normalizedValue, config.colormap, true);
         const material = new THREE.MeshStandardMaterial({
-            color: materialColor, transparent: true, opacity: entity.transparency || 1.0,
+            color: materialColor, 
+            transparent: true, 
+            opacity: entity.transparency || 1.0,
         });
-  
-        const mesh = createShape(primitive, material);
-  
-        if (mesh) {
-            mesh.userData = { 
+
+        const shapeObject = createShape(primitive, material);
+
+        if (shapeObject) {
+            shapeObject.userData = { 
                 entityName: entity.groupId, 
-                shapeIndex: i, 
-                originalValue: primitive.value,
-                originalPosition: mesh.position.clone(),
+				shapeIndex: i, 
+				originalValue: primitive.value,
+                originalPosition: shapeObject.position.clone(),
                 simPath: primitive.simPath,
             };
-            // Apply the final determined scale
-            if (mesh.geometry.type === 'SphereGeometry') {
-                mesh.scale.set(finalScale, finalScale, finalScale);
-            } else if (mesh.geometry.type === 'CylinderGeometry' || mesh.geometry.type === 'ConeGeometry') {
-                mesh.scale.set(finalScale, 1, finalScale);
+
+            if (shapeObject.type === 'Mesh') {
+                if (shapeObject.geometry.type === 'SphereGeometry') {
+                    shapeObject.scale.set(initialScale, initialScale, initialScale);
+                } else if (shapeObject.geometry.type === 'CylinderGeometry' || shapeObject.geometry.type === 'ConeGeometry') {
+                    shapeObject.scale.set(initialScale, 1, initialScale);
+                }
             }
-            this.scene.add(mesh);
-            this.sceneMeshes.push(mesh);
-            this.boundingBox.expandByObject(mesh);
+
+            this.scene.add(shapeObject);
+            this.sceneObjects.push(shapeObject);
+            this.boundingBox.expandByObject(shapeObject);
         }
       });
     });
@@ -127,31 +112,30 @@ export default class ThreeDManager {
     setTimeout(() => this.onWindowResize(), 0);
   }
 
-
   applyExplodeView(isExploded, offset, drawableOrder) {
-    if (this.sceneMeshes.length === 0) return;
+    if (this.sceneObjects.length === 0) return;
     const offsetVector = new THREE.Vector3(
         parseFloat(offset.x) || 0, parseFloat(offset.y) || 0, parseFloat(offset.z) || 0
     );
-    this.sceneMeshes.forEach(mesh => {
-        if (!mesh.userData.originalPosition) return;
+    this.sceneObjects.forEach(obj => {
+        if (!obj.userData.originalPosition) return;
         if (!isExploded) {
-            mesh.position.copy(mesh.userData.originalPosition);
+            obj.position.copy(obj.userData.originalPosition);
         } else {
-            const drawableIndex = drawableOrder.indexOf(mesh.userData.entityName);
+            const drawableIndex = drawableOrder.indexOf(obj.userData.entityName);
             if (drawableIndex !== -1) {
                 const cumulativeOffset = offsetVector.clone().multiplyScalar(drawableIndex);
-                mesh.position.copy(mesh.userData.originalPosition).add(cumulativeOffset);
+                obj.position.copy(obj.userData.originalPosition).add(cumulativeOffset);
             }
         }
     });
   }
 
   setDrawableVisibility(visibilityMap) {
-      this.sceneMeshes.forEach(mesh => {
-          const groupId = mesh.userData.entityName;
+      this.sceneObjects.forEach(obj => {
+          const groupId = obj.userData.entityName;
           if (visibilityMap.hasOwnProperty(groupId)) {
-              mesh.visible = visibilityMap[groupId];
+              obj.visible = visibilityMap[groupId];
           }
       });
   }
@@ -167,12 +151,14 @@ export default class ThreeDManager {
   }
 
   redrawColors() {
-    this.sceneMeshes.forEach(mesh => {
-        const config = this.entityConfigs.get(mesh.userData.entityName);
+    this.sceneObjects.forEach(obj => {
+        const config = this.entityConfigs.get(obj.userData.entityName);
         if (config) {
-            const normalizedValue = (mesh.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
+            const normalizedValue = (obj.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
             const newColor = getColor(normalizedValue, config.colormap, true);
-            mesh.material.color.set(newColor);
+            if (obj.material) { 
+                obj.material.color.set(newColor);
+            }
         }
     });
   }
@@ -182,13 +168,15 @@ export default class ThreeDManager {
     const entityConfig = this.entityConfigs.get(groupId);
     if (!entityConfig) { return; }
     const { vmin, vmax, colormap } = entityConfig;
-    const relevantMeshes = this.sceneMeshes.filter(mesh => mesh.userData.entityName === groupId);
+    const relevantObjects = this.sceneObjects.filter(obj => obj.userData.entityName === groupId);
     data.forEach((value, index) => {
-        if (index < relevantMeshes.length) {
-            const mesh = relevantMeshes[index];
+        if (index < relevantObjects.length) {
+            const obj = relevantObjects[index];
             const normalizedValue = (value - vmin) / (vmax - vmin);
             const newColor = getColor(normalizedValue, colormap, true);
-            mesh.material.color.set(newColor);
+            if (obj.material) {
+                obj.material.color.set(newColor);
+            }
         }
     });
   }
@@ -198,30 +186,40 @@ export default class ThreeDManager {
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       this.raycaster.setFromCamera(this.mouse, this.camera);
-      const intersects = this.raycaster.intersectObjects(this.sceneMeshes);
-      if (intersects.length > 0) {
-          const firstIntersect = intersects[0].object;
-		  // console.log("Clicked on object:", firstIntersect.userData);
+      const intersects = this.raycaster.intersectObjects(this.sceneObjects, true);
 
-          if (this.onSelectionChange && firstIntersect.userData) {
-              this.onSelectionChange(firstIntersect.userData, event.ctrlKey);
+      if (intersects.length > 0) {
+          let clickedObject = intersects[0].object;
+          let userData = clickedObject.userData;
+
+          // Traverse up the hierarchy to find the parent group with the main userData
+          // We stop when userData has a simPath, or we hit the scene object
+          while (!userData.simPath && clickedObject.parent && clickedObject.parent !== this.scene) {
+              clickedObject = clickedObject.parent;
+              userData = clickedObject.userData;
+          }
+
+          if (this.onSelectionChange && userData && userData.simPath) {
+              this.onSelectionChange(userData, event.ctrlKey);
           }
       }
   }
 
   updateSelectionVisuals(clickSelected) {
-    const isSelected = (mesh) => {
+    const isSelected = (obj) => {
         return clickSelected.some(sel =>
-            sel.entityName === mesh.userData.entityName && sel.shapeIndex === mesh.userData.shapeIndex
+            sel.entityName === obj.userData.entityName && sel.shapeIndex === obj.userData.shapeIndex
         );
     };
-    this.sceneMeshes.forEach(mesh => {
-        const config = this.entityConfigs.get(mesh.userData.entityName);
+    this.sceneObjects.forEach(obj => {
+        const config = this.entityConfigs.get(obj.userData.entityName);
         if (config) {
-            const normalizedValue = isSelected(mesh) ? 1.0 : (mesh.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
+            const normalizedValue = isSelected(obj) ? 1.0 : (obj.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
             const newColor = getColor(normalizedValue, config.colormap, true);
-            mesh.material.color.set(newColor);
-            mesh.material.needsUpdate = true;
+            if (obj.material) {
+                obj.material.color.set(newColor);
+                obj.material.needsUpdate = true;
+            }
         }
     });
   }
@@ -275,12 +273,13 @@ export default class ThreeDManager {
       const currentScale = this.diameterScales.get(targetGroupId) || 1.0;
       const newScale = currentScale * factor;
       this.diameterScales.set(targetGroupId, newScale);
-      this.sceneMeshes.forEach(mesh => {
-          if (mesh.userData.entityName === targetGroupId) {
-              if (mesh.geometry.type === 'SphereGeometry') {
-                  mesh.scale.set(newScale, newScale, newScale);
-              } else if (mesh.geometry.type === 'CylinderGeometry') {
-                  mesh.scale.set(newScale, 1, newScale);
+      
+      this.sceneObjects.forEach(obj => {
+          if (obj.userData.entityName === targetGroupId && obj.type === 'Mesh') {
+              if (obj.geometry.type === 'SphereGeometry') {
+                  obj.scale.set(newScale, newScale, newScale);
+              } else if (obj.geometry.type === 'CylinderGeometry') {
+                  obj.scale.set(newScale, 1, newScale);
               }
           }
       });

@@ -19,9 +19,7 @@ import helpText from './StimMenuBox.Help.json';
 
 // --- Define fieldOptions and typeOptions outside ---
 const fieldOptions = [
-    'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
-    'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
-    'modulation', 'vclamp', 'psdArea', 'nInit'
+    'inject', 'vclamp', 'activation', 'modulation', 'conc', 'concInit', 'n', 'nInit'
 ];
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
 const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
@@ -33,7 +31,7 @@ const safeToString = (value, defaultValue = '') => {
 
 // --- Default state for a new stim entry ---
 const createDefaultStim = () => ({
-    path: '',
+    path: 'soma',
     field: fieldOptions[0],
     chemProto: '.',
     childPath: '',

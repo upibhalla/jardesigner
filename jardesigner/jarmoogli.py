@@ -95,6 +95,9 @@ def getObjListInfo( objList ):
     elif elm.isA["ChanBase"] or elm.isA["CaConcBase"]:
         paths = [objPath( ee, 2 ) for ee in objList ]
         coords = [ ee.parent.coords  for ee in objList ]
+    elif elm.isA["VClamp"]:
+        paths = [objPath( ee.parent, 1 ) for ee in objList ]
+        coords = [ ee.parent.coords  for ee in objList ]
     else:
         return [], []
 
@@ -253,18 +256,18 @@ class Segment():
         axLen = Segment.normToCylAxis( newc, theta, path == "soma")
         start = np.array(newc[0:3]) # Middle of compartment.
         axis = np.array(newc[3:6]) #unit vector of cone direction.
-        trodeLen = max( 4e-6, np.sqrt( axLen * newc[6] )*DefaultDiaScale )
+        trodeLen = max(4e-6, np.sqrt( axLen * newc[6] )*DefaultDiaScale)/2
         # This is the sharp end, end touching the compartment
         newc[3:6] = start + axis * newc[6] * 0.55 * DefaultDiaScale
         newc[0:3] = newc[3:6] + axis * trodeLen # This is the fat end
         #newc[3:6] = start
         #newc[0:3] = start + axis * trodeLen # This is the fat end
 
-        newc[6] = trodeLen / 3
+        newc[6] = trodeLen / 6
         return Segment( "cone", newc, simId, path, 0, idx, value = -0.01 )
 
     @staticmethod
-    def stimTrode( path, newc, simId, idx, iconNum ):
+    def stimTrode( objType, path, newc, simId, idx, iconNum ):
         # I now have a lathe-shape for the stim. dia in coords[6]
         theta = idx*0.1 + np.pi/2 + iconNum*np.pi/8
         axLen = Segment.normToCylAxis( newc, theta, path == "soma")
@@ -275,8 +278,8 @@ class Segment():
         newc[0:3] = start + axis * newc[6] * 0.55 * DefaultDiaScale
         #newc[0:3] = start
         newc[3:6] = axis
-        newc[6] = max( 4e-6, np.sqrt( axLen * newc[6] )*DefaultDiaScale )
-        return Segment( "stim", newc, simId, path, 0, idx, value = 0.02 )
+        newc[6] = trodeLen/3
+        return Segment( objType, newc, simId, path, 0, idx, value = 0.02 )
 
     @staticmethod
     def moogTrode( path, newc, simId, idx, iconNum ):
@@ -464,9 +467,9 @@ class MooseTrodeDataWrapper( DataWrapper ):
         if objType == "plot":
             paths = [ "plot_"+pp for pp in paths]
             self.segmentList = [ Segment.plotTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
-        elif objType == "stim":
-            paths = [ "stim_"+pp for pp in paths]
-            self.segmentList = [ Segment.stimTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+        elif objType in ["stim", "vclamp"]:
+            paths = [ objType+"_"+pp for pp in paths]
+            self.segmentList = [ Segment.stimTrode( objType, pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType == "moogli":
             paths = [ "moogli_"+pp for pp in paths]
             self.segmentList = [ Segment.moogTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]

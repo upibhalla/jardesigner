@@ -1279,10 +1279,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             self.setupMooView.makeMoogli( pp[8], pdict, plotGroupId )
 
         pdict["field"] = "other"
-        pdict["dataType"] = "stim"
         for idx, ss in enumerate( self.stims ):
+            pdict["dataType"] = "stim"
             pdict["title"] = "stim_" + ss['path']
             pdict["iconNum"] = idx
+            if ss['field'] == 'vclamp': # Use special icon here
+                pdict["dataType"] = "vclamp"
             stimGroupId = f"{ss['path']}.{idx}" # path.idx
             self.setupMooView.makeMoogli( ss['stimObjList'], pdict, stimGroupId )
 
