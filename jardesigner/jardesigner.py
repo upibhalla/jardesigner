@@ -258,6 +258,8 @@ class JarDesigner:
         self.stims = []
         self.moogli = []
         self.chanDistrib = []
+        self.chemDistrib = []
+        
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -585,7 +587,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             self.soma = moose.element( '/library/cell/soma' )
             return
 
-    def _inMemoryProto( src, name ):
+    def _inMemoryProto( self, src, name ):
         if src[:3] != "../":    # Do not permit relative naming of src.
             if moose.exists('/library/'+name):
                 return True
@@ -763,7 +765,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             for key, val in i.items():
                 if key != "path":
                     temp.append( key )
-                    temp.append( str( value ) )
+                    temp.append( str( val ) )
             temp.append( "" )
         self.elecid.passiveDistribution = temp
 
@@ -1155,6 +1157,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             numPlots = sum( q != dummy for q in plotObj )
             #print( "PlotList: {0}: numobj={1}, field ={2}, nd={3}, ns={4}".format( pair, numPlots, plotField, len( dendCompts ), len( spineCompts ) ) )
             objList = [] # Used to fill in ObjIds of plotted objects.
+            tabs = []
             if numPlots > 0:
                 tabname = graphs.path + '/plot' + str(k)
                 scale = knownFields[i['field']][2]
@@ -1341,13 +1344,13 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
                     # Otherwise we use basepath as is.
                     basePath = modelPath + "/" + ff['path']
-                    pathStr = basePath + "." + fentry['field']
+                    pathStr = basePath + "." + ff['field']
                 if not nsdfPath in nsdfBlocks:
                     self.nsdfPathList.append( nsdfPath )
                     nsdfBlocks[nsdfPath] = [pathStr]
                     nsdf = moose.NSDFWriter2( nsdfPath )
                     nsdf.modelRoot = "" # Blank means don't save tree.
-                    nsdf.filename = fentry['file']
+                    nsdf.filename = ff['file']
                     # Insert the model setup files here.
                     nsdf.mode = 2
                     # Number of timesteps between flush
@@ -1874,7 +1877,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             self.elecid = kids[0]
             temp = moose.wildcardFind( self.elecid.path + '/#[ISA=CompartmentBase]' )
 
-        transformNMDAR( self.elecid.path )
+        jp.transformNMDAR( self.elecid.path )
         kids = moose.wildcardFind( '/library/##[0]' )
         for i in kids:
             i.tick = -1
@@ -1959,7 +1962,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             surroundMeshPath = comptDict[ em[1]]
             if self.verbose:
                 print( "surroundMESHPATH = ", surroundMeshPath )
-            surroundDsolve = moose.element( surroundMeshpath + "/dsolve" )
+            surroundDsolve = moose.element( surroundMeshPath + "/dsolve" )
             emdsolve.buildMeshJunctions( surroundDsolve )
 
     def _configureChemSolvers( self ):
