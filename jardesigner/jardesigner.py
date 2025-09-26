@@ -1874,7 +1874,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             self.elecid = kids[0]
             temp = moose.wildcardFind( self.elecid.path + '/#[ISA=CompartmentBase]' )
 
-        transformNMDAR( self.elecid.path )
+        jp.transformNMDAR( self.elecid.path )
         kids = moose.wildcardFind( '/library/##[0]' )
         for i in kids:
             i.tick = -1
