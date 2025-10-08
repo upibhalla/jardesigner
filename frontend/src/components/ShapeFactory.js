@@ -14,6 +14,9 @@ export function createShape(primitive, material) {
     let shapeObject;
     let geometry;
 
+    // A line material will be used for the new adaptor shape
+    const lineMaterial = new THREE.LineBasicMaterial({ color: material.color });
+
     switch (primitive.type) {
         case 'sphere': {
             geometry = new THREE.SphereGeometry(primitive.diameter / 2, 16, 8);
@@ -184,6 +187,80 @@ export function createShape(primitive, material) {
             shapeObject.position.set(...primitive.C);
             break;
         }
+
+        // --- START OF NEW 'ADAPTOR' CODE ---
+        case 'adaptor': {
+            const group = new THREE.Group();
+            const d = primitive.diameter;
+            const radius = d / 2;
+            const endLength = d * 0.5;
+            const midLength = d;
+            const totalLength = endLength * 2 + midLength; // Should be 2 * d
+
+            // --- 1. Round End (Cylinder) ---
+            const cylGeom = new THREE.CylinderGeometry(radius, radius, endLength, 8, 1);
+            const cylEdges = new THREE.EdgesGeometry(cylGeom);
+            const cylLines = new THREE.LineSegments(cylEdges, lineMaterial);
+            cylLines.position.y = (midLength + endLength) / 2; // Position at the top
+            group.add(cylLines);
+
+            // --- 2. Square End (Box) ---
+            const boxGeom = new THREE.BoxGeometry(d, endLength, d);
+            const boxEdges = new THREE.EdgesGeometry(boxGeom);
+            const boxLines = new THREE.LineSegments(boxEdges, lineMaterial);
+            boxLines.position.y = -(midLength + endLength) / 2; // Position at the bottom
+            group.add(boxLines);
+
+            // --- 3. Morphing Middle Section ---
+            const morphGeom = new THREE.BufferGeometry();
+            const vertices = [];
+            const indices = [];
+            const numCirclePoints = 8;
+            
+            // Define the 8 vertices for the top circle
+            for (let i = 0; i < numCirclePoints; i++) {
+                const angle = (i / numCirclePoints) * Math.PI * 2;
+                vertices.push(Math.cos(angle) * radius, midLength / 2, Math.sin(angle) * radius);
+            }
+
+            // Define the 8 vertices for the bottom square (corner + midpoint on each side)
+            const sq = [
+                [-radius, -midLength / 2, -radius], [0, -midLength / 2, -radius],
+                [radius, -midLength / 2, -radius], [radius, -midLength / 2, 0],
+                [radius, -midLength / 2, radius], [0, -midLength / 2, radius],
+                [-radius, -midLength / 2, radius], [-radius, -midLength / 2, 0]
+            ];
+            sq.forEach(v => vertices.push(...v));
+
+            // Create indices for the lines
+            // Top circle edges
+            for (let i = 0; i < numCirclePoints; i++) {
+                indices.push(i, (i + 1) % numCirclePoints);
+            }
+            // Bottom square edges
+            for (let i = 0; i < 8; i++) {
+                indices.push(numCirclePoints + i, numCirclePoints + ((i + 1) % 8));
+            }
+            // Vertical stitching edges
+            for (let i = 0; i < numCirclePoints; i++) {
+                indices.push(i, i + numCirclePoints);
+            }
+
+            morphGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            morphGeom.setIndex(indices);
+            const morphLines = new THREE.LineSegments(morphGeom, lineMaterial);
+            group.add(morphLines);
+
+            // --- Final Orientation and Positioning ---
+            const direction = new THREE.Vector3(...primitive.C2).normalize();
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+            group.quaternion.copy(quaternion);
+            group.position.set(...primitive.C);
+            
+            shapeObject = group;
+            break;
+        }
+        // --- END OF NEW 'ADAPTOR' CODE ---
 
         default:
             return null;

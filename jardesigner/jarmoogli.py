@@ -248,6 +248,11 @@ class Segment():
             idx, iconNum, -0.1 + iconNum*0.02)
 
     @staticmethod
+    def adaptor( path, newc, simId, idx, iconNum ):
+        return Segment.chanBase( "adaptor", path, newc, simId, 
+            idx, iconNum, -0.5 + iconNum*0.02)
+
+    @staticmethod
     def plotTrode( path, newc, simId, idx, iconNum ):
         # dia in coords[6]
         # cone is 4 microns and is aligned radially away from center
@@ -478,6 +483,11 @@ class MooseTrodeDataWrapper( DataWrapper ):
             if len(frel) > 0 and frel != ".":
                 paths = [ pp+"/"+frel for pp in paths]
             self.segmentList = [ Segment.chanx( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
+        elif objType == "adaptor":
+            frel = fdict['relpath']
+            if len(frel) > 0 and frel != ".":
+                paths = [ pp+"/"+frel for pp in paths]
+            self.segmentList = [ Segment.adaptor( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         '''
         '''
 

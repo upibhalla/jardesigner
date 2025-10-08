@@ -258,6 +258,7 @@ class JarDesigner:
         self.stims = []
         self.moogli = []
         self.chanDistrib = []
+        self.adaptorElecComptList = {}
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -1305,8 +1306,22 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             chanGroupId = f"{cc['proto']}.{idx}" # proto.idx
             # Note this finds the path of the parent compts, not chans.
             objList = moose.wildcardFind( f"/model/elec/{cc['path']}" )
+            print( "CCCCCCCCHHHAN: objList = ", objList )
             self.setupMooView.makeMoogli( objList, pdict, chanGroupId )
 
+        pdict["field"] = "other"
+        pdict["dataType"] = "adaptor"
+        for idx, adname in enumerate( self.adaptorElecComptList ):
+            (elecRelPath, chemRelPath, objList) = self.adaptorElecComptList[adname]
+            print( "AAAAADAPTOR: objList = ", objList )
+            print( "AAAAANAME = ", objList[0].name, objList[0].dataIndex )
+            pdict["relpath"] = f"{elecRelPath}_to_{chemRelPath}"
+            pdict["title"] = adname
+            pdict["iconNum"] = idx
+            adaptGroupId = f"{adname}.{idx}" # proto.idx
+            # ObjList has the parent elec compts
+            self.setupMooView.makeMoogli( objList, pdict, adaptGroupId )
+    
 
     def _buildFileOutput( self ):
         if not hasattr( self, 'files' ) or len( self.files ) == 0:
@@ -2058,12 +2073,16 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemObj = moose.element( chemPath )
         #print( "CHEMPATH = ", chemPath, chemObj )
         assert( chemObj.numData >= len( elecComptList ) )
-        adName = '/adapt'
+        adName = f"adapt_{elecComptList[0].name}_to_{chemObj.name}"
+        '''
         for i in range( 1, len( elecRelPath ) ):
             if ( elecRelPath[-i] == '/' ):
                 adName += elecRelPath[1-i]
                 break
-        ad = moose.Adaptor( chemObj.path + adName, len( elecComptList ) )
+        '''
+        ad = moose.Adaptor( chemObj.path + '/' + adName, len( elecComptList ) )
+        elmList = [ moose.element( ee ) for ee in elecComptList ]
+        self.adaptorElecComptList[adName] = (elecRelPath, chemRelPath, elmList )
         print( 'building ', len( elecComptList ), 'adaptors ', adName, ' for: ', mesh.name, elecRelPath, elecField, chemRelPath )
         av = ad.vec
         chemVec = moose.element( mesh.path + '/' + chemRelPath ).vec
