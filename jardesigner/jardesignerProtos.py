@@ -47,6 +47,7 @@
 import numpy as np
 import moose
 import math
+from pathlib import Path
 from moose import utils
 
 EREST_ACT    = -0.060
@@ -647,6 +648,68 @@ def makeChemOscillator( name = 'osc', parent = '/library' ):
     s.diffConst = 0
     return compt
 
+def makeChemProtoFromFile( fname, name ):
+    scriptPath = Path(__file__).resolve()
+    scriptDirectory = scriptPath.parent
+    print( "SCRIPT DIR = ", scriptDirectory )
+    target = '/library/' + name
+    if moose.exists( target ):
+        elm = moose.element( target )
+        if elm.classname == 'CubeMesh':
+            return elm
+        elif moose.exists ( target + '/' + name ):
+            elm = moose.element( target + '/' + name )
+            if elm.classname == 'CubeMesh':
+                return elm
+        print( f"Error: Prototype with same name {name} is not a chemical compartment" )
+        quit()
+    else:
+        elm = moose.loadModel( f'{scriptDirectory}/CHEM_MODELS/{fname}.g', target, 'ee' )
+        if elm.path == "/":
+            print( f"Error: Failed to load prototype {target}" )
+            quit()
+        compt = moose.wildcardFind( f"{target}/##[ISA=CubeMesh]" )
+        if len( compt ) == 0:
+            print( f"Error: prototype {target} does not define compartment in chem model" )
+            quit()
+
+        ret = compt[0]
+        if compt[0].name != name:
+            compt[0].name = name
+        moose.le( compt[0] )
+        return compt[0]
+    assert( 0 ) # Should never get here.
+
+
+def makeChemSTF( name = 'STF', parent = '/library' ):
+    return makeChemProtoFromFile( 'STF', name )
+
+def makeChemSTD( name = 'STD', parent = '/library' ):
+    return makeChemProtoFromFile( 'STD', name )
+
+def makeChemSTF( name = 'LTF', parent = '/library' ):
+    return makeChemProtoFromFile( 'LTF', name )
+
+def makeChemSTD( name = 'LTD', parent = '/library' ):
+    return makeChemProtoFromFile( 'LTD', name )
+
+def makeChemBCM( name = 'BCM', parent = '/library' ):
+    return makeChemProtoFromFile( 'BCM', name )
+
+def makeChemBetaAR( name = 'betaAR', parent = '/library' ):
+    return makeChemProtoFromFile( 'betaAR', name )
+
+def makeChem_mGluR( name = 'mGluR', parent = '/library' ):
+    return makeChemProtoFromFile( 'mGluR', name )
+
+def makeChemEGFR( name = 'EGFR', parent = '/library' ):
+    return makeChemProtoFromFile( 'EGFR', name )
+
+def makeChemCaMKII( name = 'CaMKII', parent = '/library' ):
+    return makeChemProtoFromFile( 'CaMKII', name )
+
+def makeChemCICR( name = 'CICR', parent = '/library' ):
+    return makeChemProtoFromFile( 'CICR', name )
 
     #################################################################
     # Here we have a series of utility functions for building cell

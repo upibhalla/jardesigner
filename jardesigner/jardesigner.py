@@ -1283,8 +1283,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             pdict["dataType"] = "stim"
             pdict["title"] = "stim_" + ss['path']
             pdict["iconNum"] = idx
-            if ss['field'] == 'vclamp': # Use special icon here
-                pdict["dataType"] = "vclamp"
+            if ss['type'] == 'field' and ss['field'] == 'vclamp': 
+                pdict["dataType"] = "vclamp" # Use special icon here
             stimGroupId = f"{ss['path']}.{idx}" # path.idx
             self.setupMooView.makeMoogli( ss['stimObjList'], pdict, stimGroupId )
 
@@ -1910,45 +1910,48 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     #################################################################
 
-    def _buildChemLine( self, line, smjl, pmjl, emjl, comptDict  ):
+    def _buildChemLine( self, line, smjl, pmjl, emjl, comptDict, isAllDends ):
         chemSrc = line['proto']
         elecPath = line['path']
         meshType = line['type']
-        meshpath = comptDict[ chemSrc ]
-        if self.useGssa and meshType != 'dend':
-            ksolve = moose.Gsolve( meshpath + '/ksolve' )
+        meshPath = comptDict[ chemSrc ]
+        print( "BUILD CHEM LINE: ", chemSrc, elecPath, meshType, meshPath )
+        # Normally dend remains determ, if no other compt it can be stoch
+        #if self.useGssa and meshType != 'dend':
+        if self.useGssa and (meshType != 'dend' or isAllDends ):
+            ksolve = moose.Gsolve( meshPath + '/ksolve' )
         else:
-            ksolve = moose.Ksolve( meshpath + '/ksolve' )
+            ksolve = moose.Ksolve( meshPath + '/ksolve' )
             ksolve.method = self.odeMethod
-        dsolve = moose.Dsolve( meshpath + '/dsolve' )
-        stoich = moose.Stoich( meshpath + '/stoich' )
-        stoich.compartment = moose.element(meshpath)
+        dsolve = moose.Dsolve( meshPath + '/dsolve' )
+        stoich = moose.Stoich( meshPath + '/stoich' )
+        stoich.compartment = moose.element(meshPath)
         stoich.ksolve = ksolve
         stoich.dsolve = dsolve
         if meshType == 'psd':
-            if len( moose.wildcardFind( meshpath + '/##[ISA=PoolBase     ]' ) ) == 0:
-                moose.Pool( meshpath + '/dummy' )
-        stoich.reacSystemPath = meshpath + "/##"
+            if len( moose.wildcardFind( meshPath + '/##[ISA=PoolBase     ]' ) ) == 0:
+                moose.Pool( meshPath + '/dummy' )
+        stoich.reacSystemPath = meshPath + "/##"
         # The middle arg in these cases used to be the geom. Not relevant.
         # The middle arg line[4] Now looks like it is the parent compt.
         if meshType == 'spine':
 
-            smjl.append( [meshpath, line['parent'], dsolve])
+            smjl.append( [meshPath, line['parent'], dsolve])
         if meshType == 'psd':
-            pmjl.append( [meshpath, line['parent'], dsolve] )
+            pmjl.append( [meshPath, line['parent'], dsolve] )
         elif meshType == 'endo':
             # Endo mesh is easy as it explicitly defines surround.
-            emjl.append( [meshpath, line['parent'], dsolve] )
+            emjl.append( [meshPath, line['parent'], dsolve] )
 
     # ComptDict was set up with respect to the original single model.
     def _buildChemJunctions( self, smjl, pmjl, emjl, comptDict ):
         for sm, pm in zip( smjl, pmjl ):
             # Locate associated NeuroMesh and PSD mesh
             if sm[1] == pm[1]:  # Check for same parent dend.
-                nmeshpath = comptDict[ sm[1] ]
+                nmeshPath = comptDict[ sm[1] ]
                 if self.verbose:
-                    print( "NeuroMeshPath = ", nmeshpath )
-                dmdsolve = moose.element( nmeshpath + "/dsolve" )
+                    print( "NeuroMeshPath = ", nmeshPath )
+                dmdsolve = moose.element( nmeshPath + "/dsolve" )
                 dmdsolve.buildNeuroMeshJunctions( sm[2], pm[2] )
                 # set up the connections so that the spine volume scaling can happen
                 self.elecid.setSpineAndPsdMesh( moose.element(sm[0]), moose.element(pm[0]))
@@ -1973,10 +1976,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             spineMeshJunctionList = []
             psdMeshJunctionList = []
             endoMeshJunctionList = []
+            numDends = len( [cc for cc in sortedChemDistrib if cc['type'] == 'dend'] )
+            isAllDends = ( numDends == len( sortedChemDistrib ) )
             for line in sortedChemDistrib:
                 self._buildChemLine( line, spineMeshJunctionList,
                     psdMeshJunctionList, endoMeshJunctionList, 
-                    tempComptDict )
+                    tempComptDict, isAllDends )
             self._buildChemJunctions( spineMeshJunctionList,
                     psdMeshJunctionList, endoMeshJunctionList, 
                     tempComptDict )
@@ -2012,7 +2017,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def _buildAdaptor( self, meshName, elecRelPath, elecField, \
             chemRelPath, chemField, isElecToChem, offset, scale ):
         #print "offset = ", offset, ", scale = ", scale
-        #print( "buildAdaptor: ", meshName, chemRelPath )
+        print( "11111111 buildAdaptor: ", meshName, elecRelPath, chemRelPath )
         if moose.exists( '/model/chem/' + meshName ):
             mesh = moose.element( '/model/chem/' + meshName )
         elif moose.exists( '/model/chem/kinetics/' + meshName ):
@@ -2034,7 +2039,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             for i,j in zip( elecComptList, mesh.elecComptList ):
                 print( "Lookup: {} {} {}; orig: {} {} {}".format( i.name, i.index, i.fieldIndex, j.name, j.index, j.fieldIndex ))
         else:
-            #print("Building adapter: elecComptList on mesh: ", mesh.path , " with elecRelPath = ", elecRelPath )
+            print("Building adapter: elecComptList '", mesh.elecComptList, "' on mesh: '", mesh.path , "' with elecRelPath = ", elecRelPath )
             elecComptList = mesh.elecComptList
 
         if len( elecComptList ) == 0:
@@ -2046,7 +2051,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         capField = elecField[0].capitalize() + elecField[1:]
         capChemField = chemField[0].capitalize() + chemField[1:]
         chemPath = mesh.path + '/' + chemRelPath
-        #print( "ADAPTOR: elecCompts = {}; startVx = {}, endVox = {}, chemPath = {}".format( [i.name for i in elecComptList], startVoxelInCompt, endVoxelInCompt, chemPath ) )
+        print( "ADAPTOR: elecCompts = {}; startVx = {}, endVox = {}, chemPath = {}".format( [i.name for i in elecComptList], startVoxelInCompt, endVoxelInCompt, chemPath ) )
         if not( moose.exists( chemPath ) ):
             raise BuildError( \
                 "Error: buildAdaptor: no chem obj in " + chemPath )
@@ -2059,15 +2064,17 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 adName += elecRelPath[1-i]
                 break
         ad = moose.Adaptor( chemObj.path + adName, len( elecComptList ) )
-        #print 'building ', len( elecComptList ), 'adaptors ', adName, ' for: ', mesh.name, elecRelPath, elecField, chemRelPath
+        print( 'building ', len( elecComptList ), 'adaptors ', adName, ' for: ', mesh.name, elecRelPath, elecField, chemRelPath )
         av = ad.vec
         chemVec = moose.element( mesh.path + '/' + chemRelPath ).vec
 
         for i in zip( elecComptList, startVoxelInCompt, endVoxelInCompt, av ):
+            print( "inzip", i )
             i[3].inputOffset = 0.0
             i[3].outputOffset = offset
             i[3].scale = scale
             if elecRelPath == 'spine':
+                print( "ISSPINE" )
                 # Check needed in case there were unmapped entries in 
                 # spineIdsFromCompartmentIds
                 elObj = i[0]
@@ -2078,17 +2085,20 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             else:
                 ePath = i[0].path + '/' + elecRelPath
                 #print( "EPATH = ", ePath )
+                print( "NOT SPINE", ePath )
                 if not( moose.exists( ePath ) ):
+                    print( "NOT SPINE", ePath, "DOESN'T EXIST, bailing" )
                     continue
                     #raise BuildError( "Error: buildAdaptor: no elec obj in " + ePath )
                 elObj = moose.element( i[0].path + '/' + elecRelPath )
-            if ( isElecToChem ):
+            if isElecToChem:
                 elecFieldSrc = 'get' + capField
                 chemFieldDest = 'set' + capChemField
                 #print ePath, elecFieldSrc, scale
                 moose.connect( i[3], 'requestOut', elObj, elecFieldSrc )
                 for j in range( i[1], i[2] ):
                     moose.connect( i[3], 'output', chemVec[j],chemFieldDest)
+                    print( "connect elecToChem:", i[3].name, 'output', chemVec[j].name, chemFieldDest)
             else:
                 chemFieldSrc = 'get' + capChemField
                 if capField == 'Activation':
@@ -2097,9 +2107,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     elecFieldDest = 'set' + capField
                 for j in range( i[1], i[2] ):
                     moose.connect( i[3], 'requestOut', chemVec[j], chemFieldSrc)
-                    #print( i[3].name, 'requestOut', chemVec[j].name, chemFieldSrc)
+                    print( "connect chemToElec:", i[3].name, 'requestOut', chemVec[j].name, chemFieldSrc)
                 msg = moose.connect( i[3], 'output', elObj, elecFieldDest )
-                #print( "Connecting {} to {} and {}.{}".format( i[3], chemVec[0], elObj, elecFieldDest ) )
+                print( "Connect chemToElec: Connecting {} to {} and {}.{}".format( i[3], chemVec[0], elObj, elecFieldDest ) )
 
 
 

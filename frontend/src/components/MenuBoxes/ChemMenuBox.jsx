@@ -24,11 +24,15 @@ const getChemSourceString = (componentType) => {
         case 'Oscillator': return 'makeChemOscillator()';
         case 'Bistable':   return 'makeChemBistable()';
         case 'LTP':        return 'makeChemLTP()';
-        case 'STP':        return 'makeChemSTP()';
-        case 'betaAd':     return 'makeChemBetaAR()';
+        case 'LTD':        return 'makeChemLTD()';
+        case 'STF':        return 'makeChemSTF()';
+        case 'STD':        return 'makeChemSTD()';
+        case 'BCM':        return 'makeChemBCM()';
+        case 'betaAR':     return 'makeChemBetaAR()';
         case 'mGluR':      return 'makeChem_mGluR()';
         case 'EGFR':       return 'makeChemEGFR()';
         case 'CaMKII':     return 'makeChemCaMKII()';
+        case 'CICR':       return 'makeChemCICR()';
         default:           return componentType;
     }
 };
@@ -45,7 +49,8 @@ const getComponentTypeFromSchema = (schemaType, schemaSource) => {
 };
 
 const prototypeTypeOptions = [
-    'Oscillator', 'Bistable', 'LTP', 'STP', 'betaAd', 'mGluR', 'EGFR', 'CaMKII',
+    'Oscillator', 'Bistable', 'LTP', 'LTD', 'STF', 'STD', 'BCM', 'betaAR', 
+	'mGluR', 'EGFR', 'CaMKII', 'CICR',
     'SBML', 'kkit', 'User Func', 'In-memory'
 ];
 
