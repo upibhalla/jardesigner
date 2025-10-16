@@ -651,7 +651,6 @@ def makeChemOscillator( name = 'osc', parent = '/library' ):
 def makeChemProtoFromFile( fname, name ):
     scriptPath = Path(__file__).resolve()
     scriptDirectory = scriptPath.parent
-    print( "SCRIPT DIR = ", scriptDirectory )
     target = '/library/' + name
     if moose.exists( target ):
         elm = moose.element( target )
@@ -676,7 +675,6 @@ def makeChemProtoFromFile( fname, name ):
         ret = compt[0]
         if compt[0].name != name:
             compt[0].name = name
-        moose.le( compt[0] )
         return compt[0]
     assert( 0 ) # Should never get here.
 

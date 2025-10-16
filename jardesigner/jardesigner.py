@@ -141,33 +141,25 @@ def addDefaultsRecursive(instance, schema):
     if isinstance(schema, dict) and isinstance(instance, dict):
         if 'oneOf' in schema:
             for subschema in schema['oneOf']:
-                #print( "SUBSCHEMA: ", subschema["properties"]["type"] )
-                #print( "INSTANCE: ", instance )
                 try:
                     # Check which subschema matches
                     jsonschema.validate(instance, subschema)  
-                    #print( "Validated SUBSCHEMA: ", instance )
                     # Apply defaults from that subschema
                     return addDefaultsRecursive(instance, subschema)  
                 except:
-                    #print( "Failed SUBSCHEMA: ", subschema["properties"]["type"] )
                     pass  # If validation fails, try the next subschema
         else:
             for prop, prop_schema in schema.get('properties', {}).items():
-                #print( "PROP = ", prop )
                 if 'default' in prop_schema and prop not in instance:
                     instance[prop] = prop_schema['default']
-                    #print( "DEFAULTING: ", prop, instance[prop] )
                 elif prop in instance and isinstance(prop_schema, dict):
                     instance[prop] = addDefaultsRecursive(instance[prop], prop_schema)
                 elif 'oneof' in prop_schema and prop not in instance:
                     for sch in prop_schema['oneof']:
                         if 'default' in sch:
-                            #print( "DEFAULTING2: ", prop, sch['default'] )
                             instance[prop] = sch['default']
                             break
                 else:
-                    #print( "NOT DEFAULTING: ", prop, 'default' in prop_schema )
                     pass
 
 
@@ -259,6 +251,8 @@ class JarDesigner:
         self.moogli = []
         self.chanDistrib = []
         self.adaptorElecComptList = {}
+        self.comptDict = {}     # dict of chem compartments
+        self.meshDict = {}      # dict of neuroMesh,spineMesh,psdMesh etc
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -273,7 +267,6 @@ class JarDesigner:
             if not (plotFile.endswith(".svg") or plotFile.endswith(".png") ):
                 print(f"Plot file '{plotFile}' should be svg or png.")
                 quit()
-        #self.plotFile = plotFile if sessionDir == None else sessionDir + "/" + plotFile
         self.plotFile = plotFile
         with open(schemaFile_path) as f:
             try:
@@ -283,7 +276,6 @@ class JarDesigner:
                 print( e )
                 quit()
         if jsonFile:
-            #jf = jsonFile if sessionDir == None else sessionDir + "/"+jsonFile
             with open(jsonFile) as f:
                 try:
                     data = json.load(f)
@@ -400,6 +392,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             moose.copy( self.elecid, self.model, 'elec' )
             self.elecid = moose.element( self.model.path + '/elec' )
             self.elecid.buildSegmentTree() # rebuild: copy has happened.
+        '''
         if hasattr( self, 'chemid' ):
             self.validateChem()
             if self.stealCellFromLibrary:
@@ -409,6 +402,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             else:
                 moose.copy( self.chemid, self.model, 'chem' )
                 self.chemid = moose.element( self.model.path + '/chem' )
+        '''
 
         ep = self.elecid.path
         somaList = moose.wildcardFind( ep + '/#oma#[ISA=CompartmentBase]' )
@@ -645,15 +639,20 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 ctype = cp["type"]
                 if ctype == 'builtin':
                     self.buildProtoFromFunction( cp['source'], cp['name'] )
-                    self.chemid = moose.element( '/library/' + cp['name'] )
+                    #self.chemid = moose.element( '/library/' + cp['name'] )
+                    comptlist = moose.wildcardFind( '/library/##[ISA=ChemCompt]' )
+                    if len( comptlist ) == 0:
+                        print("loadChem: No compartment found in file: ", fname)
+                        return
+                    self.comptDict.update( {cc.name:cc.path for cc in comptlist} )
                 elif ctype in ['kkit', 'sbml']:
                     sourceFile = cp['source']
                     if self.sessionDir != None:
                         sourceFile = self.sessionDir + "/" + sourceFile
                     self._loadChem( sourceFile, cp['name'] )
-                    self.chemid = moose.element( '/library/' + cp['name'] )
-                elif ctype == 'in_memory':
-                    self.chemid = moose.element( '/library/' + cp['name'] )
+                    #self.chemid = moose.element( '/library/' + cp['name'] )
+                #elif ctype == 'in_memory':
+                    #self.chemid = moose.element( '/library/' + cp['name'] )
                 else:
                     raise BuildError( \
                         "buildChemProto: type not known: " + ctype )
@@ -806,7 +805,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         self.elecid.spineDistribution = temp
 
-    def newChemDistrib( self, argList, newChemId, comptDict ):
+    def newChemDistrib( self, argList, comptDict ):
+        if not moose.exists( '/model/chem' ):
+            moose.Neutral( '/model/chem' )
         # meshOrder = ['soma', 'dend', 'spine', 'psd', 'psd_dend', 'presyn_dend', 'presyn_spine', 'endo', 'endo_axial']
         chemSrc = argList['proto']
         elecPath = argList['path']
@@ -815,11 +816,13 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         #chemSrc, elecPath, meshType, geom = argList[:4]
         chemSrcObj = comptDict.get( chemSrc )
         if not chemSrcObj:
+            print( "COMPT DICT = ", comptDict )
             raise BuildError( "newChemDistrib: Could not find chemSrcObj: " + chemSrc )
         if meshType in ['soma', 'endo_soma', 'psd_dend']:
             raise BuildError( "newChemDistrib: Can't yet handle meshType: " + meshType )
+        newChemId = moose.copy( chemSrcObj, '/library', 'temp_chem' )
         if meshType == 'dend':
-            mesh = moose.NeuroMesh( newChemId.path + '/' + chemSrc )
+            mesh = moose.NeuroMesh( '/model/chem/' + chemSrc )
             mesh.geometryPolicy = 'cylinder'
             mesh.separateSpines = 0
         elif meshType == 'spine':
@@ -829,32 +832,38 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         elif meshType == 'presyn_dend' or meshType == 'presyn_spine':
             mesh = self.buildPresynMesh( argList, newChemId )
         elif meshType == 'endo' or meshType == 'endo_axial':
-            return
+            # Earlier we did this after building. I think it should be OK
+            # as we have already set up the dend mesh because of the order
+            # of going through this loop.
+            mesh = self.buildEndoMesh( argList, newChemId )
         else:
             raise BuildError( "newChemDistrib: ERROR: No mesh of specified type found: " + meshType )
 
-        self._moveCompt( chemSrcObj, mesh )
-        comptDict[chemSrc] = mesh.path
+        #mesh.setVolumeNotRates( newChemId.volume )
+        self._moveCompt( newChemId, mesh )
+        self.meshDict[chemSrc] = mesh.path
 
     def buildSpineMesh( self, argList, newChemId, comptDict ):
         chemSrc = argList['proto']
         dendMeshName = argList["parent"]
-        dendMesh = comptDict.get( dendMeshName )
+        dendMesh = meshDict.get( dendMeshName )
+        print( "meshDict = ", meshDict )
         if not dendMesh:
-            raise( "Error: newChemDistrib: Missing parent NeuroMesh '{}' for spine '{}'".format( dendMeshName, chemSrc ) )
+            moose.le( '/model/elec' )
+            raise BuildError( "Error: buildSpineMesh: Missing parent NeuroMesh '{}' for spine '{}'".format( dendMeshName, chemSrc ) )
         #print( "COMPT DICT ============", comptDict )
         moose.element(dendMesh).separateSpines = 1
-        mesh = moose.SpineMesh( newChemId.path + '/' + chemSrc )
+        mesh = moose.SpineMesh( '/model/chem/' + chemSrc )
         moose.connect( dendMesh, 'spineListOut', mesh, 'spineList' )
         return mesh
 
     def buildPsdMesh( self, argList, newChemId, comptDict ):
         chemSrc = argList['proto']
         dendMeshName = argList["parent"]
-        dendMesh = comptDict.get( dendMeshName )
+        dendMesh = meshDict.get( dendMeshName )
         if not dendMesh:
-            raise( "Error: newChemDistrib: Missing parent NeuroMesh '{}' for psd '{}'".format( dendMeshName, chemSrc ) )
-        mesh = moose.PsdMesh( newChemId.path + '/' + chemSrc )
+            raise BuildError( "Error: buildPsdMesh: Missing parent NeuroMesh '{}' for psd '{}'".format( dendMeshName, chemSrc ) )
+        mesh = moose.PsdMesh( '/model/chem/' + chemSrc )
         moose.connect( dendMesh, 'psdListOut', mesh, 'psdList','OneToOne')
         return mesh
             
@@ -862,7 +871,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = argList['proto']
         elecPath = argList['path']
         meshType = argList['type']
-        mesh = moose.PresynMesh( newChemId.path + '/' + chemSrc )
+        mesh = moose.PresynMesh( '/model/chem' + chemSrc )
         #pair = elecPath + " " + geom
         pair = elecPath + " 1"
         if meshType == 'presyn_dend':
@@ -883,12 +892,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = argList['proto']
         elecPath = argList['path']
         meshType = argList['type']
-        mesh = moose.EndoMesh( newChemId.path + '/' + chemSrc )
+        mesh = moose.EndoMesh( '/model/chem/' + chemSrc )
         surroundName = argList["parent"]
         radiusRatio = float( argList["radiusRatio"] )
-        surroundMesh = self.comptDict.get( surroundName )
+        surroundMesh = self.meshDict.get( surroundName )
         if not surroundMesh:
-            raise( "Error: newChemDistrib: Could not find surround '{}' for endo '{}'".format( surroundName, chemSrc ) )
+            raise BuildError( "Error: buildEndoMesh: Could not find surround '{}' for endo '{}'".format( surroundName, chemSrc ) )
         #mesh.surround = moose.element( newChemId.path+'/'+surroundName )
         mesh.surround = surroundMesh
         mesh.isMembraneBound = True
@@ -908,6 +917,14 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         spineLine = [ii for ii in self.chemDistrib if ii['type']== 'spine']
         numPsd = len([ii for ii in self.chemDistrib if ii['type']== 'psd'])
         if len( spineLine ) > 0 and numPsd == 0:
+            if moose.exists('/model/chem/' + spineLine[0]['proto']):
+                dummyParent = '/model/chem'
+            elif moose.exists( '/model/chem/kinetics/' + spineLine[0]['proto']):
+                dummyParent = '/model/chem/kinetics'
+            else:
+                print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0]['proto'] )  )
+                quit()
+            '''
             if moose.exists(self.chemid.path + '/' + spineLine[0]['proto']):
                 dummyParent = self.chemid.path
             elif moose.exists(self.chemid.path + '/kinetics/' + spineLine[0]['proto']):
@@ -915,6 +932,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             else:
                 print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0]['proto'] )  )
                 quit()
+            '''
             psdLine = dict( spineLine[0] )
             dummyPSD = moose.CubeMesh( dummyParent + "/dummyPSD" )
             psdLine['proto'] = 'dummyPSD'
@@ -932,13 +950,20 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     def _buildOneChemDistrib( self, model ):
         sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
-        oldChemId = moose.element( model.path + "/chem" )
-        oldChemId.name = 'temp_chem'
-        newChemId = moose.Neutral( model.path + '/chem' )
-        comptlist = self._assignComptNamesFromKkit_SBML( model.path )
-        comptDict = { i.name:i for i in comptlist }
+        #oldChemId = moose.element( model.path + "/chem" )
+        #oldChemId.name = 'temp_chem'
+        #newChemId = moose.Neutral( model.path + '/chem' )
+        #comptlist = self._assignComptNamesFromKkit_SBML( model.path )
+        #comptlist = self._assignComptNamesFromKkit_SBML( '/library' )
+        #print( "COMPTLIST = ", comptlist, model.path )
+
+        #comptDict = { i.name:i for i in comptlist } # Loses existing comptDict content.
+        #comptDict = self.comptDict  # This is updated every time a chem proto file is loaded.
+        #comptDict.update( { i.name:i for i in comptlist } )
+        #print( "USING COMPTDICT = ", self.comptDict )
         for i in sortedChemDistrib:
-            self.newChemDistrib( i, newChemId, comptDict )
+            self.newChemDistrib( i, self.comptDict )
+        #print( "USING meshDICT = ", self.meshDict )
         # We have to assign the compartments to neuromesh and
         # spine mesh only after they have all been connected up.
         for i in sortedChemDistrib:
@@ -946,7 +971,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             elecPath = i['path']
             meshType = i['type']
             if i['type'] == 'dend':
-                dendMesh = moose.element(comptDict[i['proto']])
+                dendMesh = moose.element(self.meshDict[i['proto']])
                 if self.verbose:
                     print( "DendMesh path = ", dendMesh.path )
                 #pair = i['path'] + " " + geom
@@ -954,17 +979,24 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 dendMesh.diffLength = i.get( 'diffusionLength', self.diffusionLength )
 
                 dendMesh.subTree = self.elecid.compartmentsFromExpression[ pair ]
+            '''
             if i['type'] == 'endo' or i['type'] == 'endo_axial': 
                 # Should come after dend
                 mesh = self.buildEndoMesh( i, newChemId )
-                chemSrcObj = comptDict.get( i['proto'] )
+                chemSrcObj = self.comptDict.get( i['proto'] )
+                #mesh.setVolumeNotRates( newChemId.volume )
                 self._moveCompt( chemSrcObj, mesh )
-                comptDict[chemSrc] = mesh.path
+                self.meshDict[chemSrc] = mesh.path
+            '''
 
-        moose.delete( oldChemId )
-        self.chemid = newChemId
+        #moose.delete( oldChemId )
+        #self.chemid = newChemId
+        '''
         if model == self.modelList[0]:
+            print( "Updating comptDict with ", comptDict )
+            #self.comptDict.update( comptDict )
             self.comptDict = comptDict
+        '''
 
     ################################################################
     # Here we make copies of the model in nx and ny.
@@ -1070,12 +1102,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             objList = self._collapseElistToPathAndClass( comptList, plotDict['relpath'], kf[0] )
             return objList, kf[1]
         elif field in [ 'n', 'conc', 'nInit', 'concInit', 'volume', 'increment']:
-            path = plotDict['relpath']
+            path = plotDict['relpath'] # e.g., chemMesh/[group/]poolName
             pos = path.find( '/' )
             if pos == -1:   # Assume it is in the first chem compartment.
                 el = moose.wildcardFind( self.modelPath + "/chem/##[ISA=ChemCompt]" )
                 if len( el ) == 0:
-                    raise BuildError( "validateChem: no compartment on: " + self.modelPath )
+                    raise BuildError( "parseComptField: no compartment on: " + self.modelPath )
                 chemComptName = el[0].name
                 #chemComptName = 'dend'
                 path  = chemComptName + '/' + path
@@ -1090,7 +1122,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                         break
             if cc.path == '/':
                 print( "ERROR: path = ", path, chemComptName, field, flush = True )
-                raise BuildError( "parseComptField: no compartment named: " + chemComptName )
+                raise BuildError( "parseComptField: no chemMesh named: " + chemComptName )
             voxelVec = []
             temp = [ self._makeUniqueNameStr( i ) for i in comptList ]
             comptSet = set( temp )
@@ -1652,6 +1684,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 field = stimType
             pair = i['path'] + " " + i['geomExpr']
             dendCompts = elecid.compartmentsFromExpression[ pair ]
+            #print( "BUILD COMPTS FROM EXPR = ", dendCompts )
             if field == 'vclamp':
                 stimObj = self._buildVclampOnCompt( dendCompts, [] )
                 stimField = 'commandIn'
@@ -1781,6 +1814,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     ################################################################
 
+    '''
     def buildFromFile( self, efile, cfile ):
         self.efile = efile
         self.cfile = cfile
@@ -1790,6 +1824,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             self.elecid.parseChanDistrib()
         self._loadChem( cfile, 'tempchem' )
         self.buildFromMemory( self.model.path + '/tempelec', self.model.path + '/tempchem' )
+    '''
 
     ################################################################
     # Utility function to add a single spine to the given parent.
@@ -1895,6 +1930,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             i.tick = -1
 
 
+    '''
     #################################################################
     # This assumes that the chemid is located in self.parent.path+/chem
     # It moves the existing chem compartments into a NeuroMesh
@@ -1907,6 +1943,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             raise BuildError( "validateChem: no compartment on: " + cpath )
 
         return True
+    '''
 
     #################################################################
 
@@ -1929,8 +1966,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = line['proto']
         elecPath = line['path']
         meshType = line['type']
-        meshPath = comptDict[ chemSrc ]
-        print( "BUILD CHEM LINE: ", chemSrc, elecPath, meshType, meshPath )
+        meshPath = self.meshDict[ chemSrc ]
+        #print( "BUILD CHEM LINE: ", chemSrc, elecPath, meshType, meshPath )
         # Normally dend remains determ, if no other compt it can be stoch
         #if self.useGssa and meshType != 'dend':
         if self.useGssa and (meshType != 'dend' or isAllDends ):
@@ -1981,11 +2018,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             emdsolve.buildMeshJunctions( surroundDsolve )
 
     def _configureChemSolvers( self ):
-        if not hasattr( self, 'chemid' ) or len( self.chemDistrib ) == 0:
+        if len( self.chemDistrib ) == 0:
             return
         for model in self.modelList:
             tempComptDict = { key:val.replace( "model", model.name ) for key, val in self.comptDict.items() }
-            chempath = model.path + self.chemid.name
+            chempath = model.path + "/chem"
             fixXreacs.fixXreacs( chempath )
             sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
             spineMeshJunctionList = []
@@ -2011,10 +2048,13 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             modelId = moose.readSBML( fname, chem.path )
         else:
             modelId = moose.loadModel( fname, chem.path, 'ee' )
-        comptlist = moose.wildcardFind( chem.path + '/##[ISA=ChemCompt]' )
+        #comptlist = moose.wildcardFind( chem.path + '/##[ISA=ChemCompt]' )
+        comptlist = moose.wildcardFind( '/library/##[ISA=ChemCompt]' )
         if len( comptlist ) == 0:
             print("loadChem: No compartment found in file: ", fname)
             return
+        self.comptDict.update( {cc.name:cc.path for cc in comptlist } )
+        print( f"Loaded chem file {fname} to {chemName}, comptDic={self.comptDict}" )
 
     ################################################################
 
@@ -2027,12 +2067,13 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             if not ( i.isA('ChemCompt' ) or i.isA( 'MeshEntry' ) ):
                 moose.move( i, b )
                 #print( "Moving {} {} to {}".format( i.className, i.name, b.name ))
-        moose.delete( a )
+        moose.delete( a.path )
+
     ################################################################
     def _buildAdaptor( self, meshName, elecRelPath, elecField, \
             chemRelPath, chemField, isElecToChem, offset, scale ):
         #print "offset = ", offset, ", scale = ", scale
-        print( "11111111 buildAdaptor: ", meshName, elecRelPath, chemRelPath )
+        # print( "1111 buildAdaptor: {} {}.{} {}.{} ".format( meshName, elecRelPath, elecField, chemRelPath, chemField ) )
         if moose.exists( '/model/chem/' + meshName ):
             mesh = moose.element( '/model/chem/' + meshName )
         elif moose.exists( '/model/chem/kinetics/' + meshName ):
@@ -2054,7 +2095,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             for i,j in zip( elecComptList, mesh.elecComptList ):
                 print( "Lookup: {} {} {}; orig: {} {} {}".format( i.name, i.index, i.fieldIndex, j.name, j.index, j.fieldIndex ))
         else:
-            print("Building adapter: elecComptList '", mesh.elecComptList, "' on mesh: '", mesh.path , "' with elecRelPath = ", elecRelPath )
+            #print("Building adapter: elecComptList '", mesh.elecComptList, "' on mesh: '", mesh.path , "' with elecRelPath = ", elecRelPath )
             elecComptList = mesh.elecComptList
 
         if len( elecComptList ) == 0:
@@ -2066,7 +2107,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         capField = elecField[0].capitalize() + elecField[1:]
         capChemField = chemField[0].capitalize() + chemField[1:]
         chemPath = mesh.path + '/' + chemRelPath
-        print( "ADAPTOR: elecCompts = {}; startVx = {}, endVox = {}, chemPath = {}".format( [i.name for i in elecComptList], startVoxelInCompt, endVoxelInCompt, chemPath ) )
+        # print( "ADAPTOR: elecCompts = {}; startVx = {}, endVox = {}, chemPath = {}".format( [i.name for i in elecComptList], startVoxelInCompt, endVoxelInCompt, chemPath ) )
         if not( moose.exists( chemPath ) ):
             raise BuildError( \
                 "Error: buildAdaptor: no chem obj in " + chemPath )
@@ -2083,12 +2124,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         ad = moose.Adaptor( chemObj.path + '/' + adName, len( elecComptList ) )
         elmList = [ moose.element( ee ) for ee in elecComptList ]
         self.adaptorElecComptList[adName] = (elecRelPath, chemRelPath, elmList )
-        print( 'building ', len( elecComptList ), 'adaptors ', adName, ' for: ', mesh.name, elecRelPath, elecField, chemRelPath )
+        # print( 'building ', len( elecComptList ), 'adaptors ', adName, ' for: ', mesh.name, elecRelPath, elecField, chemRelPath )
         av = ad.vec
         chemVec = moose.element( mesh.path + '/' + chemRelPath ).vec
 
         for i in zip( elecComptList, startVoxelInCompt, endVoxelInCompt, av ):
-            print( "inzip", i )
             i[3].inputOffset = 0.0
             i[3].outputOffset = offset
             i[3].scale = scale
@@ -2104,7 +2144,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             else:
                 ePath = i[0].path + '/' + elecRelPath
                 #print( "EPATH = ", ePath )
-                print( "NOT SPINE", ePath )
+                #print( "NOT SPINE", ePath )
                 if not( moose.exists( ePath ) ):
                     print( "NOT SPINE", ePath, "DOESN'T EXIST, bailing" )
                     continue
@@ -2117,7 +2157,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 moose.connect( i[3], 'requestOut', elObj, elecFieldSrc )
                 for j in range( i[1], i[2] ):
                     moose.connect( i[3], 'output', chemVec[j],chemFieldDest)
-                    print( "connect elecToChem:", i[3].name, 'output', chemVec[j].name, chemFieldDest)
+                    #print( "connect elecToChem:", i[3].path, 'input: ', elObj, elecFieldSrc, 'output', chemVec[j].name, chemFieldDest)
             else:
                 chemFieldSrc = 'get' + capChemField
                 if capField == 'Activation':
@@ -2126,9 +2166,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     elecFieldDest = 'set' + capField
                 for j in range( i[1], i[2] ):
                     moose.connect( i[3], 'requestOut', chemVec[j], chemFieldSrc)
-                    print( "connect chemToElec:", i[3].name, 'requestOut', chemVec[j].name, chemFieldSrc)
+                    #print( "connect chemToElec:", i[3].name, 'requestOut', chemVec[j].name, chemFieldSrc)
                 msg = moose.connect( i[3], 'output', elObj, elecFieldDest )
                 print( "Connect chemToElec: Connecting {} to {} and {}.{}".format( i[3], chemVec[0], elObj, elecFieldDest ) )
+        #moose.showfield( ad )
 
 
 
