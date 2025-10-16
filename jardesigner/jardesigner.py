@@ -840,7 +840,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             raise BuildError( "newChemDistrib: ERROR: No mesh of specified type found: " + meshType )
 
         #mesh.setVolumeNotRates( newChemId.volume )
-        self._moveCompt( newChemId, mesh )
+        self._moveCompt( newChemId[0], mesh )
         self.meshDict[chemSrc] = mesh.path
 
     def buildSpineMesh( self, argList, newChemId, comptDict ):
@@ -1288,7 +1288,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         cdict = dict( DefaultFdict )
         if hasattr( self, 'comptDict' ):
-            for protoName, meshPath in self.comptDict.items():
+            for protoName, meshPath in self.meshDict.items():
                 mname = self.getFirstMol( protoName )
                 if mname == "":
                     print( f"Warning, no molecules found for {protoName}")
@@ -1338,15 +1338,15 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             chanGroupId = f"{cc['proto']}.{idx}" # proto.idx
             # Note this finds the path of the parent compts, not chans.
             objList = moose.wildcardFind( f"/model/elec/{cc['path']}" )
-            print( "CCCCCCCCHHHAN: objList = ", objList )
+            #print( "CCCCCCCCHHHAN: objList = ", objList )
             self.setupMooView.makeMoogli( objList, pdict, chanGroupId )
 
         pdict["field"] = "other"
         pdict["dataType"] = "adaptor"
         for idx, adname in enumerate( self.adaptorElecComptList ):
             (elecRelPath, chemRelPath, objList) = self.adaptorElecComptList[adname]
-            print( "AAAAADAPTOR: objList = ", objList )
-            print( "AAAAANAME = ", objList[0].name, objList[0].dataIndex )
+            #print( "AAAAADAPTOR: objList = ", objList )
+            #print( "AAAAANAME = ", objList[0].name, objList[0].dataIndex )
             pdict["relpath"] = f"{elecRelPath}_to_{chemRelPath}"
             pdict["title"] = adname
             pdict["iconNum"] = idx
@@ -2018,10 +2018,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             emdsolve.buildMeshJunctions( surroundDsolve )
 
     def _configureChemSolvers( self ):
-        if len( self.chemDistrib ) == 0:
+        if not hasattr( self, 'chemDistrib' ) or len( self.chemDistrib ) == 0:
             return
         for model in self.modelList:
-            tempComptDict = { key:val.replace( "model", model.name ) for key, val in self.comptDict.items() }
+            tempComptDict = { key:val.replace( "model", model.name ) for key, val in self.meshDict.items() }
             chempath = model.path + "/chem"
             fixXreacs.fixXreacs( chempath )
             sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
@@ -2060,6 +2060,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     def _moveCompt( self, a, b ):
 
+        print( "moveCompt: ", a, b )
         b.setVolumeNotRates( a.volume )
         # Potential problem: If we have grouped sub-meshes down one level in the tree, this will silenty move those too.
         for i in moose.wildcardFind( a.path + '/#' ):
