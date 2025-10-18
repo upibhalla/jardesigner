@@ -846,8 +846,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def buildSpineMesh( self, argList, newChemId, comptDict ):
         chemSrc = argList['proto']
         dendMeshName = argList["parent"]
-        dendMesh = meshDict.get( dendMeshName )
-        print( "meshDict = ", meshDict )
+        dendMesh = self.meshDict.get( dendMeshName )
+        print( "meshDict = ", self.meshDict )
         if not dendMesh:
             moose.le( '/model/elec' )
             raise BuildError( "Error: buildSpineMesh: Missing parent NeuroMesh '{}' for spine '{}'".format( dendMeshName, chemSrc ) )
@@ -860,7 +860,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     def buildPsdMesh( self, argList, newChemId, comptDict ):
         chemSrc = argList['proto']
         dendMeshName = argList["parent"]
-        dendMesh = meshDict.get( dendMeshName )
+        dendMesh = self.meshDict.get( dendMeshName )
         if not dendMesh:
             raise BuildError( "Error: buildPsdMesh: Missing parent NeuroMesh '{}' for psd '{}'".format( dendMeshName, chemSrc ) )
         mesh = moose.PsdMesh( '/model/chem/' + chemSrc )
@@ -1292,6 +1292,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 mname = self.getFirstMol( protoName )
                 if mname == "":
                     print( f"Warning, no molecules found for {protoName}")
+                    moose.le( '/model/chem' )
                     continue
                 molGroupId = f"{protoName}_conc_0"
                 mols = moose.wildcardFind( f"{meshPath}/{mname}[]" )
@@ -1506,7 +1507,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 for j in vtab:
                     ax.plot( t, j.vector * i[3] )
             
-        if hasattr( self, 'moogli' ) or len( self.wavePlotNames ) > 0:
+        #if hasattr( self, 'moogli' ) or len( self.wavePlotNames ) > 0:
+        if len( self.wavePlotNames ) > 0:
             plt.ion()
         # Here we build the plots and lines for the waveplots
         self.initWavePlots( startIndex )
@@ -1996,11 +1998,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             emjl.append( [meshPath, line['parent'], dsolve] )
 
     # ComptDict was set up with respect to the original single model.
-    def _buildChemJunctions( self, smjl, pmjl, emjl, comptDict ):
+    def _buildChemJunctions( self, smjl, pmjl, emjl, meshDict ):
         for sm, pm in zip( smjl, pmjl ):
             # Locate associated NeuroMesh and PSD mesh
             if sm[1] == pm[1]:  # Check for same parent dend.
-                nmeshPath = comptDict[ sm[1] ]
+                nmeshPath = meshDict[ sm[1] ]
                 if self.verbose:
                     print( "NeuroMeshPath = ", nmeshPath )
                 dmdsolve = moose.element( nmeshPath + "/dsolve" )
@@ -2011,7 +2013,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         for em in emjl:
             emdsolve = em[2]
-            surroundMeshPath = comptDict[ em[1]]
+            surroundMeshPath = meshDict[ em[1]]
             if self.verbose:
                 print( "surroundMESHPATH = ", surroundMeshPath )
             surroundDsolve = moose.element( surroundMeshpath + "/dsolve" )

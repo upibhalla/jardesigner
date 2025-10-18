@@ -23,6 +23,8 @@ const getChemSourceString = (componentType) => {
     switch (componentType) {
         case 'Oscillator': return 'makeChemOscillator()';
         case 'Bistable':   return 'makeChemBistable()';
+        case 'CaDend':   return 'makeChemCaDend()';
+        case 'CaSpineDend':   return 'makeChemCaSpineDend()';
         case 'LTP':        return 'makeChemLTP()';
         case 'LTD':        return 'makeChemLTD()';
         case 'STF':        return 'makeChemSTF()';
@@ -49,7 +51,7 @@ const getComponentTypeFromSchema = (schemaType, schemaSource) => {
 };
 
 const prototypeTypeOptions = [
-    'Oscillator', 'Bistable', 'LTP', 'LTD', 'STF', 'STD', 'BCM', 'betaAR', 
+    'Oscillator', 'Bistable', 'CaDend', 'CaSpineDend', 'LTP', 'LTD', 'STF', 'STD', 'BCM', 'betaAR', 
 	'mGluR', 'EGFR', 'CaMKII', 'CICR',
     'SBML', 'kkit', 'User Func', 'In-memory'
 ];

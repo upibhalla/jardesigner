@@ -443,7 +443,7 @@ def make_K_C( name ):
 
 
 #========================================================================
-#                SynChan: Glu receptor
+#                SynChan: AMPAR (ionotropic GluR) receptor
 #========================================================================
 
 def make_glu( name ):
@@ -460,7 +460,7 @@ def make_glu( name ):
     return glu
 
 #========================================================================
-#                NMDAChan: NMDA receptor
+#                NMDAChan: NMDA receptor. It has hooks for Ca_conc buildup
 #========================================================================
 
 def make_NMDA( name ):
@@ -673,11 +673,18 @@ def makeChemProtoFromFile( fname, name ):
             quit()
 
         ret = compt[0]
-        if compt[0].name != name:
-            compt[0].name = name
+        if len( compt ) == 1 and compt[0].name == 'kinetics':
+            if compt[0].name != name:
+                compt[0].name = name
         return compt[0]
     assert( 0 ) # Should never get here.
 
+
+def makeChemCaDend( name = 'CaDend', parent = '/library' ):
+    return makeChemProtoFromFile( 'CaDend', name )
+
+def makeChemCaSpineDend( name = 'CaSpineDend', parent = '/library' ):
+    return makeChemProtoFromFile( 'CaPsdSpineDend', name )
 
 def makeChemSTF( name = 'STF', parent = '/library' ):
     return makeChemProtoFromFile( 'STF', name )
@@ -707,7 +714,7 @@ def makeChemCaMKII( name = 'CaMKII', parent = '/library' ):
     return makeChemProtoFromFile( 'CaMKII', name )
 
 def makeChemCICR( name = 'CICR', parent = '/library' ):
-    return makeChemProtoFromFile( 'CICR', name )
+    return makeChemProtoFromFile( 'CICRpsdSpineDendEndo', name )
 
     #################################################################
     # Here we have a series of utility functions for building cell
@@ -877,7 +884,7 @@ def make_synInput( name = 'RandSpike', parent = '/library' ):
     # and assign the specified conductance density.
     # If caTau <= zero then there is no caConc created, otherwise it
     # creates one and assigns the desired tau in seconds.
-    # With the default arguments here it will create a glu, NMDA and LCa,
+    # With the default arguments here it will create AMPAR, NMDAR and LCa,
     # and add a Ca_conc.
 def addSpineProto( name = 'spine',
         parent = '/library',
@@ -944,19 +951,22 @@ def makePassiveHHsoma(name = 'passiveHHsoma', parent='/library'):
     return elecid
 
 # Wrapper function. This is used by the proto builder from rdesigneur
+# With the default arguments here it will create AMPAR, NMDAR and 
+# add a Ca_conc.
 def makeActiveSpine(name = 'active_spine', parent='/library'):
     return addSpineProto( name = name, parent = parent,
-            synList = ( ['glu', 0.0, 2e-3, 9e-3, 200.0, False],
-            ['NMDA', 0.0, 20e-3, 20e-3, 80.0, True] ),
+            synList = ( ['AMPAR', 0.0, 2e-3, 9e-3, 200.0, False],
+            ['NMDAR', 0.0, 20e-3, 20e-3, 80.0, True] ),
             chanList = ( ['Ca', 10.0, True ], ),
             caTau = 13.333e-3
         )
 
 # Wrapper function. This is used by the proto builder from rdesigneur
+# With the default arguments here it will create AMPAR and NMDAR
 def makeExcSpine(name = 'exc_spine', parent='/library'):
     return addSpineProto( name = name, parent = parent,
-            synList = ( ['glu', 0.0, 2e-3, 9e-3, 200.0, False],
-            ['NMDA', 0.0, 20e-3, 20e-3, 80.0, True] ),
+            synList = ( ['AMPAR', 0.0, 2e-3, 9e-3, 200.0, False],
+            ['NMDAR', 0.0, 20e-3, 20e-3, 80.0, True] ),
             caTau = 13.333e-3 )
 
 # Wrapper function. This is used by the proto builder from rdesigneur
