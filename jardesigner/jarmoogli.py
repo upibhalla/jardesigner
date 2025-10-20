@@ -85,10 +85,25 @@ def getObjListInfo( objList ):
         return [], []
     elm = objList[0]
     if elm.isA["PoolBase"]:
+        meshType = elm.parent.className
         paths = [objPath( ee, 3 ) for ee in objList ]
         coords = [ ee.coords for ee in objList ]
-        for cc in coords:
-            cc[6] *= 2
+        if meshType == "NeuroMesh":
+            for cc in coords:
+                cc[6] *= 2
+        elif meshType == "PsdMesh":
+            for cc in coords:
+                cc[3:6] += cc[0:3]
+        elif meshType == "SpineMesh":
+            for cc in coords:
+                cc[6] = cc[9]   # For diameter
+        elif meshType == "PresynMesh":
+            for cc in coords:
+                cc[3:6] = cc[3:6]*cc[6] + cc[0:3]   
+        elif meshType == "EndoMesh":
+            for cc in coords:
+                cc[6] = cc[3] 
+                cc[3:6] = cc[0:3]   # This may cause problems finding axis
     elif elm.isA["CompartmentBase"]:
         paths = [objPath( ee, 1 ) for ee in objList ]
         coords = [ ee.coords for ee in objList ]
@@ -179,10 +194,20 @@ class Segment():
         ret.diameter *= 2           # Moose puts radius in coords[6]
         return ret
 
+    def psdChemCompt( mol, idx ):
+        newc = np.array(mol.coords[:7])
+        newc[3:6] += newc[0:3]
+        # Diameter is in newc[6]
+        ret =  Segment( "cylinder", newc, mol.id.idValue, 
+            Segment.trimMolPath( mol ), 0, idx )
+        #print( f"IN PSD_CHEMCOMPT dia = {ret.diameter}, molcoords = {newc}" )
+        return ret
+
     @staticmethod
     def spineChemCompt( mol, idx ):
-        newc = mol.coords[:7]
+        newc = np.array(mol.coords[:7])
         newc[6] = mol.coords[9]   # For diameter
+        #print( f"IN SPINE_CHEMCOMPT dia = {newc[6]}, molcoords = {mol.coords}" )
         return Segment( "cylinder", newc, mol.id.idValue, 
             Segment.trimMolPath( mol ), 0, idx )
 
@@ -434,8 +459,10 @@ class MooseChemDataWrapper( DataWrapper ):
             return
         
         meshType = objList[0].parent.className
-        if meshType in ["NeuroMesh", "CylMesh", "PsdMesh"]:
+        if meshType in ["NeuroMesh", "CylMesh"]:
             self.segmentList = [ Segment.cylChemCompt( cc, idx ) for idx, cc in enumerate( objList ) ]
+        elif meshType == "PsdMesh":
+            self.segmentList = [ Segment.psdChemCompt( cc, idx ) for idx, cc in enumerate( objList ) ]
         elif meshType == "SpineMesh":
             self.segmentList = [ Segment.spineChemCompt( cc, idx ) for idx, cc in enumerate( objList ) ]
         elif meshType == "PresynMesh":
@@ -470,6 +497,7 @@ class MooseTrodeDataWrapper( DataWrapper ):
         #print( f"mooseTrodeDataWrapper: paths = {len( paths)}, coords = {len(coords )}" )
         #print( f"mooseTrodeDataWrapper: isa = {objList[0].isA['HHChannelBase']}, isachanbase = {objList[0].isA['ChanBase']}" )
         if objType == "plot":
+            #print( f"SETUP PLOT: objList[0] = {objList[0].path}, {objList[0].className}, \n FDICT = {fdict}" )
             paths = [ "plot_"+pp for pp in paths]
             self.segmentList = [ Segment.plotTrode( pp, cc, obj.id.idValue, idx, iconNum ) for idx, (pp, cc, obj ) in enumerate( zip( paths, coords, objList) ) ]
         elif objType in ["stim", "vclamp"]:
@@ -554,6 +582,7 @@ class MooView:
 
     def makeMoogli(self, mooObj, fdict, groupId ):
         mooField = fdict.get('field', 'Vm')
+        #print( f"IN MAKE MOOGLI, moofield = {mooObj[0].path}.{mooField}" )
         if mooField in ['n', 'conc']: # mooObj is the wildcard list
             dw = MooseChemDataWrapper(mooObj, fdict, groupId)
         elif mooField == 'other': # mooObj is objList

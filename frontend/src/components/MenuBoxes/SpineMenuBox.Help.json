@@ -11,8 +11,9 @@
     "shaftLength": "The length of the spine's shaft in microns (μm).",
     "headDiameter": "The diameter of the spine's head in microns (μm).",
     "headLength": "The length of the spine's head in microns (μm).",
-    "gluRGbar": "Maximum conductance for the AMPA/Kainate (GluR) receptor on this spine. This field only applies to active spine types. Units: Siemens per square meter (S/m^2).",
-    "nmdaRGbar": "Maximum conductance for the NMDA receptor on this spine. This field only applies to active spine types. Units: Siemens per square meter (S/m^2)."
+    "glurGbar": "Maximum conductance for the AMPA/Kainate (GluR) receptor on this spine. This field only applies to active spine types. Units: Siemens per square meter (S/m^2).",
+    "nmdarGbar": "Maximum conductance for the NMDA receptor on this spine. This field only applies to active spine types. Units: Siemens per square meter (S/m^2).",
+    "CaTau": "Time course for exponential decay of Ca levels to baseline. This field only applies to active spine types. Units: ms."
   },
   "distributions": {
     "prototype": "Select which of the defined spine prototypes to distribute with this rule.",
@@ -22,7 +23,8 @@
     "sizeScale": "A multiplier to scale the size of all dimensions of the selected spine prototype (e.g., 1.2 makes it 20% larger).",
     "sizeStdDev": "The standard deviation for the size scaling, allowing for random variability in the size of each spine.",
     "angle": "The mean angle (in radians) at which spines emerge from the dendrite, where 0 is perpendicular to the surface.",
-    "angleStdDev": "The standard deviation for the emergence angle (in radians), allowing for random variability in spine orientation."
+    "angleStdDev": "The standard deviation for the emergence angle (in radians), allowing for random variability in spine orientation.",
+    "randSeed": "Integer. Random seed for spine building, affects all of spacing, sizeScale, and angle. randSeed>0 gives repeatable distributions. randSeed==0 uses ongoing system values and outcomes will differ between runs."
   }
 }
 

@@ -53,12 +53,14 @@ const safeToString = (value, defaultValue = '') => {
 const createDefaultPrototype = () => ({
     type: 'Excitatory', name: 'exc', source: 'makeExcSpine()',
     shaftDiameter: '0.2', shaftLength: '1', headDiameter: '0.5', headLength: '0.5',
-    gluRGbar: '200.0', nmdaRGbar: '80.0',
-    gluRTau1: '2.0', gluRTau2: '9.0', nmdaRTau1: '20.0', nmdaRTau2: '20.0',
+    amparGbar: '200.0', nmdarGbar: '80.0',
+    amparTau1: '2.0', amparTau2: '9.0', nmdarTau1: '20.0', nmdarTau2: '20.0',
+    CaTau: '0.013', // CaTau default, in seconds
 });
 const createDefaultDistribution = () => ({
     prototype: '', path: 'dend', spacing: '10.0', minSpacing: '1.0',
     sizeScale: '1.0', sizeStdDev: '0.5', angle: '0.0', angleStdDev: '6.2832',
+    randSeed: '1234', // Req 1: Added randSeed default
 });
 
 // --- Reusable HelpField Component ---
@@ -88,12 +90,13 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 shaftLength: toMicrons(p.shaftLen) || createDefaultPrototype().shaftLength,
                 headDiameter: toMicrons(p.headDia) || createDefaultPrototype().headDiameter,
                 headLength: toMicrons(p.headLen) || createDefaultPrototype().headLength,
-                gluRGbar: safeToString(p.gluGbar, createDefaultPrototype().gluRGbar),
-                nmdaRGbar: safeToString(p.nmdaGbar, createDefaultPrototype().nmdaRGbar),
-                gluRTau1: createDefaultPrototype().gluRTau1,
-                gluRTau2: createDefaultPrototype().gluRTau2,
-                nmdaRTau1: createDefaultPrototype().nmdaRTau1,
-                nmdaRTau2: createDefaultPrototype().nmdaRTau2,
+                amparGbar: safeToString(p.amparGbar, createDefaultPrototype().amparGbar),
+                nmdarGbar: safeToString(p.nmdarGbar, createDefaultPrototype().nmdarGbar),
+                CaTau: safeToString(p.CaTau, createDefaultPrototype().CaTau), // Req 3: Load CaTau
+                amparTau1: createDefaultPrototype().amparTau1,
+                amparTau2: createDefaultPrototype().amparTau2,
+                nmdarTau1: createDefaultPrototype().nmdarTau1,
+                nmdarTau2: createDefaultPrototype().nmdarTau2,
             };
         }) || [];
         return initialProtos.length > 0 ? initialProtos : [createDefaultPrototype()];
@@ -109,6 +112,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
             sizeStdDev: safeToString(d.sizeSdev, createDefaultDistribution().sizeStdDev),
             angle: safeToString(d.angle, createDefaultDistribution().angle),
             angleStdDev: safeToString(d.angleSdev, createDefaultDistribution().angleStdDev),
+            randSeed: safeToString(d.randSeed, createDefaultDistribution().randSeed), // Req 1: Load randSeed
         })) || [];
         return initialDists.length > 0 ? initialDists : [createDefaultDistribution()];
     });
@@ -197,11 +201,17 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      headDia: (toMeters(protoState.headDiameter) || 0),
                      headLen: (toMeters(protoState.headLength) || 0),
                  };
-
-                 if (schemaSource === 'makeActiveSpine()') {
-                     protoSchemaItem.gluGbar = parseFloat(protoState.gluRGbar) || 0;
-                     protoSchemaItem.nmdaGbar = parseFloat(protoState.nmdaRGbar) || 0;
+                
+                 // Req 2: Modified condition to include 'makeExcSpine()'
+                 if (schemaSource === 'makeActiveSpine()' || schemaSource === 'makeExcSpine()') {
+                     protoSchemaItem.amparGbar = parseFloat(protoState.amparGbar) || 0;
+                     protoSchemaItem.nmdarGbar = parseFloat(protoState.nmdarGbar) || 0;
                  }
+                 // Req 3: Added CaTau mapping only for 'makeActiveSpine()'
+                 if (schemaSource === 'makeActiveSpine()') {
+                    protoSchemaItem.CaTau = parseFloat(protoState.CaTau) || 13.0;
+                 }
+
                  if (!protoSchemaItem.name || !protoSchemaItem.source) return null;
                  return protoSchemaItem;
              }).filter(p => p !== null);
@@ -219,6 +229,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      sizeSdev: parseFloat(distState.sizeStdDev) || 0.5,
                      angle: parseFloat(distState.angle) || 0,
                      angleSdev: parseFloat(distState.angleStdDev) || 6.2831853,
+                     randSeed: parseInt(distState.randSeed, 10) || 1234, // Req 1: Added randSeed mapping
                  };
              }).filter(d => d !== null);
 
@@ -276,11 +287,20 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                         <Grid item xs={6}>
                              <HelpField id="headLength" label="Head Length (μm)" type="number" value={prototypes[activePrototype].headLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headLength} />
                         </Grid>
-                        {(prototypes[activePrototype].source === 'makeActiveSpine()') && (
+                        
+                        {/* Req 2: Modified condition to show block for 'makeActiveSpine()' OR 'makeExcSpine()' */}
+                        {(prototypes[activePrototype].source === 'makeActiveSpine()' || prototypes[activePrototype].source === 'makeExcSpine()') && (
                             <>
                                 <Grid item xs={12}><Typography variant="caption" display="block">Receptor Params</Typography></Grid>
-                                <Grid item xs={6}><HelpField id="gluRGbar" label="GluR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].gluRGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.gluRGbar} /></Grid>
-                                <Grid item xs={6}><HelpField id="nmdaRGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdaRGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdaRGbar} /></Grid>
+                                <Grid item xs={6}><HelpField id="amparGbar" label="AMPAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].amparGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.amparGbar} /></Grid>
+                                <Grid item xs={6}><HelpField id="nmdarGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdarGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdarGbar} /></Grid>
+                                
+                                {/* Req 3: Added CaTau field, conditional on 'makeActiveSpine()' */}
+                                {(prototypes[activePrototype].source === 'makeActiveSpine()') && (
+                                    <Grid item xs={6}>
+                                        <HelpField id="CaTau" label="Ca decay time (s)" type="number" value={prototypes[activePrototype].CaTau} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.CaTau} />
+                                    </Grid>
+                                )}
                              </>
                         )}
                     </Grid>
@@ -332,6 +352,10 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                         </Grid>
                         <Grid item xs={6}>
                              <HelpField id="angleStdDev" label="Angle Std Dev (rad)" type="number" value={distributions[activeDistribution].angleStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angleStdDev}/>
+                        </Grid>
+                        {/* Req 1: Added randSeed field */}
+                        <Grid item xs={6}>
+                             <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>
                         </Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeDistribution(activeDistribution)} sx={{ mt: 2 }}>

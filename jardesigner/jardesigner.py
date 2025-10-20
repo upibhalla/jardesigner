@@ -392,17 +392,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             moose.copy( self.elecid, self.model, 'elec' )
             self.elecid = moose.element( self.model.path + '/elec' )
             self.elecid.buildSegmentTree() # rebuild: copy has happened.
-        '''
-        if hasattr( self, 'chemid' ):
-            self.validateChem()
-            if self.stealCellFromLibrary:
-                moose.move( self.chemid, self.model )
-                if self.chemid.name != 'chem':
-                    self.chemid.name = 'chem'
-            else:
-                moose.copy( self.chemid, self.model, 'chem' )
-                self.chemid = moose.element( self.model.path + '/chem' )
-        '''
 
         ep = self.elecid.path
         somaList = moose.wildcardFind( ep + '/#oma#[ISA=CompartmentBase]' )
@@ -458,17 +447,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 print(f"Error loading module {moduleName}: {e}")
                 return False
             
-            '''
-            moduleFile, pathName, description = imp.find_module(moduleName, [modulePath])
-            try:
-                module = imp.load_module(moduleName, moduleFile, pathName, description)
-                funcObj = getattr(module, funcName)
-                funcObj(protoName)
-                return True
-            finally:
-                moduleFile.close()
-            return False
-            '''
         # Globally defined function
         fname = func[0:bracePos]
         if fname in globals():
@@ -502,11 +480,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         if moose.exists( '/library/' + protoVec[1] ):
             # Assume the job is already done, just skip it.
             return True
-            '''
-            raise BuildError( \
-                protoType + "Proto: object /library/" + \
-                    protoVec[1] + " already exists." )
-            '''
         # Check if the proto function is already a callable
         if callable( protoVec[0] ):
             return self.buildProtoFromFunction( protoVec[0], protoVec[1] )
@@ -595,12 +568,28 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 return True
         return False
 
+    def checkAndSetChan( self, sp, field, chan ):
+        x = sp.get( field, None ) # Field is one of amparGbar, nmdarGbar, CaTau
+        if x == None:
+            return
+        if moose.exists( f"/library/{sp['name']}/head/{chan}" ):
+            elm = moose.element( f"/library/{sp['name']}/head/{chan}" )
+            #print( f"Reassigning proto spine field: {chan}.{field}" )
+            if field == 'CaTau':
+                elm.tau = x
+            else:
+                spineArea = elm.parent.diameter * elm.parent.length * np.pi
+                elm.Gbar = x * spineArea
+
     def buildSpineProto( self ):
         if hasattr( self, "spineProto" ):
             for sp in self.spineProto:
                 stype = sp["type"]
                 if stype == 'builtin':
                     self.buildProtoFromFunction( sp['source'], sp['name'] )
+                    self.checkAndSetChan( sp, 'amparGbar', 'AMPAR' )
+                    self.checkAndSetChan( sp, 'nmdarGbar', 'NMDAR' )
+                    self.checkAndSetChan( sp, 'CaTau', 'Ca_conc' )
                 elif stype == 'in_memory':
                     if self._inMemoryProto( sp['source'], sp['name'] ):
                         return
@@ -795,6 +784,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         argKeys = ['proto', 'path', 'spacing', 'minSpacing', 'sizeScale', 'sizeSdev', 'angle', 'angleSdev' ]
         argKeys2 = ['proto', 'path', 'spacing', 'spacingDistrib', 'size', 'sizeDistrib', 'angle', 'angleDistrib' ]
         for ii in self.spineDistrib:
+            moose.seed( ii['randSeed'] ) # 0 is system, >=1 is specific seed.
             line = []
             for jj in argKeys[:2]:
                 line.append( ii[jj] )
@@ -847,7 +837,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = argList['proto']
         dendMeshName = argList["parent"]
         dendMesh = self.meshDict.get( dendMeshName )
-        print( "meshDict = ", self.meshDict )
+        #print( "meshDict = ", self.meshDict )
         if not dendMesh:
             moose.le( '/model/elec' )
             raise BuildError( "Error: buildSpineMesh: Missing parent NeuroMesh '{}' for spine '{}'".format( dendMeshName, chemSrc ) )
@@ -924,15 +914,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             else:
                 print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0]['proto'] )  )
                 quit()
-            '''
-            if moose.exists(self.chemid.path + '/' + spineLine[0]['proto']):
-                dummyParent = self.chemid.path
-            elif moose.exists(self.chemid.path + '/kinetics/' + spineLine[0]['proto']):
-                dummyParent = self.chemid.path + '/kinetics'
-            else:
-                print( "Error: spine compartment '{}' specified, also need psd compartment.".format( spineLine[0]['proto'] )  )
-                quit()
-            '''
             psdLine = dict( spineLine[0] )
             dummyPSD = moose.CubeMesh( dummyParent + "/dummyPSD" )
             psdLine['proto'] = 'dummyPSD'
@@ -950,17 +931,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     def _buildOneChemDistrib( self, model ):
         sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
-        #oldChemId = moose.element( model.path + "/chem" )
-        #oldChemId.name = 'temp_chem'
-        #newChemId = moose.Neutral( model.path + '/chem' )
-        #comptlist = self._assignComptNamesFromKkit_SBML( model.path )
-        #comptlist = self._assignComptNamesFromKkit_SBML( '/library' )
-        #print( "COMPTLIST = ", comptlist, model.path )
-
-        #comptDict = { i.name:i for i in comptlist } # Loses existing comptDict content.
-        #comptDict = self.comptDict  # This is updated every time a chem proto file is loaded.
-        #comptDict.update( { i.name:i for i in comptlist } )
-        #print( "USING COMPTDICT = ", self.comptDict )
         for i in sortedChemDistrib:
             self.newChemDistrib( i, self.comptDict )
         #print( "USING meshDICT = ", self.meshDict )
@@ -988,15 +958,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 self._moveCompt( chemSrcObj, mesh )
                 self.meshDict[chemSrc] = mesh.path
             '''
-
-        #moose.delete( oldChemId )
-        #self.chemid = newChemId
-        '''
-        if model == self.modelList[0]:
-            print( "Updating comptDict with ", comptDict )
-            #self.comptDict.update( comptDict )
-            self.comptDict = comptDict
-        '''
 
     ################################################################
     # Here we make copies of the model in nx and ny.
@@ -1280,25 +1241,26 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         spines = moose.wildcardFind( "{0}/shaft#,{0}/head#".format(self.elecid.path ) )
         compts = list( set( allcompts ) - set( spines ) )
 
-        self.setupMooView.makeMoogli( compts, DefaultFdict, comptGroupId )
+        self.setupMooView.makeMoogli( compts, dict(DefaultFdict), comptGroupId )
         if len( spines ) > 0:
             sdict = dict( DefaultFdict )
             sdict['title'] = 'Spines'
-            self.setupMooView.makeMoogli( spines, DefaultFdict, spineGroupId )
+            self.setupMooView.makeMoogli( spines, sdict, spineGroupId )
 
         cdict = dict( DefaultFdict )
-        if hasattr( self, 'comptDict' ):
-            for protoName, meshPath in self.meshDict.items():
-                mname = self.getFirstMol( protoName )
-                if mname == "":
-                    print( f"Warning, no molecules found for {protoName}")
-                    moose.le( '/model/chem' )
-                    continue
-                molGroupId = f"{protoName}_conc_0"
-                mols = moose.wildcardFind( f"{meshPath}/{mname}[]" )
-                #print( "NUM MOLS = ", len(mols), "mesh = ", meshPath, "mol = ", mname )
-                cdict['title'] = f"Chem: {protoName}"
-                self.setupMooView.makeMoogli( mols, cdict, molGroupId )
+        cdict['field'] = 'conc'
+        for protoName, meshPath in self.meshDict.items():
+            mname = self.getFirstMol( protoName )
+            if mname == "":
+                print( f"Warning, no molecules found for {protoName}")
+                moose.le( '/model/chem' )
+                continue
+            molGroupId = f"{protoName}_conc_0"
+            mols = moose.wildcardFind( f"{meshPath}/{mname}[]" )
+            #print( "NUM MOLS = ", len(mols), "mesh = ", meshPath, "mol = ", mname )
+            #print( "MOL0 coords = ", mols[0].coords )
+            cdict['title'] = f"Chem: {protoName}"
+            self.setupMooView.makeMoogli( mols, cdict, molGroupId )
 
         # Later also check for any chem, stim, plot etc and add those.
         # PlotName entry has  [ tabname, title, idx_of_tab, scale, units, 
@@ -1814,20 +1776,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             assert len(i) >= 8
             self._buildAdaptor( i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7] )
 
-    ################################################################
-
     '''
-    def buildFromFile( self, efile, cfile ):
-        self.efile = efile
-        self.cfile = cfile
-        self._loadElec( efile, 'tempelec' )
-        if len( self.chanDistrib ) > 0:
-            self.elecid.channelDistribution = self.chanDistrib
-            self.elecid.parseChanDistrib()
-        self._loadChem( cfile, 'tempchem' )
-        self.buildFromMemory( self.model.path + '/tempelec', self.model.path + '/tempchem' )
-    '''
-
     ################################################################
     # Utility function to add a single spine to the given parent.
 
@@ -1870,6 +1819,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         moose.connect( parent, "raxial", kids[0], "axial" )
         self._reorientSpine( kids, coords, ppos, pos, size, angle, x, y, z )
 
+    '''
     ################################################################
     ## The spineid is the parent object of the prototype spine. The
     ## spine prototype can include any number of compartments, and each
@@ -1931,21 +1881,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         for i in kids:
             i.tick = -1
 
-
-    '''
-    #################################################################
-    # This assumes that the chemid is located in self.parent.path+/chem
-    # It moves the existing chem compartments into a NeuroMesh
-    # For now this requires that we have a dend, a spine and a PSD,
-    # with those names and volumes in decreasing order.
-    def validateChem( self  ):
-        cpath = self.chemid.path
-        comptlist = moose.wildcardFind( cpath + '/##[ISA=ChemCompt]' )
-        if len( comptlist ) == 0:
-            raise BuildError( "validateChem: no compartment on: " + cpath )
-
-        return True
-    '''
 
     #################################################################
 
@@ -2062,7 +1997,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     def _moveCompt( self, a, b ):
 
-        print( "moveCompt: ", a, b )
+        #print( "moveCompt: ", a, b )
         b.setVolumeNotRates( a.volume )
         # Potential problem: If we have grouped sub-meshes down one level in the tree, this will silenty move those too.
         for i in moose.wildcardFind( a.path + '/#' ):

@@ -233,22 +233,32 @@
           "headLen": {
             "type": "number"
           },
-	      "gluGbar": {
+	      "amparGbar": {
         	"type": "number",
         	"if": {
           		"properties": {
             		"source": {
-              			"const": "activeSpine"
+              			"enum": ["makeActiveSpine()", "makeExcSpine()"]
             		}
           		}
         	}
       	  },
-      	  "nmdaGbar": {
+      	  "nmdarGbar": {
         	"type": "number",
         	"if": {
           		"properties": {
             		"source": {
-              			"const": "activeSpine"
+              			"enum": ["makeActiveSpine()", "makeExcSpine()"]
+            		}
+          		}
+        	}
+      	  },
+      	  "CaTau": {
+        	"type": "number",
+        	"if": {
+          		"properties": {
+            		"source": {
+              			"const": "makeActiveSpine()"
             		}
           		}
         	}
@@ -303,9 +313,15 @@
 				{ "type": "number", "default": 6.2831853 },
 				{ "type": "string", "default": "6.2831853" }
 			]
+          },
+          "randSeed": {
+            "oneOf": [
+				{ "type": "number", "default": 1234 },
+				{ "type": "string", "default": "1234" }
+			]
           }
         },
-        "required": ["proto", "path", "spacing"],
+        "required": ["proto", "path", "spacing", "randSeed"],
   		"additionalProperties": false
       }
     },
