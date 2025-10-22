@@ -250,6 +250,7 @@ class JarDesigner:
         self.stims = []
         self.moogli = []
         self.chanDistrib = []
+        self.chemDistrib = []
         self.adaptorElecComptList = {}
         self.comptDict = {}     # dict of chem compartments
         self.meshDict = {}      # dict of neuroMesh,spineMesh,psdMesh etc
