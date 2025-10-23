@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -10,39 +10,45 @@ import {
     MenuItem,
     Button,
     Tooltip,
-    FormHelperText
+    FormHelperText,
+    ListSubheader
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
 import helpText from './PlotMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
 
 // --- Define options outside component ---
-const fieldOptions = [
+const nonChemFieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
-    'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
-    'modulation', 'psdArea', 'nInit'
+    'Ca', 'activation', 'current', 'modulation', 'psdArea'
 ];
+const chemFieldOptions = ['n', 'conc', 'volume', 'concInit', 'nInit'];
+const fieldOptions = [...nonChemFieldOptions, ...chemFieldOptions];
 const modeOptions = ['time', 'space', 'wave', 'raster'];
-const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
 
 // --- Helper to safely convert value to string ---
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
 };
 
+// --- Regex to parse chem paths like "DEND/Ca[0]" ---
+const chemPathRegex = /([^/]+)\/([^[]+)(\[.*\])?/;
+
 // --- Default state for a new plot entry ---
 const createDefaultPlot = () => ({
     path: '',
-    field: fieldOptions[0],
-    chemProto: '.',
-    childPath: '',
+    field: nonChemFieldOptions[0],
+    chemProto: '.', // Will store meshName for chem fields
+    childPath: '', // Will store molName for chem fields
+    molIndex: '',  // New field for mol index
     title: '',
     yMin: '0.0',
     yMax: '0.0',
     mode: 'time',
-    waveFrames: '100', // Default value moved here
+    waveFrames: '100',
 });
 
 // --- Reusable HelpField Component ---
@@ -59,23 +65,32 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 });
 
 // --- Main Component ---
-const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) => {
+const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     const [plots, setPlots] = useState(() => {
         const initialPlots = currentConfig?.map(p => {
-            const field = p.field || fieldOptions[0];
-            const isChemField = chemFields.includes(field);
+            const field = p.field || nonChemFieldOptions[0];
+            const isChemField = chemFieldOptions.includes(field);
             let initialChemProto = '.';
             let initialChildPath = '';
+            let initialMolIndex = '';
 
             if (isChemField) {
                 const relpath = p.relpath || '';
-                const slashIndex = relpath.indexOf('/');
-                if (slashIndex !== -1) {
-                    initialChemProto = relpath.substring(0, slashIndex);
-                    initialChildPath = relpath.substring(slashIndex + 1);
+                const match = relpath.match(chemPathRegex);
+                if (match) {
+                    initialChemProto = match[1] || '';
+                    initialChildPath = match[2] || '';
+                    initialMolIndex = match[3] || '';
                 } else {
-                    initialChemProto = '';
-                    initialChildPath = relpath;
+                    // Fallback for older/simpler paths
+                    const slashIndex = relpath.indexOf('/');
+                    if (slashIndex !== -1) {
+                        initialChemProto = relpath.substring(0, slashIndex);
+                        initialChildPath = relpath.substring(slashIndex + 1);
+                    } else {
+                        initialChemProto = '';
+                        initialChildPath = relpath;
+                    }
                 }
             } else {
                 initialChildPath = p.relpath || '';
@@ -86,11 +101,12 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
+                molIndex: initialMolIndex,
                 title: p.title || '',
                 yMin: formatFloat(p.ymin) || '0.0',
                 yMax: formatFloat(p.ymax) || '0.0',
                 mode: p.mode || 'time',
-                waveFrames: safeToString(p.numWaveFrames, '100'), // Updated default
+                waveFrames: safeToString(p.numWaveFrames, '100'),
             };
         }) || [];
         return initialPlots.length > 0 ? initialPlots : [createDefaultPlot()];
@@ -101,8 +117,6 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const plotsRef = useRef(plots);
     useEffect(() => { plotsRef.current = plots; }, [plots]);
-    const getChemProtosRef = useRef(getChemProtos);
-    useEffect(() => { getChemProtosRef.current = getChemProtos; }, [getChemProtos]);
 
     const addPlot = useCallback(() => {
         setPlots((prev) => [...prev, createDefaultPlot()]);
@@ -119,15 +133,28 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
             prevPlots.map((plot, i) => {
                 if (i === index) {
                     const updatedPlot = { ...plot, [key]: value };
+                    
+                    // Handle switching field type
                     if (key === 'field') {
-                        const isNowChem = chemFields.includes(value);
-                        const wasChem = chemFields.includes(plot.field);
+                        const isNowChem = chemFieldOptions.includes(value);
+                        const wasChem = chemFieldOptions.includes(plot.field);
                         if (wasChem && !isNowChem) {
                             updatedPlot.chemProto = '.';
+                            updatedPlot.childPath = '';
+                            updatedPlot.molIndex = '';
                         } else if (!wasChem && isNowChem) {
-                            updatedPlot.chemProto = '';
+                            updatedPlot.chemProto = ''; // Require user selection
+                            updatedPlot.childPath = '';
+                            updatedPlot.molIndex = '';
                         }
                     }
+
+                    // Handle changing compartment
+                    if (key === 'chemProto') {
+                        updatedPlot.childPath = ''; // Reset molecule path
+                        updatedPlot.molIndex = '';  // Reset index
+                    }
+
                     return updatedPlot;
                 }
                 return plot;
@@ -135,67 +162,104 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
         );
     }, []);
 
-    useEffect(() => {
-        const getPlotDataForUnmount = () => {
-            return plotsRef.current.map(plotState => {
-                 if (!plotState.path || !plotState.field) return null;
+    // Create sorted list of chem compartment (mesh) names
+    const chemCompartmentOptions = useMemo(() => {
+        if (!meshMols || typeof meshMols !== 'object') return [];
+        return Object.keys(meshMols).sort();
+    }, [meshMols]);
 
-                const yminNum = parseFloat(plotState.yMin);
-                const ymaxNum = parseFloat(plotState.yMax);
-                const numWaveFramesInt = parseInt(plotState.waveFrames, 10);
-                const isChemField = chemFields.includes(plotState.field);
-                let relpathValue = undefined;
-
-                if (isChemField) {
-                    if (plotState.chemProto && plotState.childPath) {
-                        relpathValue = `${plotState.chemProto}/${plotState.childPath}`;
-                    } else { return null; }
-                } else {
-                    if (plotState.childPath && plotState.childPath !== '') {
-                         relpathValue = plotState.childPath;
-                    }
-                }
-
-                const plotSchemaItem = {
-                    path: plotState.path,
-                    field: plotState.field,
-                    ...(relpathValue !== undefined && { relpath: relpathValue }),
-                    ...(plotState.title && { title: plotState.title }),
-                    ...((!isNaN(yminNum) && yminNum !== 0) && { ymin: yminNum }),
-                    ...((!isNaN(ymaxNum) && ymaxNum !== 0) && { ymax: ymaxNum }),
-                    ...(plotState.mode && plotState.mode !== 'time' && { mode: plotState.mode }),
-                    ...((plotState.mode === 'wave' && !isNaN(numWaveFramesInt) && numWaveFramesInt !== 0) && { numWaveFrames: numWaveFramesInt }),
-                };
-                return plotSchemaItem;
-            }).filter(item => item !== null);
-        };
-        const initialConfigString = JSON.stringify(currentConfig || []);
-        return () => {
-            if (onConfigurationChangeRef.current) {
-                const finalConfigData = getPlotDataForUnmount();
-                const finalConfigString = JSON.stringify(finalConfigData);
-                 if (finalConfigString !== initialConfigString) {
-                    onConfigurationChangeRef.current({ plots: finalConfigData });
-                 }
-            }
-        };
-    }, [currentConfig]);
-
-    const availableChemProtos = getChemProtosRef.current ? getChemProtosRef.current() : [];
+    // Get active plot data
     const activePlotData = plots[activePlot];
-    const isChemField = activePlotData && chemFields.includes(activePlotData.field);
-    const showChemProtoWarning = isChemField && !availableChemProtos.length;
+    const isChemField = activePlotData && chemFieldOptions.includes(activePlotData.field);
+
+    // Create sorted list of molecules for the selected compartment
+    const moleculeOptions = useMemo(() => {
+        if (!isChemField || !meshMols || !activePlotData.chemProto) return [];
+        const mols = meshMols[activePlotData.chemProto];
+        return Array.isArray(mols) ? [...mols].sort() : [];
+    }, [isChemField, meshMols, activePlotData?.chemProto]);
+
+
+    // --- Refactored Save/Refresh Logic ---
+    const getPlotDataForSave = useCallback(() => {
+        return plotsRef.current.map(plotState => {
+                if (!plotState.path || !plotState.field) return null;
+
+            const yminNum = parseFloat(plotState.yMin);
+            const ymaxNum = parseFloat(plotState.yMax);
+            const numWaveFramesInt = parseInt(plotState.waveFrames, 10);
+            const isChemField = chemFieldOptions.includes(plotState.field);
+            let relpathValue = undefined;
+
+            if (isChemField) {
+                // Mol path and compartment are now required
+                if (plotState.chemProto && plotState.childPath) {
+                    // Combine mol path and optional index
+                    const molIndex = plotState.molIndex || '';
+                    relpathValue = `${plotState.chemProto}/${plotState.childPath}${molIndex}`;
+                } else { 
+                    return null; // Invalid chemical plot
+                }
+            } else {
+                if (plotState.childPath && plotState.childPath !== '') {
+                        relpathValue = plotState.childPath;
+                }
+            }
+
+            const plotSchemaItem = {
+                path: plotState.path,
+                field: plotState.field,
+                ...(relpathValue !== undefined && { relpath: relpathValue }),
+                ...(plotState.title && { title: plotState.title }),
+                ...((!isNaN(yminNum) && yminNum !== 0) && { ymin: yminNum }),
+                ...((!isNaN(ymaxNum) && ymaxNum !== 0) && { ymax: ymaxNum }),
+                ...(plotState.mode && plotState.mode !== 'time' && { mode: plotState.mode }),
+                ...((plotState.mode === 'wave' && !isNaN(numWaveFramesInt) && numWaveFramesInt !== 0) && { numWaveFrames: numWaveFramesInt }),
+            };
+            return plotSchemaItem;
+        }).filter(item => item !== null);
+    }, []); // Uses plotsRef, no dependencies needed
+
+    const handleRefreshModel = useCallback(() => {
+        if (onConfigurationChangeRef.current) {
+            const finalConfigData = getPlotDataForSave();
+            onConfigurationChangeRef.current({ plots: finalConfigData });
+        }
+    }, [getPlotDataForSave]);
+
+    useEffect(() => {
+        // Register the handleRefreshModel function to be called on unmount
+        return () => {
+            handleRefreshModel();
+        };
+    }, [handleRefreshModel]);
+    // --- End Refactor ---
+
+    const getTabLabel = (plot) => {
+        const isChem = chemFieldOptions.includes(plot.field);
+        if (isChem) {
+            const mol = plot.childPath || '?';
+            const comp = plot.chemProto || '?';
+            return `${mol}@${comp}`;
+        }
+        return `${plot.field || 'New'} @ ${plot.path || '?'}`;
+    };
+
+    const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Plot Configuration</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefreshModel} sx={{ ml: 'auto' }}>
+                    Refresh Model
+                </Button>
             </Box>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
                 <Tabs value={activePlot} onChange={(e, nv) => setActivePlot(nv)} variant="scrollable" scrollButtons="auto">
-                    {plots.map((plot, index) => <Tab key={index} label={`${plot.field || 'New'} @ ${plot.path || '?'}`} />)}
+                    {plots.map((plot, index) => <Tab key={index} label={getTabLabel(plot)} />)}
                     <IconButton onClick={addPlot} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
@@ -209,26 +273,72 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
                         <Grid item xs={12} sm={6}>
                             <HelpField id="field" label="Field" select required value={activePlotData.field} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.field}>
                                 <MenuItem value=""><em>Select Field...</em></MenuItem>
-                                {fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                <ListSubheader>Electrical/Other</ListSubheader>
+                                {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                <ListSubheader>Chemical</ListSubheader>
+                                {chemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                             </HelpField>
                         </Grid>
+                         
+                        <Grid item xs={12} sm={6}>
+                            <HelpField 
+                                id="chemProto" 
+                                label="Chem Compartment" 
+                                select 
+                                required={isChemField}
+                                value={activePlotData.chemProto} 
+                                onChange={(id, v) => updatePlot(activePlot, id, v)} 
+                                helptext={helpText.fields.chemProto} 
+                                error={isChemField && (showChemCompartmentWarning || !activePlotData.chemProto)}
+                                disabled={!isChemField}
+                            >
+                                <MenuItem value={isChemField ? "" : "."}><em>{isChemField ? "Select..." : "."}</em></MenuItem>
+                                {chemCompartmentOptions.map(compName => <MenuItem key={compName} value={compName}>{compName}</MenuItem>)}
+                            </HelpField>
+                            {isChemField && (showChemCompartmentWarning || !activePlotData.chemProto) && 
+                                <FormHelperText error>{showChemCompartmentWarning ? "Warning: No Chem Compartments found" : "Required"}</FormHelperText>}
+                        </Grid>
+                        
                          {isChemField ? (
                              <>
-                                 <Grid item xs={12} sm={6}>
-                                     <HelpField id="chemProto" label="Chem Prototype" select required value={activePlotData.chemProto} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.chemProto} error={showChemProtoWarning || !activePlotData.chemProto}>
-                                         <MenuItem value=""><em>Select...</em></MenuItem>
-                                         {availableChemProtos.map(protoName => <MenuItem key={protoName} value={protoName}>{protoName}</MenuItem>)}
-                                     </HelpField>
-                                     {(showChemProtoWarning || !activePlotData.chemProto) && <FormHelperText error>{showChemProtoWarning ? "Warning: No Chem Protos defined" : "Required"}</FormHelperText>}
-                                 </Grid>
-                                 <Grid item xs={12} sm={6}><HelpField id="childPath" label="Child Object Path" required value={activePlotData.childPath} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.childPath} error={!activePlotData.childPath} /></Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <HelpField 
+                                        id="childPath" 
+                                        label="Molecule Path" 
+                                        select 
+                                        required 
+                                        value={activePlotData.childPath} 
+                                        onChange={(id, v) => updatePlot(activePlot, id, v)} 
+                                        helptext={helpText.fields.childPath} // You may want to update this help text
+                                        error={!activePlotData.childPath}
+                                        disabled={!activePlotData.chemProto}
+                                    >
+                                        <MenuItem value=""><em>{activePlotData.chemProto ? "Select..." : "Select compartment first"}</em></MenuItem>
+                                        {moleculeOptions.map(molName => <MenuItem key={molName} value={molName}>{molName}</MenuItem>)}
+                                    </HelpField>
+                                    {!activePlotData.childPath && <FormHelperText error>Required</FormHelperText>}
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <HelpField 
+                                        id="molIndex" 
+                                        label="Molecule Index (optional)" 
+                                        value={activePlotData.molIndex} 
+                                        onChange={(id, v) => updatePlot(activePlot, id, v)} 
+                                        helptext="e.g., [0] or [Ca_cyto]" 
+                                    />
+                                </Grid>
                              </>
                          ) : (
                              <>
                                  <Grid item xs={12} sm={6}>
-                                    <HelpField id="chemProto" label="Chem Prototype" select disabled value={activePlotData.chemProto} onChange={()=>{}} helptext={helpText.fields.chemProto}><MenuItem value=".">.</MenuItem></HelpField>
-                                 </Grid>
-                                 <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activePlotData.childPath} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.childPath}/></Grid>
+                                    <HelpField 
+                                        id="childPath" 
+                                        label="Relative Path (Optional)" 
+                                        value={activePlotData.childPath} 
+                                        onChange={(id, v) => updatePlot(activePlot, id, v)} 
+                                        helptext={helpText.fields.childPath}
+                                    />
+                                </Grid>
                              </>
                          )}
                          <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activePlotData.title} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.title} /></Grid>

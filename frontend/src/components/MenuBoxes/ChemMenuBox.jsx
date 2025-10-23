@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -15,6 +15,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
 import helpText from './ChemMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
 
@@ -98,7 +99,8 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
+const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols }) => {
+	console.log("ChemMenuBox rendered. meshMols prop:", meshMols);
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chemProto?.map(p => {
             const componentType = getComponentTypeFromSchema(p.type, p.source);
@@ -178,6 +180,12 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
     
     const fileInputRef = useRef(null);
 
+    // Create sorted list of chem compartment (mesh) names
+    const chemCompartmentOptions = useMemo(() => {
+        if (!meshMols || typeof meshMols !== 'object') return [];
+        return Object.keys(meshMols).sort();
+    }, [meshMols]);
+
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultChemPrototype()]);
         setActivePrototype(prototypes.length);
@@ -186,6 +194,8 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
     const removePrototype = useCallback((indexToRemove) => {
         const removedProtoName = prototypesRef.current[indexToRemove]?.name;
         setPrototypes((prev) => prev.filter((_, i) => i !== indexToRemove));
+        // Note: This logic may need to be updated if distributions ever link back to prototypes
+        // For now, we only update distributions if the *prototype* is deleted, not the compartment
         setDistributions(prevDists => prevDists.map(dist =>
             dist.prototype === removedProtoName ? { ...dist, prototype: '' } : dist
         ));
@@ -266,107 +276,115 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
         );
     }, []);
 
-    useEffect(() => {
-        const getChemDataForUnmount = () => {
-            const currentPrototypes = prototypesRef.current;
-            const currentDistributions = distributionsRef.current;
+    // --- Refactored Save/Refresh Logic ---
+    const getChemDataForSave = useCallback(() => {
+        const currentPrototypes = prototypesRef.current;
+        const currentDistributions = distributionsRef.current;
 
-            const chemProtoData = currentPrototypes.map(protoState => {
-                let schemaType = "builtin";
-                let schemaSource = "";
-                const componentType = protoState.type;
+        const chemProtoData = currentPrototypes.map(protoState => {
+            let schemaType = "builtin";
+            let schemaSource = "";
+            const componentType = protoState.type;
 
-                if (componentType === 'SBML') { schemaType = 'sbml'; schemaSource = protoState.source; }
-                else if (componentType === 'kkit') { schemaType = 'kkit'; schemaSource = protoState.source; }
-                else if (componentType === 'In-memory') { schemaType = 'in_memory'; schemaSource = protoState.source; }
-                else if (componentType === 'User Func') {
-                    schemaType = 'builtin';
-                    schemaSource = protoState.source || protoState.name;
-                } else {
-                    schemaType = 'builtin';
-                    schemaSource = getChemSourceString(componentType);
-                }
-
-                if (!protoState.name || !schemaSource) return null;
-                return { type: schemaType, source: schemaSource, name: protoState.name };
-            }).filter(p => p !== null);
-
-            const chemDistribData = currentDistributions.map(distState => {
-                const selectedProtoExists = chemProtoData.some(p => p.name === distState.prototype);
-                if (!selectedProtoExists || !distState.prototype || !distState.path) return null;
-
-                const baseDistrib = {
-                    proto: distState.prototype,
-                    path: distState.path,
-                };
-                
-                const umToSI = (um_val) => {
-                    if (um_val === undefined || um_val === null || String(um_val).trim() === '') return undefined;
-                    const num = parseFloat(um_val);
-                    return isNaN(num) ? undefined : num * 1e-6;
-                };
-
-                const parseFloatOrUndefined = (val) => {
-                     if (val === undefined || val === null || String(val).trim() === '') return undefined;
-                     const num = parseFloat(val);
-                     return isNaN(num) ? undefined : num;
-                }
-
-                switch(distState.location) {
-                    case 'Dendrite':
-                        baseDistrib.type = 'dend';
-                        const diffLen = umToSI(distState.diffusionLength_um);
-                        if (diffLen !== undefined) baseDistrib.diffusionLength = diffLen;
-                        break;
-                    case 'Spine':
-                        baseDistrib.type = 'spine';
-                        if (distState.parent) baseDistrib.parent = distState.parent;
-                        break;
-                    case 'PSD':
-                        baseDistrib.type = 'psd';
-                        if (distState.parent) baseDistrib.parent = distState.parent;
-                        break;
-                    case 'Endo':
-                        baseDistrib.type = 'endo';
-                        if (distState.parent) baseDistrib.parent = distState.parent;
-                        const radiusRatio = parseFloatOrUndefined(distState.radiusRatio);
-                        if (radiusRatio !== undefined) baseDistrib.radiusRatio = radiusRatio;
-                        const endoSpacing = umToSI(distState.spacing_um);
-                        if (endoSpacing !== undefined) baseDistrib.spacing = endoSpacing;
-                        break;
-                    case 'Presyn_spine':
-                        baseDistrib.type = 'presyn_spine';
-                        const radiusByPsd = parseFloatOrUndefined(distState.radiusByPsd);
-                        if (radiusByPsd !== undefined) baseDistrib.radiusByPsd = radiusByPsd;
-                        const radiusByPsdSdev = parseFloatOrUndefined(distState.radiusByPsdSdev);
-                        if (radiusByPsdSdev !== undefined) baseDistrib.radiusByPsdSdev = radiusByPsdSdev;
-                        break;
-                    case 'Presyn_dend':
-                        baseDistrib.type = 'presyn_dend';
-                        const pdRadius = umToSI(distState.radius_um);
-                        if (pdRadius !== undefined) baseDistrib.radius = pdRadius;
-                        const pdRadiusSdev = umToSI(distState.radiusSdev_um);
-                        if (pdRadiusSdev !== undefined) baseDistrib.radiusSdev = pdRadiusSdev;
-                        const pdSpacing = umToSI(distState.spacing_um);
-                        if (pdSpacing !== undefined) baseDistrib.spacing = pdSpacing;
-                        break;
-                    default:
-                        return null; 
-                }
-
-                return baseDistrib;
-            }).filter(item => item !== null);
-
-            return { chemProto: chemProtoData, chemDistrib: chemDistribData };
-        };
-
-        return () => {
-            if (onConfigurationChangeRef.current) {
-                const configData = getChemDataForUnmount();
-                onConfigurationChangeRef.current(configData);
+            if (componentType === 'SBML') { schemaType = 'sbml'; schemaSource = protoState.source; }
+            else if (componentType === 'kkit') { schemaType = 'kkit'; schemaSource = protoState.source; }
+            else if (componentType === 'In-memory') { schemaType = 'in_memory'; schemaSource = protoState.source; }
+            else if (componentType === 'User Func') {
+                schemaType = 'builtin';
+                schemaSource = protoState.source || protoState.name;
+            } else {
+                schemaType = 'builtin';
+                schemaSource = getChemSourceString(componentType);
             }
+
+            if (!protoState.name || !schemaSource) return null;
+            return { type: schemaType, source: schemaSource, name: protoState.name };
+        }).filter(p => p !== null);
+
+        const chemDistribData = currentDistributions.map(distState => {
+            // VALIDATION REMOVED: const selectedProtoExists = chemProtoData.some(p => p.name === distState.prototype);
+            // We no longer validate against the prototype list. We just need a value.
+            if (!distState.prototype || !distState.path) return null;
+
+            const baseDistrib = {
+                proto: distState.prototype, // This 'proto' now refers to the 'Chem Compartment' (meshName)
+                path: distState.path,
+            };
+            
+            const umToSI = (um_val) => {
+                if (um_val === undefined || um_val === null || String(um_val).trim() === '') return undefined;
+                const num = parseFloat(um_val);
+                return isNaN(num) ? undefined : num * 1e-6;
+            };
+
+            const parseFloatOrUndefined = (val) => {
+                    if (val === undefined || val === null || String(val).trim() === '') return undefined;
+                    const num = parseFloat(val);
+                    return isNaN(num) ? undefined : num;
+            }
+
+            switch(distState.location) {
+                case 'Dendrite':
+                    baseDistrib.type = 'dend';
+                    const diffLen = umToSI(distState.diffusionLength_um);
+                    if (diffLen !== undefined) baseDistrib.diffusionLength = diffLen;
+                    break;
+                case 'Spine':
+                    baseDistrib.type = 'spine';
+                    if (distState.parent) baseDistrib.parent = distState.parent;
+                    break;
+                case 'PSD':
+                    baseDistrib.type = 'psd';
+                    if (distState.parent) baseDistrib.parent = distState.parent;
+                    break;
+                case 'Endo':
+                    baseDistrib.type = 'endo';
+                    if (distState.parent) baseDistrib.parent = distState.parent;
+                    const radiusRatio = parseFloatOrUndefined(distState.radiusRatio);
+                    if (radiusRatio !== undefined) baseDistrib.radiusRatio = radiusRatio;
+                    const endoSpacing = umToSI(distState.spacing_um);
+                    if (endoSpacing !== undefined) baseDistrib.spacing = endoSpacing;
+                    break;
+                case 'Presyn_spine':
+                    baseDistrib.type = 'presyn_spine';
+                    const radiusByPsd = parseFloatOrUndefined(distState.radiusByPsd);
+                    if (radiusByPsd !== undefined) baseDistrib.radiusByPsd = radiusByPsd;
+                    const radiusByPsdSdev = parseFloatOrUndefined(distState.radiusByPsdSdev);
+                    if (radiusByPsdSdev !== undefined) baseDistrib.radiusByPsdSdev = radiusByPsdSdev;
+                    break;
+                case 'Presyn_dend':
+                    baseDistrib.type = 'presyn_dend';
+                    const pdRadius = umToSI(distState.radius_um);
+                    if (pdRadius !== undefined) baseDistrib.radius = pdRadius;
+                    const pdRadiusSdev = umToSI(distState.radiusSdev_um);
+                    if (pdRadiusSdev !== undefined) baseDistrib.radiusSdev = pdRadiusSdev;
+                    const pdSpacing = umToSI(distState.spacing_um);
+                    if (pdSpacing !== undefined) baseDistrib.spacing = pdSpacing;
+                    break;
+                default:
+                    return null; 
+            }
+
+            return baseDistrib;
+        }).filter(item => item !== null);
+
+        return { chemProto: chemProtoData, chemDistrib: chemDistribData };
+    }, []); // Uses refs, so no dependencies needed
+
+    const handleRefreshModel = useCallback(() => {
+        if (onConfigurationChangeRef.current) {
+            const configData = getChemDataForSave();
+            onConfigurationChangeRef.current(configData);
+        }
+    }, [getChemDataForSave]);
+
+    useEffect(() => {
+        // Register the handleRefreshModel function to be called on unmount
+        return () => {
+            handleRefreshModel();
         };
-    }, []);
+    }, [handleRefreshModel]);
+    // --- End Refactor ---
 
     const activeProtoData = prototypes[activePrototype];
     const activeDistribData = distributions[activeDistribution];
@@ -386,6 +404,9 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Prototypes</Typography>
                 <Tooltip title={helpText.headings.prototypes} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefreshModel} sx={{ ml: 'auto' }}>
+                    Refresh Model
+                </Button>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto">
@@ -460,9 +481,9 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
                      <Grid container spacing={2}>
                          {/* --- Common Fields --- */}
                          <Grid item xs={12} sm={6}>
-                             <HelpField id="prototype" label="Prototype" select required value={activeDistribData.prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
+                             <HelpField id="prototype" label="Chem Compartment" select required value={activeDistribData.prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
                                 <MenuItem value=""><em>Select...</em></MenuItem>
-                                {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
+                                {chemCompartmentOptions.map((meshName) => <MenuItem key={meshName} value={meshName}>{meshName}</MenuItem>)}
                             </HelpField>
                          </Grid>
                           <Grid item xs={12} sm={6}>

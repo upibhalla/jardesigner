@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -10,19 +10,22 @@ import {
     MenuItem,
     Button,
     Tooltip,
-    FormHelperText
+    FormHelperText,
+    ListSubheader
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
 import helpText from './StimMenuBox.Help.json';
 
 // --- Define fieldOptions and typeOptions outside ---
-const fieldOptions = [
-    'inject', 'vclamp', 'activation', 'modulation', 'conc', 'concInit', 'n', 'nInit'
-];
+const nonChemFieldOptions = ['inject', 'vclamp', 'activation', 'modulation'];
+const chemFieldOptions = ['conc', 'concInit', 'n', 'nInit'];
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
-const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
+
+// --- Regex to parse chem paths like "DEND/Ca[0]" ---
+const chemPathRegex = /([^/]+)\/([^[]+)(\[.*\])?/;
 
 // --- Helper to safely convert value to string ---
 const safeToString = (value, defaultValue = '') => {
@@ -32,9 +35,10 @@ const safeToString = (value, defaultValue = '') => {
 // --- Default state for a new stim entry ---
 const createDefaultStim = () => ({
     path: 'soma',
-    field: fieldOptions[0],
-    chemProto: '.',
-    childPath: '',
+    field: nonChemFieldOptions[0],
+    chemProto: '.', // Will store meshName for chem fields
+    childPath: '', // Will store molName for chem fields
+    molIndex: '',  // New field for mol index
     geometryExpression: '1',
     stimulusExpression: '',
     type: typeOptions[0],
@@ -63,23 +67,31 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 });
 
 // --- Main Component ---
-const StimMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) => {
+const StimMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     const [stims, setStims] = useState(() => {
         const initialStims = currentConfig?.map(s => {
-            const field = s.field || fieldOptions[0];
-            const isChemField = chemFields.includes(field);
+            const field = s.field || nonChemFieldOptions[0];
+            const isChemField = s.type === 'field' && chemFieldOptions.includes(field);
             let initialChemProto = '.';
             let initialChildPath = '';
+            let initialMolIndex = '';
 
             if (isChemField) {
                 const relpath = s.relpath || '';
-                const slashIndex = relpath.indexOf('/');
-                if (slashIndex !== -1) {
-                    initialChemProto = relpath.substring(0, slashIndex);
-                    initialChildPath = relpath.substring(slashIndex + 1);
+                const match = relpath.match(chemPathRegex);
+                if (match) {
+                    initialChemProto = match[1] || '';
+                    initialChildPath = match[2] || '';
+                    initialMolIndex = match[3] || '';
                 } else {
-                    initialChemProto = '';
-                    initialChildPath = relpath;
+                    const slashIndex = relpath.indexOf('/');
+                    if (slashIndex !== -1) {
+                        initialChemProto = relpath.substring(0, slashIndex);
+                        initialChildPath = relpath.substring(slashIndex + 1);
+                    } else {
+                        initialChemProto = '';
+                        initialChildPath = relpath;
+                    }
                 }
             } else {
                 initialChildPath = s.relpath || '';
@@ -89,6 +101,7 @@ const StimMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
+                molIndex: initialMolIndex,
                 geometryExpression: s.geomExpr || '1',
                 stimulusExpression: s.expr || '',
                 type: mapSchemaTypeToComponent(s.type),
@@ -103,8 +116,6 @@ const StimMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const stimsRef = useRef(stims);
     useEffect(() => { stimsRef.current = stims; }, [stims]);
-    const getChemProtosRef = useRef(getChemProtos);
-    useEffect(() => { getChemProtosRef.current = getChemProtos; }, [getChemProtos]);
 
     const addStim = useCallback(() => {
         setStims((prev) => [...prev, createDefaultStim()]);
@@ -121,15 +132,29 @@ const StimMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
             prevStims.map((stim, i) => {
                 if (i === index) {
                     const updatedStim = { ...stim, [key]: value };
-                    if (key === 'field') {
-                        const isNowChem = chemFields.includes(value);
-                        const wasChem = chemFields.includes(stim.field);
+
+                    const isNowChem = updatedStim.type === 'Field' && chemFieldOptions.includes(updatedStim.field);
+
+                    if (key === 'field' || key === 'type') {
+                        const wasChem = stim.type === 'Field' && chemFieldOptions.includes(stim.field);
+                        
                         if (wasChem && !isNowChem) {
                             updatedStim.chemProto = '.';
+                            updatedStim.childPath = '';
+                            updatedStim.molIndex = '';
                         } else if (!wasChem && isNowChem) {
-                            updatedStim.chemProto = '';
+                            updatedStim.chemProto = ''; // Require user selection
+                            updatedStim.childPath = '';
+                            updatedStim.molIndex = '';
                         }
                     }
+
+                    // Handle changing compartment
+                    if (key === 'chemProto') {
+                        updatedStim.childPath = ''; // Reset molecule path
+                        updatedStim.molIndex = '';  // Reset index
+                    }
+                    
                     return updatedStim;
                 }
                 return stim;
@@ -137,68 +162,121 @@ const StimMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
         );
     }, []);
 
-    useEffect(() => {
-        const getStimDataForUnmount = () => {
-            return stimsRef.current.map(stimState => {
-                let schemaType = 'field';
-                if (stimState.type === 'Periodic Synapse') schemaType = 'periodicsyn';
-                if (stimState.type === 'Random Synapse') schemaType = 'randsyn';
-                const isChemField = chemFields.includes(stimState.field);
-                let relpathValue = undefined;
+    // Create sorted list of chem compartment (mesh) names
+    const chemCompartmentOptions = useMemo(() => {
+        if (!meshMols || typeof meshMols !== 'object') return [];
+        return Object.keys(meshMols).sort();
+    }, [meshMols]);
 
-                if (isChemField) {
-                    if (stimState.chemProto && stimState.childPath) {
-                        relpathValue = `${stimState.chemProto}/${stimState.childPath}`;
-                    } else { return null; }
-                } else {
-                    if (stimState.childPath && stimState.childPath !== '') {
-                         relpathValue = stimState.childPath;
-                    }
-                }
-                const stimSchemaItemBase = {
-                    type: schemaType,
-                    path: stimState.path || "",
-                    ...(relpathValue !== undefined && { relpath: relpathValue }),
-                    ...(stimState.geometryExpression && stimState.geometryExpression !== '1' && { geomExpr: stimState.geometryExpression }),
-                    expr: stimState.stimulusExpression || "",
-                };
-                if (schemaType === 'field') {
-                    if (!stimSchemaItemBase.path || !stimState.field || !stimSchemaItemBase.expr) return null;
-                    stimSchemaItemBase.field = stimState.field;
-                } else {
-                     const weightNum = parseFloat(stimState.weight);
-                     if (!stimSchemaItemBase.path || isNaN(weightNum) || !stimSchemaItemBase.expr || relpathValue === undefined) return null;
-                     stimSchemaItemBase.weight = weightNum;
-                }
-                return stimSchemaItemBase;
-            }).filter(item => item !== null);
-        };
-        const initialConfigString = JSON.stringify(currentConfig || []);
-        return () => {
-            if (onConfigurationChangeRef.current) {
-                const finalConfigData = getStimDataForUnmount();
-                const finalConfigString = JSON.stringify(finalConfigData);
-                 if (finalConfigString !== initialConfigString) {
-                    onConfigurationChangeRef.current({ stims: finalConfigData });
-                 }
-            }
-        };
-    }, [currentConfig]);
-
-    const availableChemProtos = getChemProtosRef.current ? getChemProtosRef.current() : [];
+    // Get active plot data
     const activeStimData = stims[activeStim];
-    const isChemField = activeStimData && chemFields.includes(activeStimData.field);
-    const showChemProtoWarning = isChemField && !availableChemProtos.length;
+    const isFieldType = activeStimData && activeStimData.type === 'Field';
+    const isChemField = isFieldType && chemFieldOptions.includes(activeStimData.field);
+
+    // Create sorted list of molecules for the selected compartment
+    const moleculeOptions = useMemo(() => {
+        if (!isChemField || !meshMols || !activeStimData.chemProto) return [];
+        const mols = meshMols[activeStimData.chemProto];
+        return Array.isArray(mols) ? [...mols].sort() : [];
+    }, [isChemField, meshMols, activeStimData?.chemProto]);
+
+
+    // --- Refactored Save/Refresh Logic ---
+    const getStimDataForSave = useCallback(() => {
+        return stimsRef.current.map(stimState => {
+            let schemaType = 'field';
+            if (stimState.type === 'Periodic Synapse') schemaType = 'periodicsyn';
+            if (stimState.type === 'Random Synapse') schemaType = 'randsyn';
+            
+            const isChemField = schemaType === 'field' && chemFieldOptions.includes(stimState.field);
+            let relpathValue = undefined;
+
+            if (isChemField) {
+                if (stimState.chemProto && stimState.childPath) {
+                    const molIndex = stimState.molIndex || '';
+                    relpathValue = `${stimState.chemProto}/${stimState.childPath}${molIndex}`;
+                } else { return null; } // Invalid chem stim
+            } else {
+                if (stimState.childPath && stimState.childPath !== '') {
+                        relpathValue = stimState.childPath;
+                }
+            }
+            
+            const stimSchemaItemBase = {
+                type: schemaType,
+                path: stimState.path || "",
+                ...(relpathValue !== undefined && { relpath: relpathValue }),
+                ...(stimState.geometryExpression && stimState.geometryExpression !== '1' && { geomExpr: stimState.geometryExpression }),
+                expr: stimState.stimulusExpression || "",
+            };
+            
+            if (schemaType === 'field') {
+                if (!stimSchemaItemBase.path || !stimState.field || !stimSchemaItemBase.expr) return null;
+                if (isChemField && !relpathValue) return null; // Chem field requires relpath
+                stimSchemaItemBase.field = stimState.field;
+            } else {
+                    const weightNum = parseFloat(stimState.weight);
+                    // Synapse types require a relpath
+                    if (!stimSchemaItemBase.path || isNaN(weightNum) || !stimSchemaItemBase.expr || relpathValue === undefined) return null;
+                    stimSchemaItemBase.weight = weightNum;
+            }
+            return stimSchemaItemBase;
+        }).filter(item => item !== null);
+    }, []); // Uses stimsRef, no dependencies
+
+    const handleRefreshModel = useCallback(() => {
+        if (onConfigurationChangeRef.current) {
+            const finalConfigData = getStimDataForSave();
+            onConfigurationChangeRef.current({ stims: finalConfigData });
+        }
+    }, [getStimDataForSave]);
+
+    useEffect(() => {
+        // Register the handleRefreshModel function to be called on unmount
+        return () => {
+            handleRefreshModel();
+        };
+    }, [handleRefreshModel]);
+    // --- End Refactor ---
+
+    const getTabLabel = (stim) => {
+        const isChem = stim.type === 'Field' && chemFieldOptions.includes(stim.field);
+        if (isChem) {
+            const mol = stim.childPath || '?';
+            const comp = stim.chemProto || '?';
+            return `${mol}@${comp}`;
+        }
+
+        const path = stim.path || '?';
+        const relPath = stim.childPath || '';
+        const fullPath = `${path}${relPath ? '/' + relPath : ''}`;
+
+        if (stim.type === 'Random Synapse') {
+            return `Poisson@${fullPath}`;
+        }
+        
+        if (stim.type === 'Periodic Synapse') {
+            return `Periodic@${fullPath}`;
+        }
+
+        // Fallback for 'Field' (non-chem) and 'New'
+        return `${stim.type || 'New'} @ ${path}`;
+    };
+
+    const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Stimulus Configuration</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefreshModel} sx={{ ml: 'auto' }}>
+                    Refresh Model
+                </Button>
             </Box>
              <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
                  <Tabs value={activeStim} onChange={(e, nv) => setActiveStim(nv)} variant="scrollable" scrollButtons="auto">
-                     {stims.map((stim, index) => <Tab key={index} label={`${stim.type || 'New'} @ ${stim.path || '?'}`} />)}
+                     {stims.map((stim, index) => <Tab key={index} label={getTabLabel(stim)} />)}
                       <IconButton onClick={addStim} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                   </Tabs>
               </Box>
@@ -207,36 +285,86 @@ const StimMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) =>
                       <Grid container spacing={2}>
                           <Grid item xs={12} sm={6}><HelpField id="path" label="Path" required value={activeStimData.path} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.path} /></Grid>
                           <Grid item xs={12} sm={6}><HelpField id="type" label="Type" select required value={activeStimData.type} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.type}>{typeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                          <Grid item xs={12} sm={6}>
-                              <HelpField id="field" label="Field" select required={activeStimData.type === 'Field'} value={activeStimData.field} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.field}>
-                                  <MenuItem value=""><em>Select...</em></MenuItem>
-                                  {fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
-                              </HelpField>
-                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                              {activeStimData.type !== 'Field' && (
-                                  <HelpField id="weight" label="Weight" type="number" required value={activeStimData.weight} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.weight} InputProps={{ inputProps: { step: 0.1 } }} />
-                              )}
-                          </Grid>
-                          {isChemField ? (
-                              <>
-                                  <Grid item xs={12} sm={6}>
-                                      <HelpField id="chemProto" label="Chem Prototype" select required value={activeStimData.chemProto} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.chemProto} error={showChemProtoWarning || !activeStimData.chemProto}>
-                                          <MenuItem value=""><em>Select...</em></MenuItem>
-                                          {availableChemProtos.map(protoName => <MenuItem key={protoName} value={protoName}>{protoName}</MenuItem>)}
-                                      </HelpField>
-                                      {(showChemProtoWarning || !activeStimData.chemProto) && <FormHelperText error>{showChemProtoWarning ? "Warning: No Chem Prototypes defined" : "Required"}</FormHelperText>}
-                                  </Grid>
-                                  <Grid item xs={12} sm={6}><HelpField id="childPath" label="Child Object Path" required value={activeStimData.childPath} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.childPath} error={!activeStimData.childPath} /></Grid>
-                              </>
-                          ) : (
-                              <>
-                                  <Grid item xs={12} sm={6}>
-                                    <HelpField id="chemProto" label="Chem Prototype" select disabled value={activeStimData.chemProto} onChange={()=>{}} helptext={helpText.fields.chemProto}><MenuItem value=".">.</MenuItem></HelpField>
-                                  </Grid>
-                                  <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeStimData.childPath} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.childPath}/></Grid>
-                              </>
+                          
+                          {isFieldType && (
+                            <Grid item xs={12} sm={6}>
+                                <HelpField id="field" label="Field" select required value={activeStimData.field} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.field}>
+                                    <MenuItem value=""><em>Select Field...</em></MenuItem>
+                                    <ListSubheader>Electrical/Other</ListSubheader>
+                                    {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                    <ListSubheader>Chemical</ListSubheader>
+                                    {chemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                </HelpField>
+                            </Grid>
                           )}
+                          
+                          {!isFieldType && (
+                              <Grid item xs={12} sm={6}>
+                                  <HelpField id="weight" label="Weight" type="number" required value={activeStimData.weight} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.weight} InputProps={{ inputProps: { step: 0.1 } }} />
+                              </Grid>
+                          )}
+
+                          <Grid item xs={12} sm={6}>
+                              <HelpField 
+                                  id="chemProto" 
+                                  label="Chem Compartment" 
+                                  select 
+                                  required={isChemField}
+                                  value={activeStimData.chemProto} 
+                                  onChange={(id, v) => updateStim(activeStim, id, v)} 
+                                  helptext={helpText.fields.chemProto} 
+                                  error={isChemField && (showChemCompartmentWarning || !activeStimData.chemProto)}
+                                  disabled={!isChemField}
+                              >
+                                  <MenuItem value={isChemField ? "" : "."}><em>{isChemField ? "Select..." : "."}</em></MenuItem>
+                                  {chemCompartmentOptions.map(compName => <MenuItem key={compName} value={compName}>{compName}</MenuItem>)}
+                              </HelpField>
+                              {isChemField && (showChemCompartmentWarning || !activeStimData.chemProto) && 
+                                  <FormHelperText error>{showChemCompartmentWarning ? "Warning: No Chem Compartments found" : "Required"}</FormHelperText>}
+                          </Grid>
+                          
+                         {isChemField ? (
+                             <>
+                                <Grid item xs={12} sm={6}>
+                                    <HelpField 
+                                        id="childPath" 
+                                        label="Molecule Path" 
+                                        select 
+                                        required 
+                                        value={activeStimData.childPath} 
+                                        onChange={(id, v) => updateStim(activeStim, id, v)} 
+                                        helptext={helpText.fields.childPath} // You may want to update this help text
+                                        error={!activeStimData.childPath}
+                                        disabled={!activeStimData.chemProto}
+                                    >
+                                        <MenuItem value=""><em>{activeStimData.chemProto ? "Select..." : "Select compartment first"}</em></MenuItem>
+                                        {moleculeOptions.map(molName => <MenuItem key={molName} value={molName}>{molName}</MenuItem>)}
+                                    </HelpField>
+                                    {!activeStimData.childPath && <FormHelperText error>Required</FormHelperText>}
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <HelpField 
+                                        id="molIndex" 
+                                        label="Molecule Index (optional)" 
+                                        value={activeStimData.molIndex} 
+                                        onChange={(id, v) => updateStim(activeStim, id, v)} 
+                                        helptext="e.g., [0] or [Ca_cyto]" 
+                                    />
+                                </Grid>
+                             </>
+                         ) : (
+                             <>
+                                 <Grid item xs={12} sm={6}>
+                                    <HelpField 
+                                        id="childPath" 
+                                        label="Relative Path (Optional)" 
+                                        value={activeStimData.childPath} 
+                                        onChange={(id, v) => updateStim(activeStim, id, v)} 
+                                        helptext={helpText.fields.childPath}
+                                    />
+                                </Grid>
+                             </>
+                         )}
                           <Grid item xs={12} sm={6}><HelpField id="geometryExpression" label="Geometry Expr" value={activeStimData.geometryExpression} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.geometryExpression}/></Grid>
                           <Grid item xs={12} sm={6}><HelpField id="stimulusExpression" label="Stimulus Expr" required value={activeStimData.stimulusExpression} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.stimulusExpression}/></Grid>
                       </Grid>

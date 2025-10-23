@@ -446,7 +446,7 @@ def make_K_C( name ):
 #                SynChan: AMPAR (ionotropic GluR) receptor
 #========================================================================
 
-def make_glu( name ):
+def make_AMPAR( name ):
     if moose.exists( '/library/' + name ):
         return
     glu = moose.SynChan( '/library/' + name )
@@ -459,11 +459,14 @@ def make_glu( name ):
     sh.synapse[0].weight = 1
     return glu
 
+def make_glu( name ):   ### for backward compatibility.
+    return make_AMPAR( name )
+
 #========================================================================
 #                NMDAChan: NMDA receptor. It has hooks for Ca_conc buildup
 #========================================================================
 
-def make_NMDA( name ):
+def make_NMDAR( name ):
     if moose.exists( '/library/' + name ):
         return
     NMDA = moose.NMDAChan( '/library/' + name )
@@ -492,11 +495,14 @@ def make_NMDA( name ):
     sh.synapse[0].weight = 1
     return NMDA
 
+def make_NMDA( name ):  ### for backward compatibility
+    return make_NMDAR( name )
+
 #========================================================================
 #                SynChan: GABA receptor
 #========================================================================
 
-def make_GABA( name ):
+def make_GABAR( name ):
     if moose.exists( '/library/' + name ):
         return
     GABA = moose.SynChan( '/library/' + name )
@@ -507,6 +513,9 @@ def make_GABA( name ):
     moose.connect( sh, 'activationOut', GABA, 'activation' )
     sh.numSynapses = 1
     sh.synapse[0].weight = 1
+
+def make_GABA( name ):  ### for backward compatibility
+    return make_GABAR( name )
 
 #========================================================================
 def makeDiffusivePool( name = 'diffn', parent = '/library' ):

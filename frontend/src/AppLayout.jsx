@@ -47,6 +47,8 @@ export const AppLayout = (props) => {
     replayTime,
     clientId,
     clickSelected,
+    threeDConfigs,
+    meshMolsData, // Destructure the new prop
   } = props;
 
 
@@ -82,16 +84,31 @@ export const AppLayout = (props) => {
         currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} 
         getChemProtos={getChemProtos} 
         clientId={clientId}
+        meshMols={meshMolsData?.setup} // Pass the correct prop
     />,
     Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
-    Stimuli: <StimMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.stims} getChemProtos={getChemProtos} />,
-    Plots: <PlotMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.plots} getChemProtos={getChemProtos} />,
-    '3D': <ThreeDMenuBox onConfigurationChange={updateJsonData} currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} getChemProtos={getChemProtos} />,
+    Stimuli: <StimMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={jsonData.stims} 
+        meshMols={meshMolsData?.setup} // Pass meshMols
+    />,
+    Plots: <PlotMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={jsonData.plots} 
+        meshMols={meshMolsData?.setup} // Pass meshMols
+    />,
+    '3D': <ThreeDMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} 
+        meshMols={meshMolsData?.setup} // Pass meshMols
+    />,
   }), [
     jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,
     handleStartRun, handleResetRun, isSimulating, activeSim.pid, liveFrameData, isReplaying,
     handleMorphologyFileChange, 
-    clientId
+    clientId,
+    threeDConfigs,
+    meshMolsData // Add to dependency array
   ]);
 
   return (

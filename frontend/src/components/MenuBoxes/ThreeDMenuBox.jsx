@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -13,20 +13,23 @@ import {
     Checkbox,
     FormControlLabel,
     Tooltip,
+    ListSubheader,
+    FormHelperText
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
 import helpText from './ThreeDMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
 
 // --- Define options outside component ---
-const fieldOptions = [
+const nonChemFieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
-    'Ca', 'n', 'conc', 'volume', 'activation', 'concInit', 'current',
-    'modulation', 'psdArea', 'nInit'
+    'Ca', 'activation', 'current', 'modulation', 'psdArea'
 ];
-const chemFields = ["n", "conc", "volume", "concInit", "nInit"];
+const chemFieldOptions = ['n', 'conc', 'concInit', 'nInit'];
+const chemFields = [...chemFieldOptions]; // Keep this for quick lookup
 const fastDtFields = ['Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'activation', 'current', 'Ca'];
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
 const backgroundOptions = ['default', 'white', 'black', 'grey', 'beige'];
@@ -39,7 +42,7 @@ const safeToString = (value, defaultValue = '') => {
 // --- Default state creators ---
 const createDefaultMoogliEntry = () => ({
     path: 'soma',
-    field: fieldOptions[0],
+    field: nonChemFieldOptions[0],
     chemProto: '.',
     childPath: '',
     title: '',
@@ -76,11 +79,11 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) => {
+const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     const [tabs, setTabs] = useState(() => {
         const defaults = createDefaultMoogliEntry();
         const initialTabs = currentConfig?.moogli?.map(m => {
-            const field = m.field || fieldOptions[0];
+            const field = m.field || nonChemFieldOptions[0];
             const isChemField = chemFields.includes(field);
             let initialChemProto = '.';
             let initialChildPath = '';
@@ -136,8 +139,6 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
     useEffect(() => { tabsRef.current = tabs; }, [tabs]);
     const globalSettingsRef = useRef(globalSettings);
     useEffect(() => { globalSettingsRef.current = globalSettings; }, [globalSettings]);
-    const getChemProtosRef = useRef(getChemProtos);
-    useEffect(() => { getChemProtosRef.current = getChemProtos; }, [getChemProtos]);
 
     const addTab = useCallback(() => {
         setTabs((prev) => [...prev, createDefaultMoogliEntry()]);
@@ -154,16 +155,28 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
             prevTabs.map((tab, i) => {
                 if (i === index) {
                     const updatedTab = { ...tab, [key]: value };
+                    
                     if (key === 'field') {
                         // Handle chem proto logic
                         const isNowChem = chemFields.includes(value);
                         const wasChem = chemFields.includes(tab.field);
-                        if (wasChem && !isNowChem) updatedTab.chemProto = '.';
-                        else if (!wasChem && isNowChem) updatedTab.chemProto = '';
+                        if (wasChem && !isNowChem) {
+                            updatedTab.chemProto = '.';
+                            updatedTab.childPath = '';
+                        } else if (!wasChem && isNowChem) {
+                            updatedTab.chemProto = '';
+                            updatedTab.childPath = '';
+                        }
 
                         // Set dt based on field type
                         updatedTab.dt = fastDtFields.includes(value) ? '0.001' : '0.2';
                     }
+
+                    // Handle changing compartment
+                    if (key === 'chemProto') {
+                        updatedTab.childPath = ''; // Reset molecule path
+                    }
+
                     return updatedTab;
                 }
                 return tab;
@@ -178,78 +191,110 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
 
     const handleTabChange = (event, newValue) => setActiveTab(newValue);
 
-    useEffect(() => {
-        const getThreeDDataForUnmount = () => {
-            const moogliData = tabsRef.current.map(tabState => {
-                if (!tabState.path || !tabState.field) return null;
-                const diaScaleNum = parseFloat(tabState.diameterScale);
-                const minNum = parseFloat(tabState.min);
-                const maxNum = parseFloat(tabState.max);
-                const dtNum = parseFloat(tabState.dt);
-                const defaultsMoogli = createDefaultMoogliEntry();
-                const isChemField = chemFields.includes(tabState.field);
-                let relpathValue = undefined;
+    // Create sorted list of chem compartment (mesh) names
+    const chemCompartmentOptions = useMemo(() => {
+        if (!meshMols || typeof meshMols !== 'object') return [];
+        return Object.keys(meshMols).sort();
+    }, [meshMols]);
 
-                if (isChemField) {
-                    if (tabState.chemProto && tabState.childPath) {
-                        relpathValue = `${tabState.chemProto}/${tabState.childPath}`;
-                    } else { return null; }
-                } else {
-                    if (tabState.childPath && tabState.childPath !== '') relpathValue = tabState.childPath;
-                }
-
-                const moogliSchemaItem = { path: tabState.path, field: tabState.field };
-                if (relpathValue !== undefined) moogliSchemaItem.relpath = relpathValue;
-                if (tabState.title) moogliSchemaItem.title = tabState.title;
-                if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaultsMoogli.diameterScale) moogliSchemaItem.diaScale = diaScaleNum;
-                if (!isNaN(minNum) && safeToString(minNum) !== defaultsMoogli.min) moogliSchemaItem.ymin = minNum;
-                if (!isNaN(maxNum) && safeToString(maxNum) !== defaultsMoogli.max) moogliSchemaItem.ymax = maxNum;
-                
-                // --- MODIFIED: Always add the 'dt' property if it's a valid number ---
-                if (!isNaN(dtNum)) moogliSchemaItem.dt = dtNum;
-
-                return moogliSchemaItem;
-
-            }).filter(item => item !== null);
-
-            if (moogliData.length === 0) {
-                return { moogli: [], displayMoogli: undefined };
-            }
-
-            let centerArray;
-            try {
-                const parsedCenter = JSON.parse(globalSettingsRef.current.center);
-                centerArray = (Array.isArray(parsedCenter) && parsedCenter.length === 3 && parsedCenter.every(n => typeof n === 'number')) ? parsedCenter : JSON.parse(createDefaultGlobalSettings().center);
-            } catch (e) {
-                centerArray = JSON.parse(createDefaultGlobalSettings().center);
-            }
-            const defaultsGlobal = createDefaultGlobalSettings();
-            const displayMoogliData = {
-                rotation: parseFloat(globalSettingsRef.current.rotation) || parseFloat(defaultsGlobal.rotation),
-                azim: parseFloat(globalSettingsRef.current.azimuth) || parseFloat(defaultsGlobal.azimuth),
-                elev: parseFloat(globalSettingsRef.current.elevation) || parseFloat(defaultsGlobal.elevation),
-                colormap: globalSettingsRef.current.colormap || defaultsGlobal.colormap,
-                bg: globalSettingsRef.current.background || defaultsGlobal.background,
-                center: centerArray,
-                block: globalSettingsRef.current.block,
-                ...(globalSettingsRef.current.mergeDisplays !== defaultsGlobal.mergeDisplays && { mergeDisplays: globalSettingsRef.current.mergeDisplays }),
-                ...(globalSettingsRef.current.fullScreen !== defaultsGlobal.fullScreen && { fullscreen: globalSettingsRef.current.fullScreen }),
-            };
-            return { moogli: moogliData, displayMoogli: displayMoogliData };
-        };
-
-        return () => {
-            if (onConfigurationChangeRef.current) {
-                const configData = getThreeDDataForUnmount();
-                onConfigurationChangeRef.current(configData);
-            }
-        };
-    }, []);
-
-    const availableChemProtos = getChemProtosRef.current ? getChemProtosRef.current() : [];
+    // Get active plot data
     const activeTabData = tabs[activeTab];
     const isChemField = activeTabData && chemFields.includes(activeTabData.field);
-    const showChemProtoWarning = isChemField && !availableChemProtos.length;
+
+    // Create sorted list of molecules for the selected compartment
+    const moleculeOptions = useMemo(() => {
+        if (!isChemField || !meshMols || !activeTabData.chemProto) return [];
+        const mols = meshMols[activeTabData.chemProto];
+        return Array.isArray(mols) ? [...mols].sort() : [];
+    }, [isChemField, meshMols, activeTabData?.chemProto]);
+
+
+    // --- Refactored Save/Refresh Logic ---
+    const getThreeDDataForSave = useCallback(() => {
+        const moogliData = tabsRef.current.map(tabState => {
+            if (!tabState.path || !tabState.field) return null;
+            const diaScaleNum = parseFloat(tabState.diameterScale);
+            const minNum = parseFloat(tabState.min);
+            const maxNum = parseFloat(tabState.max);
+            const dtNum = parseFloat(tabState.dt);
+            const defaultsMoogli = createDefaultMoogliEntry();
+            const isChemField = chemFields.includes(tabState.field);
+            let relpathValue = undefined;
+
+            if (isChemField) {
+                if (tabState.chemProto && tabState.childPath) {
+                    relpathValue = `${tabState.chemProto}/${tabState.childPath}`;
+                } else { return null; }
+            } else {
+                if (tabState.childPath && tabState.childPath !== '') relpathValue = tabState.childPath;
+            }
+
+            const moogliSchemaItem = { path: tabState.path, field: tabState.field };
+            if (relpathValue !== undefined) moogliSchemaItem.relpath = relpathValue;
+            if (tabState.title) moogliSchemaItem.title = tabState.title;
+            if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaultsMoogli.diameterScale) moogliSchemaItem.diaScale = diaScaleNum;
+            if (!isNaN(minNum) && safeToString(minNum) !== defaultsMoogli.min) moogliSchemaItem.ymin = minNum;
+            if (!isNaN(maxNum) && safeToString(maxNum) !== defaultsMoogli.max) moogliSchemaItem.ymax = maxNum;
+            
+            // --- MODIFIED: Always add the 'dt' property if it's a valid number ---
+            if (!isNaN(dtNum)) moogliSchemaItem.dt = dtNum;
+
+            return moogliSchemaItem;
+
+        }).filter(item => item !== null);
+
+        if (moogliData.length === 0) {
+            return { moogli: [], displayMoogli: undefined };
+        }
+
+        let centerArray;
+        try {
+            const parsedCenter = JSON.parse(globalSettingsRef.current.center);
+            centerArray = (Array.isArray(parsedCenter) && parsedCenter.length === 3 && parsedCenter.every(n => typeof n === 'number')) ? parsedCenter : JSON.parse(createDefaultGlobalSettings().center);
+        } catch (e) {
+            centerArray = JSON.parse(createDefaultGlobalSettings().center);
+        }
+        const defaultsGlobal = createDefaultGlobalSettings();
+        const displayMoogliData = {
+            rotation: parseFloat(globalSettingsRef.current.rotation) || parseFloat(defaultsGlobal.rotation),
+            azim: parseFloat(globalSettingsRef.current.azimuth) || parseFloat(defaultsGlobal.azimuth),
+            elev: parseFloat(globalSettingsRef.current.elevation) || parseFloat(defaultsGlobal.elevation),
+            colormap: globalSettingsRef.current.colormap || defaultsGlobal.colormap,
+            bg: globalSettingsRef.current.background || defaultsGlobal.background,
+            center: centerArray,
+            block: globalSettingsRef.current.block,
+            ...(globalSettingsRef.current.mergeDisplays !== defaultsGlobal.mergeDisplays && { mergeDisplays: globalSettingsRef.current.mergeDisplays }),
+            ...(globalSettingsRef.current.fullScreen !== defaultsGlobal.fullScreen && { fullscreen: globalSettingsRef.current.fullScreen }),
+        };
+        return { moogli: moogliData, displayMoogli: displayMoogliData };
+    }, []); // Uses refs, no dependencies
+
+    const handleRefreshModel = useCallback(() => {
+        if (onConfigurationChangeRef.current) {
+            const configData = getThreeDDataForSave();
+            onConfigurationChangeRef.current(configData);
+        }
+    }, [getThreeDDataForSave]);
+
+    useEffect(() => {
+        // Register the handleRefreshModel function to be called on unmount
+        return () => {
+            handleRefreshModel();
+        };
+    }, [handleRefreshModel]);
+    // --- End Refactor ---
+
+    const getTabLabel = (tab) => {
+        const isChem = chemFields.includes(tab.field);
+        if (isChem) {
+            const mol = tab.childPath || '?';
+            const comp = tab.chemProto || '?';
+            return `${mol}@${comp}`;
+        }
+        return `${tab.field || 'New'} @ ${tab.path || '?'}`;
+    };
+    
+    const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
@@ -261,10 +306,13 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Data Sources</Typography>
                 <Tooltip title={helpText.headings.dataSources} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefreshModel} sx={{ ml: 'auto' }}>
+                    Refresh Model
+                </Button>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
-                    {tabs.map((tab, index) => <Tab key={index} label={`${tab.field || 'New'} @ ${tab.path || '?'}`} />)}
+                    {tabs.map((tab, index) => <Tab key={index} label={getTabLabel(tab)} />)}
                     <IconButton onClick={addTab} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
@@ -272,20 +320,56 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, getChemProtos }) 
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}><HelpField id="path" label="Path" required value={activeTabData.path} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.path} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="field" label="Field" required select value={activeTabData.field} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.field}>{fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                        <Grid item xs={12} sm={6}>
+                            <HelpField id="field" label="Field" required select value={activeTabData.field} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.field}>
+                                <ListSubheader>Electrical/Other</ListSubheader>
+                                {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                <ListSubheader>Chemical</ListSubheader>
+                                {chemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                            </HelpField>
+                        </Grid>
+                        
+                        <Grid item xs={12} sm={6}>
+                            <HelpField 
+                                id="chemProto" 
+                                label="Chem Compartment" 
+                                select 
+                                required={isChemField}
+                                value={activeTabData.chemProto} 
+                                onChange={(id, v) => updateTab(activeTab, id, v)} 
+                                helptext={helpText.dataSources.chemProto} 
+                                error={isChemField && (showChemCompartmentWarning || !activeTabData.chemProto)}
+                                disabled={!isChemField}
+                            >
+                                <MenuItem value={isChemField ? "" : "."}><em>{isChemField ? "Select..." : "."}</em></MenuItem>
+                                {chemCompartmentOptions.map(compName => <MenuItem key={compName} value={compName}>{compName}</MenuItem>)}
+                            </HelpField>
+                            {isChemField && (showChemCompartmentWarning || !activeTabData.chemProto) && 
+                                <FormHelperText error>{showChemCompartmentWarning ? "Warning: No Chem Compartments found" : "Required"}</FormHelperText>}
+                        </Grid>
+
                         {isChemField ? (
                              <>
                                  <Grid item xs={12} sm={6}>
-                                     <HelpField id="chemProto" label="Chem Prototype" select required value={activeTabData.chemProto} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.chemProto} error={showChemProtoWarning || !activeTabData.chemProto}>
-                                         <MenuItem value=""><em>Select...</em></MenuItem>
-                                         {availableChemProtos.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-                                     </HelpField>
+                                     <HelpField 
+                                        id="childPath" 
+                                        label="Molecule Path" 
+                                        select 
+                                        required 
+                                        value={activeTabData.childPath} 
+                                        onChange={(id, v) => updateTab(activeTab, id, v)} 
+                                        helptext={helpText.dataSources.childPath} // You may want to update this help text
+                                        error={!activeTabData.childPath}
+                                        disabled={!activeTabData.chemProto}
+                                    >
+                                        <MenuItem value=""><em>{activeTabData.chemProto ? "Select..." : "Select compartment first"}</em></MenuItem>
+                                        {moleculeOptions.map(molName => <MenuItem key={molName} value={molName}>{molName}</MenuItem>)}
+                                    </HelpField>
+                                    {!activeTabData.childPath && <FormHelperText error>Required</FormHelperText>}
                                  </Grid>
-                                 <Grid item xs={12} sm={6}><HelpField id="childPath" label="Child Object Path" required value={activeTabData.childPath} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.childPath} /></Grid>
                              </>
                          ) : (
                              <>
-                                 <Grid item xs={12} sm={6}><HelpField id="chemProto" label="Chem Prototype" select disabled value={activeTabData.chemProto} onChange={()=>{}} helptext={helpText.dataSources.chemProto}><MenuItem value=".">.</MenuItem></HelpField></Grid>
                                  <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeTabData.childPath} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.childPath}/></Grid>
                              </>
                          )}

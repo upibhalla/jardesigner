@@ -253,6 +253,7 @@ class JarDesigner:
         self.adaptorElecComptList = {}
         self.comptDict = {}     # dict of chem compartments
         self.meshDict = {}      # dict of neuroMesh,spineMesh,psdMesh etc
+        self.meshMols = {}      # dict of meshName:[molPathTail] in each mesh
         # Construct the absolute path to the schema file
         script_dir = os.path.dirname(os.path.abspath(__file__))
         schemaFile_path = os.path.join(script_dir, schemaFile)
@@ -861,7 +862,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         chemSrc = argList['proto']
         elecPath = argList['path']
         meshType = argList['type']
-        mesh = moose.PresynMesh( '/model/chem' + chemSrc )
+        mesh = moose.PresynMesh( '/model/chem/' + chemSrc )
         #pair = elecPath + " " + geom
         pair = elecPath + " 1"
         if meshType == 'presyn_dend':
@@ -886,10 +887,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         surroundName = argList["parent"]
         radiusRatio = float( argList["radiusRatio"] )
         surroundMesh = self.meshDict.get( surroundName )
+        #print( "NAME = ", surroundName, "    MEHS = ", surroundMesh )
         if not surroundMesh:
             raise BuildError( "Error: buildEndoMesh: Could not find surround '{}' for endo '{}'".format( surroundName, chemSrc ) )
         #mesh.surround = moose.element( newChemId.path+'/'+surroundName )
-        mesh.surround = surroundMesh
+        mesh.surround = moose.element(surroundMesh)
         mesh.isMembraneBound = True
         mesh.rScale = radiusRatio
         if meshType == 'endo_axial':
@@ -1227,11 +1229,25 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
 
     def getFirstMol( self, protoName ):
-        mols = moose.wildcardFind(f"/library/{protoName}/##[ISA=PoolBase]")
+        mols = moose.wildcardFind(f"/model/chem/{protoName}/##[ISA=PoolBase]")
         if len(mols) == 0:
             return ""
         return mols[0].name
 
+    def fillMeshMols( self ):
+        chemCompts = moose.wildcardFind( "/library/##[ISA=ChemCompt]")
+        #print( "CHEM COMPTS = ", chemCompts )
+        chemComptPaths = [ cc.path for cc in chemCompts ]
+        for cc in chemCompts:
+            ret = []
+            lp = len( cc.path )
+            elist = moose.wildcardFind( cc.path + "/##[0][ISA=PoolBase]" )
+            for elm in elist:
+                path = elm.path[lp:].replace( "[0]", "" )
+                if path[0] == '/':
+                    path = path[1:]
+                ret.append( path )
+            self.meshMols[ cc.name ] = ret
 
     def _buildSetupMoogli( self ):
         self.setupMooView = jarmoogli.MooView( self.dataChannelId )
@@ -1249,8 +1265,11 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
         cdict = dict( DefaultFdict )
         cdict['field'] = 'conc'
+        self.fillMeshMols()
+        #print( "MESHMOLS = ", self.meshMols )
         for protoName, meshPath in self.meshDict.items():
             mname = self.getFirstMol( protoName )
+            #print( "PROTONAME vs meshPath: ", protoName, meshPath )
             if mname == "":
                 print( f"Warning, no molecules found for {protoName}")
                 moose.le( '/model/chem' )
@@ -1918,7 +1937,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         stoich.ksolve = ksolve
         stoich.dsolve = dsolve
         if meshType == 'psd':
-            if len( moose.wildcardFind( meshPath + '/##[ISA=PoolBase     ]' ) ) == 0:
+            if len( moose.wildcardFind( meshPath + '/##[ISA=PoolBase]' ) ) == 0:
                 moose.Pool( meshPath + '/dummy' )
         stoich.reacSystemPath = meshPath + "/##"
         # The middle arg in these cases used to be the geom. Not relevant.
@@ -1951,7 +1970,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             surroundMeshPath = meshDict[ em[1]]
             if self.verbose:
                 print( "surroundMESHPATH = ", surroundMeshPath )
-            surroundDsolve = moose.element( surroundMeshpath + "/dsolve" )
+            surroundDsolve = moose.element( surroundMeshPath + "/dsolve" )
             emdsolve.buildMeshJunctions( surroundDsolve )
 
     def _configureChemSolvers( self ):
@@ -1991,7 +2010,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             print("loadChem: No compartment found in file: ", fname)
             return
         self.comptDict.update( {cc.name:cc.path for cc in comptlist } )
-        print( f"Loaded chem file {fname} to {chemName}, comptDic={self.comptDict}" )
+        #print( f"Loaded chem file {fname} to {chemName}, comptDic={self.comptDict}" )
 
     ################################################################
 
@@ -2017,6 +2036,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         elif moose.exists( '/model/chem/kinetics/' + meshName ):
             mesh = moose.element( '/model/chem/kinetics/' + meshName )
         else:
+            moose.le( '/model' )
+            moose.le( '/model/chem' )
+            #moose.le( '/model/chem/PRESYN' )
             print( "rdes::buildAdaptor: Error: meshName not found: ", meshName )
             quit()
         #elecComptList = mesh.elecComptList
@@ -2106,7 +2128,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     moose.connect( i[3], 'requestOut', chemVec[j], chemFieldSrc)
                     #print( "connect chemToElec:", i[3].name, 'requestOut', chemVec[j].name, chemFieldSrc)
                 msg = moose.connect( i[3], 'output', elObj, elecFieldDest )
-                print( "Connect chemToElec: Connecting {} to {} and {}.{}".format( i[3], chemVec[0], elObj, elecFieldDest ) )
+                #print( "Connect chemToElec: Connecting {} to {} and {}.{}".format( i[3], chemVec[0], elObj, elecFieldDest ) )
         #moose.showfield( ad )
 
 
@@ -2147,8 +2169,8 @@ def main():
     #print( "jardesigner.py: built model" )
     if rdes.dataChannelId:
         rdes._buildSetupMoogli()
-        rdes.setupMooView.sendSceneGraph( "setup" )
-        #print( "jardesigner.py: sent SceneGraph1 on:", rdes )
+        rdes.setupMooView.sendSceneGraph( "setup", meshMols=rdes.meshMols )
+        #print( "jardesigner.py: sent SceneGraph1 with meshMols:", rdes.meshMols )
 
     moose.reinit()
     if args.run and args.data_channel_id == None: # local run

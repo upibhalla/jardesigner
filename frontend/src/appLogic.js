@@ -103,6 +103,9 @@ export const useAppLogic = () => {
     
     // State refactored to be keyed by viewId
     const [threeDConfigs, setThreeDConfigs] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SCENE_CONFIG__, [VIEW_IDS.RUN]: null } : { [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
+    // --- ADDED STATE FOR MESH MOLS ---
+    const [meshMolsData, setMeshMolsData] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
+    // ---------------------------------
     const [simulationFrames, setSimulationFrames] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SIMULATION_FRAMES__, [VIEW_IDS.RUN]: [] } : { [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
     const [liveFrameData, setLiveFrameData] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
     const [clickSelected, setClickSelected] = useState({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
@@ -237,6 +240,9 @@ export const useAppLogic = () => {
 		
    			if (data?.type === 'scene_init') {
        			setThreeDConfigs(prev => ({ ...prev, [viewId]: data.scene }));
+                // --- ADDED LINE TO SAVE MESH MOLS ---
+                setMeshMolsData(prev => ({ ...prev, [viewId]: data.meshMols }));
+                // --------------------------------------
        			const initialVisibility = {};
        			(data.scene?.drawables || []).forEach(d => { initialVisibility[d.groupId] = true; });
        			setDrawableVisibility(prev => ({ ...prev, [viewId]: initialVisibility }));
@@ -315,6 +321,9 @@ export const useAppLogic = () => {
         setIsSimulating(false);
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
         setThreeDConfigs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
+        // --- ADDED RESET FOR MESH MOLS ---
+        setMeshMolsData({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
+        // ---------------------------------
         setSvgPlotFilename(null); setIsPlotReady(false); setPlotError('');
         handleRewindReplay();
         if (activeSim.pid) {
@@ -377,6 +386,8 @@ export const useAppLogic = () => {
         return {
             ...baseProps,
             threeDConfig: threeDConfigs[VIEW_IDS.SETUP],
+            // Note: Standalone mode doesn't support meshMols yet
+            // meshMolsData: ... 
             simulationFrames: simulationFrames[VIEW_IDS.SETUP],
             drawableVisibility: drawableVisibility[VIEW_IDS.SETUP],
             setDrawableVisibility: (updater) => setDrawableVisibility(prev => ({ ...prev, [VIEW_IDS.SETUP]: typeof updater === 'function' ? updater(prev[VIEW_IDS.SETUP]) : updater })),
@@ -392,6 +403,7 @@ export const useAppLogic = () => {
     return {
         ...baseProps,
         threeDConfigs, simulationFrames, drawableVisibility, 
+        meshMolsData, // --- RETURNED THE NEW STATE ---
 		setDrawableVisibility, clickSelected, explodeAxis,
         handleSelectionChange, onManagerReady, 
 		onExplodeAxisToggle: handleExplodeAxisToggle, onSceneBuilt,

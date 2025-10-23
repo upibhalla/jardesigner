@@ -101,9 +101,14 @@ def getObjListInfo( objList ):
             for cc in coords:
                 cc[3:6] = cc[3:6]*cc[6] + cc[0:3]   
         elif meshType == "EndoMesh":
+            newcoords = []
             for cc in coords:
-                cc[6] = cc[3] 
-                cc[3:6] = cc[0:3]   # This may cause problems finding axis
+                ncc = np.zeros( 7 )
+                ncc[0:3] = cc[0:3]
+                ncc[3:6] = cc[0:3]   # This may cause problems finding axis
+                ncc[6] = cc[3] 
+                newcoords.append( ncc )
+                coords = newcoords
     elif elm.isA["CompartmentBase"]:
         paths = [objPath( ee, 1 ) for ee in objList ]
         coords = [ ee.coords for ee in objList ]
@@ -221,9 +226,9 @@ class Segment():
 
     @staticmethod
     def endoChemCompt( mol, idx ):
-        newc = np.array(mol.coords[:7])
-        newc[6] = newc[3] 
+        newc = np.zeros( 7 )
         newc[3:6] = newc[0:3]
+        newc[6] = newc[3] 
         return Segment( "sphere", newc, mol.id.idValue, 
             Segment.trimMolPath( mol ), 0, idx )
 
@@ -598,11 +603,12 @@ class MooView:
         #print( "called updateMoogliViewer for {} at {:.3f}".format( idx, simTime ) )
         self.updateValues( simTime, idx )
 
-    def sendSceneGraph( self, viewId ):
+    def sendSceneGraph( self, viewId, meshMols = "" ):
         payload = {
             "type": "scene_init",
             "viewId": viewId,
-            "scene": self.getSceneGraph()
+            "scene": self.getSceneGraph(),
+            "meshMols": meshMols
         }
         requestBody = {
             "data_channel_id": self.dataChannelId,
