@@ -16,6 +16,28 @@ for more information about it.
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Setting up
+1. Install `nvm`:
+
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+source ~/.nvm/nvm.sh
+
+2. Install requirements:
+    `pip install Flask`
+    `pip install flask_cors`
+    `pip install Flask_SocketIO`
+
+3. Install node
+`nvm install --lts`
+`nvm use --lts`
+`npm install`
+
+4. Start server
+    cd backend
+    python server.py
+5. Start frontend
+    npm run dev
+    
 ## Available Scripts
 
 In the project directory, you can run:
