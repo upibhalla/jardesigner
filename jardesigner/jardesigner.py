@@ -32,7 +32,8 @@ import requests
 import csv
 from . import jarmoogli
 from . import jardesignerProtos as jp
-import moose.fixXreacs as fixXreacs
+from . import fixXreacs
+#import moose.fixXreacs as fixXreacs
 
 from moose.neuroml.NeuroML import NeuroML
 from moose.neuroml.ChannelML import ChannelML
@@ -1943,7 +1944,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         # The middle arg in these cases used to be the geom. Not relevant.
         # The middle arg line[4] Now looks like it is the parent compt.
         if meshType == 'spine':
-
             smjl.append( [meshPath, line['parent'], dsolve])
         if meshType == 'psd':
             pmjl.append( [meshPath, line['parent'], dsolve] )
@@ -1953,6 +1953,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 
     # ComptDict was set up with respect to the original single model.
     def _buildChemJunctions( self, smjl, pmjl, emjl, meshDict ):
+        #print( f"SMJL={len(smjl)}, PMJL={len(pmjl)}, EMJL={len(emjl)}, MeshDict={len( meshDict )} )" )
         for sm, pm in zip( smjl, pmjl ):
             # Locate associated NeuroMesh and PSD mesh
             if sm[1] == pm[1]:  # Check for same parent dend.
@@ -1971,6 +1972,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             if self.verbose:
                 print( "surroundMESHPATH = ", surroundMeshPath )
             surroundDsolve = moose.element( surroundMeshPath + "/dsolve" )
+            #print( f"IN emjl, surround={surroundMeshPath}, surroundDsolve = {surroundDsolve.path}" )
             emdsolve.buildMeshJunctions( surroundDsolve )
 
     def _configureChemSolvers( self ):
@@ -1979,7 +1981,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         for model in self.modelList:
             tempComptDict = { key:val.replace( "model", model.name ) for key, val in self.meshDict.items() }
             chempath = model.path + "/chem"
-            fixXreacs.fixXreacs( chempath )
+            #fixXreacs.fixXreacs( chempath )
             sortedChemDistrib = sorted( self.chemDistrib, key = lambda c: meshOrder.index( c['type'] ) )
             spineMeshJunctionList = []
             psdMeshJunctionList = []
@@ -2009,6 +2011,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         if len( comptlist ) == 0:
             print("loadChem: No compartment found in file: ", fname)
             return
+        fixXreacs.fixXreacs( chem.path )
         self.comptDict.update( {cc.name:cc.path for cc in comptlist } )
         #print( f"Loaded chem file {fname} to {chemName}, comptDic={self.comptDict}" )
 
@@ -2036,9 +2039,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         elif moose.exists( '/model/chem/kinetics/' + meshName ):
             mesh = moose.element( '/model/chem/kinetics/' + meshName )
         else:
-            moose.le( '/model' )
-            moose.le( '/model/chem' )
-            #moose.le( '/model/chem/PRESYN' )
             print( "rdes::buildAdaptor: Error: meshName not found: ", meshName )
             quit()
         #elecComptList = mesh.elecComptList
@@ -2177,9 +2177,10 @@ def main():
         #print( "Running locally")
         moose.start( rdes.runtime )
         rdes.display()
-        if rdes.runMooView:
+        if rdes.runMooView and len( rdes.moogli ) > 0:
             rdes.runMooView.sendSceneGraph( "run" )
             rdes.runMooView.notifySimulationEnd( None )
+        quit()
 
     # This loop will wait for commands from server.py via stdin
     for line in sys.stdin:

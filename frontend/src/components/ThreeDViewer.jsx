@@ -6,6 +6,12 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import FlareIcon from '@mui/icons-material/Flare';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+// --- NEW ICON ---
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+// --- END NEW ICON ---
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
 import { ReplayContext } from './ReplayContext';
@@ -71,6 +77,13 @@ const ThreeDViewer = (props) => {
   const [displayConfig, setDisplayConfig] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [activeDrawableId, setActiveDrawableId] = useState(null);
+  
+  const [rotationSpeedState, setRotationSpeedState] = useState(0); 
+  const [isReflective, setIsReflective] = useState(false);
+  const [verticalAxis, setVerticalAxis] = useState('y'); // 'y', 'z', or 'x'
+  // --- NEW STATE ---
+  const [isWorldFlipped, setIsWorldFlipped] = useState(false);
+  // --- END NEW STATE ---
 
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
   const showSetupControls = !isSimulating && simulationFrames.length === 0;
@@ -110,6 +123,13 @@ const ThreeDViewer = (props) => {
       if (threeDConfig.drawables && threeDConfig.drawables.length > 0) {
         setActiveDrawableId(threeDConfig.drawables[0].groupId);
       }
+
+      // --- NEW: Reset view states on new scene load ---
+      setIsWorldFlipped(false);
+      setVerticalAxis('y');
+      setIsReflective(false);
+      setRotationSpeedState(0);
+      // --- END NEW ---
     }
   }, [threeDConfig, setDrawableVisibility, onSceneBuilt]);
 
@@ -151,13 +171,61 @@ const ThreeDViewer = (props) => {
   };
   const handleVisibilityChange = (groupId, isChecked) => { setDrawableVisibility(prev => ({ ...prev, [groupId]: isChecked })); };
 
-  const keybindingsText = `Arrow keys: move display
+  // --- HANDLERS FOR NEW TOGGLES ---
+  const handleToggleAutoRotate = () => {
+      const newState = (rotationSpeedState + 1) % 3; // Cycles 0 -> 1 -> 2 -> 0
+      setRotationSpeedState(newState);
+      if (managerRef.current) {
+          managerRef.current.setAutoRotate(newState);
+      }
+  };
+
+  const handleToggleReflectivity = () => {
+      const newState = !isReflective;
+      setIsReflective(newState);
+      if (managerRef.current) {
+          managerRef.current.setReflectivity(newState);
+      }
+  };
+
+  const handleToggleVerticalAxis = () => {
+      // Cycle 'y' -> 'z' -> 'x' -> 'y'
+      const cycle = { y: 'z', z: 'x', x: 'y' };
+      const newState = cycle[verticalAxis];
+      setVerticalAxis(newState);
+      if (managerRef.current) {
+          managerRef.current.setVerticalAxis(newState);
+      }
+  };
+
+  // --- NEW HANDLER ---
+  const handleToggleWorldFlip = () => {
+      const newState = !isWorldFlipped;
+      setIsWorldFlipped(newState);
+      if (managerRef.current) {
+          managerRef.current.setWorldFlip(newState);
+      }
+  };
+  // --- END NEW HANDLER ---
+
+  const keybindingsText = `Mouse: Pan (Left), Zoom (Middle), Orbit (Right)
+Arrow keys: move display
 <>,. : zoom in and out.
 Dd: scale diameter of selected readout.
 Pp: Pitch
 Yy: Yaw
 Rr: Roll
 Aa: Auto-position`;
+
+  const getRotationTooltip = () => {
+    if (rotationSpeedState === 1) return "Auto-Rotate (1x)";
+    if (rotationSpeedState === 2) return "Auto-Rotate (4x)";
+    return "Auto-Rotate (Off)";
+  };
+
+  const getVerticalAxisTooltip = () => {
+    return `Vertical Axis: ${verticalAxis.toUpperCase()}`;
+  };
 
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -177,7 +245,7 @@ Aa: Auto-position`;
                     <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Typography variant="caption">0</Typography>
                         <Slider min={0} max={totalRuntime} step={Math.max(totalRuntime/1000, 1e-6)} value={Math.min(replayTime, totalRuntime)} onChangeCommitted={(e, v)=> onSeekReplay(v)} aria-label="progress slider"
-                            sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MuiSlider-track': { transition: 'none' } }}
+                            sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MiSlider-track': { transition: 'none' } }}
                         />
                         <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
                     </Box>
@@ -198,6 +266,33 @@ Aa: Auto-position`;
 
             {/* Spacer and Settings Icon */}
             <Box sx={{ flexGrow: 1 }} />
+
+            <Tooltip title={getRotationTooltip()}>
+                <IconButton onClick={handleToggleAutoRotate} color={rotationSpeedState > 0 ? 'primary' : 'default'}>
+                    <AutorenewIcon />
+                </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Toggle Reflectivity">
+                <IconButton onClick={handleToggleReflectivity} color={isReflective ? 'primary' : 'default'}>
+                    <FlareIcon />
+                </IconButton>
+            </Tooltip>
+            
+            {/* --- NEW BUTTON --- */}
+            <Tooltip title="Flip View">
+                <IconButton onClick={handleToggleWorldFlip} color={isWorldFlipped ? 'primary' : 'default'}>
+                    <CompareArrowsIcon />
+                </IconButton>
+            </Tooltip>
+            {/* --- END NEW BUTTON --- */}
+
+            <Tooltip title={getVerticalAxisTooltip()}>
+                <IconButton onClick={handleToggleVerticalAxis} color={verticalAxis !== 'y' ? 'primary' : 'default'}>
+                    <SwapVertIcon />
+                </IconButton>
+            </Tooltip>
+
             <Tooltip title="View Options">
                 <IconButton onClick={() => setIsPanelOpen(true)}>
                     <SettingsIcon />

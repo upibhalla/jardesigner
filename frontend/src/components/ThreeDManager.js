@@ -9,12 +9,33 @@ export default class ThreeDManager {
     this.onSelectionChange = onSelectionChange;
     this.activeGroupId = null;
     this.diameterScales = new Map();
+    this.clock = new THREE.Clock(); // For smooth animation
+    this.isAutoRotating = false;
+    this.autoRotateSpeedRads = 0;
+
+    // --- NEW: State for world rotation ---
+    this.baseWorldRotation = new THREE.Euler(0, 0, 0);
+    this.isWorldFlipped = false;
+    // --- END NEW ---
 
     this.scene = new THREE.Scene();
+    this.world = new THREE.Group();
+    this.scene.add(this.world);
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.container.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 1e-9, 1e3);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,   // Pan with left-click
+      MIDDLE: THREE.MOUSE.DOLLY, // Zoom with middle-click
+      RIGHT: THREE.MOUSE.ROTATE  // Orbit with right-click
+    };
+
+    this.controls.minPolarAngle = 0; // 0 degrees
+    this.controls.maxPolarAngle = Math.PI; // 180 degrees
+    this.controls.autoRotate = false; // We will handle rotation manually
 
     this.boundingBox = new THREE.Box3();
     this.sceneObjects = [];
@@ -23,10 +44,13 @@ export default class ThreeDManager {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    dirLight.position.set(5, 5, 5);
-    this.scene.add(dirLight);
+    this.world.add(new THREE.HemisphereLight(0xffffff, 0x888888, 1.0));
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainLight.position.set(5, 5, 5);
+    this.world.add(mainLight);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-5, -3, -2);
+    this.world.add(fillLight);
 
     this.onWindowResize = this.onWindowResize.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -48,17 +72,93 @@ export default class ThreeDManager {
     this.activeGroupId = groupId;
   }
 
+  setAutoRotate(speedState) {
+    switch (speedState) {
+        case 1:
+            this.isAutoRotating = true;
+            this.autoRotateSpeedRads = Math.PI / 180; // 1 deg/sec
+            break;
+        case 2:
+            this.isAutoRotating = true;
+            this.autoRotateSpeedRads = 4 * (Math.PI / 180); // 4 deg/sec
+            break;
+        case 0:
+        default:
+            this.isAutoRotating = false;
+            this.autoRotateSpeedRads = 0;
+            break;
+    }
+  }
+
+  setReflectivity(isEnabled) {
+    const metalness = isEnabled ? 0.8 : 0.0;
+    const roughness = isEnabled ? 0.1 : 1.0;
+    
+    this.sceneObjects.forEach(obj => {
+        if (obj.material) {
+            obj.material.metalness = metalness;
+            obj.material.roughness = roughness;
+            obj.material.needsUpdate = true;
+        }
+    });
+  }
+  
+  /**
+   * --- MODIFIED: Sets the *base* world rotation ---
+   * @param {string} axis - 'x', 'y', or 'z'
+   */
+  setVerticalAxis(axis) {
+    switch (axis) {
+        case 'x':
+            this.baseWorldRotation.set(0, 0, Math.PI / 2); // Rotate world so X is up
+            break;
+        case 'z':
+            this.baseWorldRotation.set(-Math.PI / 2, 0, 0); // Rotate world so Z is up
+            break;
+        case 'y':
+        default:
+            this.baseWorldRotation.set(0, 0, 0); // Default Y-up
+            break;
+    }
+    this.applyWorldRotation();
+    this.focusCamera();
+  }
+
+  // --- NEW: Toggle for flipping the world ---
+  setWorldFlip(isFlipped) {
+    this.isWorldFlipped = isFlipped;
+    this.applyWorldRotation();
+    // No focusCamera here, as it's jarring.
+  }
+
+  // --- NEW: Helper to combine base and flip rotations ---
+  applyWorldRotation() {
+    this.world.rotation.copy(this.baseWorldRotation);
+    if (this.isWorldFlipped) {
+      // Apply a 180-degree flip around the world's X-axis
+      this.world.rotation.x += Math.PI; 
+    }
+    this.world.updateMatrixWorld(true);
+  }
+
   buildScene(config) {
     if (!config || !config.drawables) {
         return;
     }
 
+    // --- NEW: Reset rotation states on build ---
+    this.baseWorldRotation.set(0, 0, 0);
+    this.isWorldFlipped = false;
+    this.applyWorldRotation();
+    // --- END NEW ---
+
     this.sceneObjects = [];
     this.entityConfigs.clear();
     this.diameterScales.clear();
-    while(this.scene.children.length > 2){
-        const child = this.scene.children[2];
-        this.scene.remove(child);
+
+    while(this.world.children.length > 3){ // Keep the 3 lights
+        const child = this.world.children[3];
+        this.world.remove(child);
         if(child.geometry) child.geometry.dispose();
         if(child.material) child.material.dispose();
     }
@@ -81,6 +181,8 @@ export default class ThreeDManager {
             color: materialColor, 
             transparent: true, 
             opacity: entity.transparency || 1.0,
+            metalness: 0.0,
+            roughness: 1.0,
         });
 
         const shapeObject = createShape(primitive, material);
@@ -101,8 +203,8 @@ export default class ThreeDManager {
                     shapeObject.scale.set(initialScale, 1, initialScale);
                 }
             }
-
-            this.scene.add(shapeObject);
+            
+            this.world.add(shapeObject);
             this.sceneObjects.push(shapeObject);
             this.boundingBox.expandByObject(shapeObject);
         }
@@ -185,16 +287,15 @@ export default class ThreeDManager {
       const rect = this.renderer.domElement.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      
       this.raycaster.setFromCamera(this.mouse, this.camera);
-      const intersects = this.raycaster.intersectObjects(this.sceneObjects, true);
+      const intersects = this.raycaster.intersectObjects(this.world.children, true);
 
       if (intersects.length > 0) {
           let clickedObject = intersects[0].object;
           let userData = clickedObject.userData;
 
-          // Traverse up the hierarchy to find the parent group with the main userData
-          // We stop when userData has a simPath, or we hit the scene object
-          while (!userData.simPath && clickedObject.parent && clickedObject.parent !== this.scene) {
+          while (!userData.simPath && clickedObject.parent && clickedObject.parent !== this.world) {
               clickedObject = clickedObject.parent;
               userData = clickedObject.userData;
           }
@@ -287,17 +388,27 @@ export default class ThreeDManager {
 
   focusCamera() {
     if (this.boundingBox.isEmpty()) return;
-    const center = this.boundingBox.getCenter(new THREE.Vector3());
-    const size = this.boundingBox.getSize(new THREE.Vector3());
+
+    const worldBox = new THREE.Box3();
+    this.world.updateWorldMatrix(true, true); // Ensure matrix is fresh
+    worldBox.copy(this.boundingBox).applyMatrix4(this.world.matrixWorld);
+
+    const center = worldBox.getCenter(new THREE.Vector3());
+    const size = worldBox.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = this.camera.fov * (Math.PI / 180);
     const cameraDistance = Math.abs(maxDim / 1.5 / Math.tan(fov / 2));
+    
     this.camera.position.copy(center);
-    this.camera.position.z += cameraDistance;
+    this.camera.position.z += cameraDistance; // Always look from "front"
+    this.camera.up.set(0, 1, 0); // Always Y-up
+
     this.controls.target.copy(center);
     this.camera.near = cameraDistance / 100;
     this.camera.far = cameraDistance * 100;
     this.camera.updateProjectionMatrix();
+    
+    this.controls.update(); // Sync controls with new camera settings
   }
 
   onWindowResize() {
@@ -309,13 +420,25 @@ export default class ThreeDManager {
 
   animate = () => {
     requestAnimationFrame(this.animate);
+    
+    const delta = this.clock.getDelta();
+
+    if (this.isAutoRotating && this.autoRotateSpeedRads > 0) {
+        const axis = new THREE.Vector3(0, 1, 0); 
+        const angle = this.autoRotateSpeedRads * delta;
+        const offset = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
+        offset.applyAxisAngle(axis, angle);
+        this.camera.position.copy(this.controls.target).add(offset);
+    }
+
     const canvas = this.renderer.domElement;
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     if (canvas.width !== width || canvas.height !== height) {
         this.onWindowResize();
     }
-    this.controls.update();
+    
+    this.controls.update(delta); 
     this.renderer.render(this.scene, this.camera);
   }
 

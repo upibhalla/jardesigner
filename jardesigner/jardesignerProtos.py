@@ -49,6 +49,7 @@ import moose
 import math
 from pathlib import Path
 from moose import utils
+from . import fixXreacs
 
 EREST_ACT    = -0.060
 EREST_ACT_HH = -0.070 # A different value is used for the HH squid params
@@ -720,10 +721,13 @@ def makeChemEGFR( name = 'EGFR', parent = '/library' ):
     return makeChemProtoFromFile( 'EGFR', name )
 
 def makeChemCaMKII( name = 'CaMKII', parent = '/library' ):
-    return makeChemProtoFromFile( 'CaMKII', name )
+    return makeChemProtoFromFile( 'chanPhosphByCaMKII', name )
 
 def makeChemCICR( name = 'CICR', parent = '/library' ):
-    return makeChemProtoFromFile( 'CICRpsdSpineDendEndo', name )
+    ret = makeChemProtoFromFile( 'CICRpsdSpineDendEndo', name )
+    fixXreacs.fixXreacs( parent + '/' + name )
+    #moose.le( "/library/CICR/kinetics/DEND" )
+    return ret
 
     #################################################################
     # Here we have a series of utility functions for building cell

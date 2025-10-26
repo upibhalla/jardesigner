@@ -103,9 +103,7 @@ export const useAppLogic = () => {
     
     // State refactored to be keyed by viewId
     const [threeDConfigs, setThreeDConfigs] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SCENE_CONFIG__, [VIEW_IDS.RUN]: null } : { [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-    // --- ADDED STATE FOR MESH MOLS ---
     const [meshMolsData, setMeshMolsData] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-    // ---------------------------------
     const [simulationFrames, setSimulationFrames] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SIMULATION_FRAMES__, [VIEW_IDS.RUN]: [] } : { [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
     const [liveFrameData, setLiveFrameData] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
     const [clickSelected, setClickSelected] = useState({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
@@ -240,9 +238,7 @@ export const useAppLogic = () => {
 		
    			if (data?.type === 'scene_init') {
        			setThreeDConfigs(prev => ({ ...prev, [viewId]: data.scene }));
-                // --- ADDED LINE TO SAVE MESH MOLS ---
                 setMeshMolsData(prev => ({ ...prev, [viewId]: data.meshMols }));
-                // --------------------------------------
        			const initialVisibility = {};
        			(data.scene?.drawables || []).forEach(d => { initialVisibility[d.groupId] = true; });
        			setDrawableVisibility(prev => ({ ...prev, [viewId]: initialVisibility }));
@@ -266,6 +262,27 @@ export const useAppLogic = () => {
         });
     }, [clickSelected]);
     
+    // --- ADDED: Warn on Exit Logic ---
+    useEffect(() => {
+        const handleBeforeUnload = (event) => {
+            const message = "Have you saved your model? Please check before you close Jardesigner.";
+            // Standard way to prevent the default dialog
+            event.preventDefault();
+            // Legacy way (required for some browsers like older Chrome/Firefox)
+            event.returnValue = message;
+            // Modern way
+            return message;
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        // Cleanup function to remove the listener when the component unmounts
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, []); // Empty dependency array ensures this runs only once on mount and cleans up on unmount
+    // --- END: Warn on Exit Logic ---
+
     const buildModelOnServer = useCallback(async (newJsonData) => {
         setSvgPlotFilename(null); setIsPlotReady(false); setPlotError('');
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
@@ -321,9 +338,7 @@ export const useAppLogic = () => {
         setIsSimulating(false);
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
         setThreeDConfigs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-        // --- ADDED RESET FOR MESH MOLS ---
         setMeshMolsData({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-        // ---------------------------------
         setSvgPlotFilename(null); setIsPlotReady(false); setPlotError('');
         handleRewindReplay();
         if (activeSim.pid) {

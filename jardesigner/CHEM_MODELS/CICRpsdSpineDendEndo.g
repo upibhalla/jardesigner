@@ -1,7 +1,7 @@
 //genesis
 // kkit Version 11 flat dumpfile
  
-// Saved on Sun Dec  8 18:59:38 2024
+// Saved on Sun Oct 26 12:40:50 2025
  
 include kkit {argv 1}
  
@@ -68,6 +68,9 @@ call /kinetics/geometry[1]/notes LOAD \
 simundump text /kinetics/geometry[2]/notes 0 ""
 call /kinetics/geometry[2]/notes LOAD \
 ""
+simundump text /kinetics/geometry[3]/notes 0 ""
+call /kinetics/geometry[3]/notes LOAD \
+""
 simundump group /kinetics/DEND 0 yellow black x 0 1 "" defaultfile \
   defaultfile.g 0 0 0 0 -2 0
 simundump text /kinetics/DEND/notes 0 Compartment
@@ -118,8 +121,8 @@ simundump kpool /kinetics/DEND/CaMCa4 0 0.0 0 0 0 0 0 0 1866.9 0 \
 simundump text /kinetics/DEND/CaMCa4/notes 0 ""
 call /kinetics/DEND/CaMCa4/notes LOAD \
 ""
-simundump kpool /kinetics/DEND/IP3_R 0 0.0 0.1 0.1 186.69 186.69 0 0 1866.9 0 \
-  /kinetics/geometry 22 black 3 9 0
+simundump kpool /kinetics/DEND/IP3_R 0 0.0 0.15 0.15 280.04 280.04 0 0 1866.9 \
+  0 /kinetics/geometry 22 black 3 9 0
 simundump text /kinetics/DEND/IP3_R/notes 0 ""
 call /kinetics/DEND/IP3_R/notes LOAD \
 ""
@@ -148,7 +151,7 @@ simundump kpool /kinetics/DEND/ActIP3R 0 0.0 0 0 0 0 0 0 1866.9 0 \
 simundump text /kinetics/DEND/ActIP3R/notes 0 ""
 call /kinetics/DEND/ActIP3R/notes LOAD \
 ""
-simundump kchan /kinetics/DEND/ActIP3R/chan 0 8 0.1 0 1 0 "" brown 8 2 2 0
+simundump kchan /kinetics/DEND/ActIP3R/chan 0 20 0.1 0 1 0 "" brown 8 2 2 0
 simundump text /kinetics/DEND/ActIP3R/chan/notes 0 ""
 call /kinetics/DEND/ActIP3R/chan/notes LOAD \
 ""
@@ -188,7 +191,7 @@ simundump kreac /kinetics/DEND/Reac2 0 0.0080348 1.65 "" white black 6 6 0
 simundump text /kinetics/DEND/Reac2/notes 0 ""
 call /kinetics/DEND/Reac2/notes LOAD \
 ""
-simundump kreac /kinetics/DEND/Reac4 0 0.00096422 0.21 "" white black 7 7 0
+simundump kreac /kinetics/DEND/Reac4 0 0.00096422 0.6 "" white black 7 7 0
 simundump text /kinetics/DEND/Reac4/notes 0 ""
 call /kinetics/DEND/Reac4/notes LOAD \
 ""
@@ -249,9 +252,6 @@ simundump kpool /kinetics/PSD/Ca 0 2e-11 0 0 0 0 0 0 18.6 0 \
   /kinetics/geometry[3] 37 11 6 11 0
 simundump text /kinetics/PSD/Ca/notes 0 ""
 call /kinetics/PSD/Ca/notes LOAD \
-""
-simundump text /kinetics/geometry[3]/notes 0 ""
-call /kinetics/geometry[3]/notes LOAD \
 ""
 simundump xgraph /graphs/conc1 0 0 100 0.001 0.999 0
 simundump xgraph /graphs/conc2 0 0 100 0 1 0
