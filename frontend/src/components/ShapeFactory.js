@@ -14,8 +14,8 @@ export function createShape(primitive, material) {
     let shapeObject;
     let geometry;
 
-    // A line material will be used for the new adaptor shape
-    const lineMaterial = new THREE.LineBasicMaterial({ color: material.color });
+    // A line material was used for the old adaptor shape, but the new one uses solid 'material'
+    // const lineMaterial = new THREE.LineBasicMaterial({ color: material.color });
 
     switch (primitive.type) {
         case 'sphere': {
@@ -188,79 +188,73 @@ export function createShape(primitive, material) {
             break;
         }
 
-        // --- START OF NEW 'ADAPTOR' CODE ---
+        // --- START OF REPLACED 'ADAPTOR' CODE ---
         case 'adaptor': {
+            // This shape will be a composite of solid meshes
             const group = new THREE.Group();
-            const d = primitive.diameter;
-            const radius = d / 2;
-            const endLength = d * 0.5;
-            const midLength = d;
-            const totalLength = endLength * 2 + midLength; // Should be 2 * d
 
-            // --- 1. Round End (Cylinder) ---
-            const cylGeom = new THREE.CylinderGeometry(radius, radius, endLength, 8, 1);
-            const cylEdges = new THREE.EdgesGeometry(cylGeom);
-            const cylLines = new THREE.LineSegments(cylEdges, lineMaterial);
-            cylLines.position.y = (midLength + endLength) / 2; // Position at the top
-            group.add(cylLines);
+            // 1. Get coordinates, length (L), and orientation
+            const start = new THREE.Vector3(...primitive.C);
+            const end = new THREE.Vector3(...primitive.C2);
+            const L = start.distanceTo(end);
+            const direction = new THREE.Vector3().subVectors(end, start).normalize();
+            // We build all parts along the Y-axis (0,1,0) then rotate the whole group
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
 
-            // --- 2. Square End (Box) ---
-            const boxGeom = new THREE.BoxGeometry(d, endLength, d);
-            const boxEdges = new THREE.EdgesGeometry(boxGeom);
-            const boxLines = new THREE.LineSegments(boxEdges, lineMaterial);
-            boxLines.position.y = -(midLength + endLength) / 2; // Position at the bottom
-            group.add(boxLines);
+            // 2. Define parameters
+            const thinDiameter = primitive.diameter * 0.08;
+            const diskHeight = thinDiameter; // Make disks very thin
+            const armLength = L * 0.15; // "Short" arm length
+            const armAngle = Math.PI / 6; // 30 degrees
 
-            // --- 3. Morphing Middle Section ---
-            const morphGeom = new THREE.BufferGeometry();
-            const vertices = [];
-            const indices = [];
-            const numCirclePoints = 8;
+            // 3. Build the reaction symbol parts
+            // Main axis cylinder
+            const mainAxisGeom = new THREE.CylinderGeometry(thinDiameter / 2, thinDiameter / 2, L, 8);
+            const mainAxisMesh = new THREE.Mesh(mainAxisGeom, material);
+            mainAxisMesh.position.set(0, L / 2, 0); // Centered on the axis
+            group.add(mainAxisMesh);
+
+            // Arm 1 (at start, Y=0)
+            const armGeom = new THREE.CylinderGeometry(thinDiameter / 2, thinDiameter / 2, armLength, 8);
+            const armMesh1 = new THREE.Mesh(armGeom, material);
+            armMesh1.position.y = armLength / 2; // Position so its base is at the pivot
+            const pivot1 = new THREE.Group();
+            pivot1.add(armMesh1);
+            pivot1.rotation.z = armAngle; // Splay outwards
+            pivot1.position.set(0, 0, 0); // Pivot at the start
+            group.add(pivot1);
+
+            // Arm 2 (at end, Y=L)
+            const armMesh2 = new THREE.Mesh(armGeom, material); // Can reuse geometry
+            armMesh2.position.y = -armLength / 2; // Position so its *top* is at the pivot
+            const pivot2 = new THREE.Group();
+            pivot2.add(armMesh2);
+            pivot2.rotation.z = armAngle; // Splay outwards
+            pivot2.position.set(0, L, 0); // Pivot at the end
+            group.add(pivot2);
             
-            // Define the 8 vertices for the top circle
-            for (let i = 0; i < numCirclePoints; i++) {
-                const angle = (i / numCirclePoints) * Math.PI * 2;
-                vertices.push(Math.cos(angle) * radius, midLength / 2, Math.sin(angle) * radius);
-            }
+            // 4. Build Disk 1 (at 0.4L)
+            const diskGeom1 = new THREE.CylinderGeometry(primitive.diameter, primitive.diameter, diskHeight, 16);
+            const diskMesh1 = new THREE.Mesh(diskGeom1, material);
+            diskMesh1.position.set(0, 0.4 * L, 0);
+            group.add(diskMesh1);
 
-            // Define the 8 vertices for the bottom square (corner + midpoint on each side)
-            const sq = [
-                [-radius, -midLength / 2, -radius], [0, -midLength / 2, -radius],
-                [radius, -midLength / 2, -radius], [radius, -midLength / 2, 0],
-                [radius, -midLength / 2, radius], [0, -midLength / 2, radius],
-                [-radius, -midLength / 2, radius], [-radius, -midLength / 2, 0]
-            ];
-            sq.forEach(v => vertices.push(...v));
-
-            // Create indices for the lines
-            // Top circle edges
-            for (let i = 0; i < numCirclePoints; i++) {
-                indices.push(i, (i + 1) % numCirclePoints);
-            }
-            // Bottom square edges
-            for (let i = 0; i < 8; i++) {
-                indices.push(numCirclePoints + i, numCirclePoints + ((i + 1) % 8));
-            }
-            // Vertical stitching edges
-            for (let i = 0; i < numCirclePoints; i++) {
-                indices.push(i, i + numCirclePoints);
-            }
-
-            morphGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-            morphGeom.setIndex(indices);
-            const morphLines = new THREE.LineSegments(morphGeom, lineMaterial);
-            group.add(morphLines);
+            // 5. Build Disk 2 (at 0.6L)
+            const diskGeom2 = new THREE.CylinderGeometry(primitive.diameter / 2, primitive.diameter / 2, diskHeight, 16);
+            const diskMesh2 = new THREE.Mesh(diskGeom2, material);
+            diskMesh2.position.set(0, 0.6 * L, 0);
+            group.add(diskMesh2);
 
             // --- Final Orientation and Positioning ---
-            const direction = new THREE.Vector3(...primitive.C2).normalize();
-            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+            // Rotate the entire group to match the C-to-C2 direction
             group.quaternion.copy(quaternion);
-            group.position.set(...primitive.C);
+            // Place the group's origin (0,0,0) at the start point
+            group.position.copy(start);
             
             shapeObject = group;
             break;
         }
-        // --- END OF NEW 'ADAPTOR' CODE ---
+        // --- END OF REPLACED 'ADAPTOR' CODE ---
 
         default:
             return null;
@@ -268,3 +262,4 @@ export function createShape(primitive, material) {
 
     return shapeObject;
 }
+
