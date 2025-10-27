@@ -278,16 +278,10 @@ class Segment():
             idx, iconNum, -0.1 + iconNum*0.02)
 
     @staticmethod
-    def adaptor( path, newc, simId, idx, iconNum ):
-        return Segment.chanBase( "adaptor", path, newc, simId, 
-            idx, iconNum, -0.5 + iconNum*0.02)
-
-    @staticmethod
-    def plotTrode( path, newc, simId, idx, iconNum ):
+    def plotTrodeOrAdaptor( path, newc, simId, idx, theta, shape ):
         # dia in coords[6]
         # cone is 4 microns and is aligned radially away from center
         # of cylinder/sphere, which it touches at its surface.
-        theta = idx*0.1 + iconNum*np.pi/8
         axLen = Segment.normToCylAxis( newc, theta, path == "soma")
         start = np.array(newc[0:3]) # Middle of compartment.
         axis = np.array(newc[3:6]) #unit vector of cone direction.
@@ -299,7 +293,17 @@ class Segment():
         #newc[0:3] = start + axis * trodeLen # This is the fat end
 
         newc[6] = trodeLen / 6
-        return Segment( "cone", newc, simId, path, 0, idx, value = -0.01 )
+        return Segment( shape, newc, simId, path, 0, idx, value = -0.01 )
+
+    @staticmethod
+    def plotTrode( path, newc, simId, idx, iconNum ):
+        theta = idx*0.1 + iconNum*np.pi/8
+        return Segment.plotTrodeOrAdaptor( path, newc, simId, idx, theta, "cone" )
+
+    @staticmethod
+    def adaptor( path, newc, simId, idx, iconNum ):
+        theta = idx*1.7 + iconNum*np.pi/8
+        return Segment.plotTrodeOrAdaptor( path, newc, simId, idx, theta, "adaptor" )
 
     @staticmethod
     def stimTrode( objType, path, newc, simId, idx, iconNum ):
