@@ -283,6 +283,7 @@ export default class ThreeDManager {
     });
   }
 
+  // --- MODIFIED handleClick (FIX for Request 3) ---
   handleClick(event) {
       const rect = this.renderer.domElement.getBoundingClientRect();
       this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -292,19 +293,41 @@ export default class ThreeDManager {
       const intersects = this.raycaster.intersectObjects(this.world.children, true);
 
       if (intersects.length > 0) {
-          let clickedObject = intersects[0].object;
-          let userData = clickedObject.userData;
-
-          while (!userData.simPath && clickedObject.parent && clickedObject.parent !== this.world) {
-              clickedObject = clickedObject.parent;
-              userData = clickedObject.userData;
+          // let clickedObject = intersects[0].object;
+		  let firstVisibleIntersect = null;
+          for (const intersect of intersects) {
+              // We must check the material property exists and opacity is greater than 0.
+              if (intersect.object.material && intersect.object.material.opacity > 0.0) {
+                  firstVisibleIntersect = intersect;
+                  break; // We found the closest visible object
+              }
           }
+
+          // If we only clicked on transparent objects, do nothing.
+          if (!firstVisibleIntersect) {
+              return;
+          }
+
+          let clickedObject = firstVisibleIntersect.object;
+
+          // --- NEW LOGIC ---
+          // Traverse up the hierarchy until we find a direct child of the world.
+          // This is the "shapeObject" that we added in buildScene.
+          while (clickedObject.parent && clickedObject.parent !== this.world) {
+              clickedObject = clickedObject.parent;
+          }
+          // At this point, clickedObject is the top-level object for that shape.
+          // *Now* we check its userData.
+          // --- END NEW LOGIC ---
+
+          const userData = clickedObject.userData;
 
           if (this.onSelectionChange && userData && userData.simPath) {
               this.onSelectionChange(userData, event.ctrlKey);
           }
       }
   }
+  // --- END MODIFIED handleClick ---
 
   updateSelectionVisuals(clickSelected) {
     const isSelected = (obj) => {
@@ -389,9 +412,12 @@ export default class ThreeDManager {
   focusCamera() {
     if (this.boundingBox.isEmpty()) return;
 
+    // --- MODIFIED: Use world-space bounding box ---
+    // We need the bounding box *after* the world rotation has been applied.
     const worldBox = new THREE.Box3();
     this.world.updateWorldMatrix(true, true); // Ensure matrix is fresh
     worldBox.copy(this.boundingBox).applyMatrix4(this.world.matrixWorld);
+    // --- END MODIFIED ---
 
     const center = worldBox.getCenter(new THREE.Vector3());
     const size = worldBox.getSize(new THREE.Vector3());
@@ -399,9 +425,12 @@ export default class ThreeDManager {
     const fov = this.camera.fov * (Math.PI / 180);
     const cameraDistance = Math.abs(maxDim / 1.5 / Math.tan(fov / 2));
     
+    // --- MODIFIED: Simplified camera positioning ---
+    // We *always* use the Y-up camera logic now.
     this.camera.position.copy(center);
     this.camera.position.z += cameraDistance; // Always look from "front"
     this.camera.up.set(0, 1, 0); // Always Y-up
+    // --- END MODIFIED ---
 
     this.controls.target.copy(center);
     this.camera.near = cameraDistance / 100;
@@ -423,13 +452,19 @@ export default class ThreeDManager {
     
     const delta = this.clock.getDelta();
 
+    // --- MANUAL AUTO-ROTATE ---
     if (this.isAutoRotating && this.autoRotateSpeedRads > 0) {
+        // We *always* rotate around the world Y-axis, which is always "up"
+        // for the camera. This will correctly rotate the scene group.
         const axis = new THREE.Vector3(0, 1, 0); 
+        
         const angle = this.autoRotateSpeedRads * delta;
+        // Rotate the camera's position vector around the target
         const offset = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
         offset.applyAxisAngle(axis, angle);
         this.camera.position.copy(this.controls.target).add(offset);
     }
+    // --- END MANUAL AUTO-ROTATE ---
 
     const canvas = this.renderer.domElement;
     const width = this.container.clientWidth;
@@ -438,7 +473,7 @@ export default class ThreeDManager {
         this.onWindowResize();
     }
     
-    this.controls.update(delta); 
+    this.controls.update(delta); // Pass delta to controls
     this.renderer.render(this.scene, this.camera);
   }
 
