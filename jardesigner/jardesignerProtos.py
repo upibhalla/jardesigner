@@ -702,10 +702,10 @@ def makeChemSTF( name = 'STF', parent = '/library' ):
 def makeChemSTD( name = 'STD', parent = '/library' ):
     return makeChemProtoFromFile( 'STD', name )
 
-def makeChemSTF( name = 'LTF', parent = '/library' ):
+def makeChemLTF( name = 'LTF', parent = '/library' ):
     return makeChemProtoFromFile( 'LTF', name )
 
-def makeChemSTD( name = 'LTD', parent = '/library' ):
+def makeChemLTD( name = 'LTD', parent = '/library' ):
     return makeChemProtoFromFile( 'LTD', name )
 
 def makeChemBCM( name = 'BCM', parent = '/library' ):

@@ -92,7 +92,7 @@ const DisplayWindow = (props) => {
         <MemoizedMarkdownText />
       </Box>
       
-      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'block' : 'none', position: 'relative' }}>
+	  <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
         {threeDConfigs?.setup && (
             <ThreeDViewer
               {...props}
@@ -115,7 +115,7 @@ const DisplayWindow = (props) => {
         )}
       </Box>
 
-      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 4 ? 'block' : 'none', position: 'relative' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 4 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
         {threeDConfigs?.run && (
             <ThreeDViewer
               {...props}

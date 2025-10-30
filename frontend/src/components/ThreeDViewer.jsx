@@ -9,14 +9,20 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import FlareIcon from '@mui/icons-material/Flare';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
-// --- NEW ICON ---
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
-// --- END NEW ICON ---
 import ThreeDManager from './ThreeDManager';
 import { getColor } from './colormap';
 import { ReplayContext } from './ReplayContext';
 
-const ColorBar = ({ displayConfig, entityConfig, currentRange, readoutTitle }) => {
+const ColorBar = ({
+    displayConfig,
+    entityConfig,
+    currentRange,
+    readoutTitle,
+    activeDrawableId,
+    handleColorRangeChange
+}) => {
+    // ... (ColorBar component remains unchanged) ...
     const gradient = useMemo(() => {
         const colormap = displayConfig?.colormap || 'jet';
         const stops = Array.from({ length: 11 }, (_, i) => {
@@ -35,6 +41,54 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange, readoutTitle }) =
         return parseFloat(num.toPrecision(3)).toString();
     };
 
+    const handleWheel = (e) => {
+        e.preventDefault(); // Prevent the page from scrolling
+        if (!activeDrawableId || !handleColorRangeChange) return;
+
+        e.preventDefault(); // Prevent the page from scrolling
+        const rect = e.currentTarget.getBoundingClientRect();
+        const yPercent = (e.clientY - rect.top) / rect.height;
+        const scrollUp = e.deltaY < 0; // true for scroll up/forwards
+        const x = 0.2; // Sensitivity
+
+        const vmin = parseFloat(currentRange.vmin);
+        const vmax = parseFloat(currentRange.vmax);
+        const range = vmax - vmin;
+
+        if (isNaN(vmin) || isNaN(vmax)) return; // Don't do anything if numbers are invalid
+
+        if (yPercent < 0.20) {
+            // --- VMAX ZONE (TOP 20%) ---
+            let newVmax;
+            if (scrollUp) {
+                // Scroll forwards: vmax = vmax + x*(vmax-vmin)
+                newVmax = vmax + x * range;
+            } else {
+                // Scroll backwards: vmax = (vmax+vmin*x)/(1+x)
+                newVmax = (vmax + vmin * x) / (1 + x);
+            }
+            // Ensure newVmax is always greater than vmin
+            if (newVmax <= vmin) newVmax = vmin + 1e-9;
+            handleColorRangeChange('vmax', newVmax.toExponential(2));
+
+        } else if (yPercent > 0.80) {
+            // --- VMIN ZONE (BOTTOM 20%) ---
+            let newVmin;
+            if (scrollUp) {
+                // Scroll forwards: Increase vmin (pull towards vmax)
+                // vmin_increase = (vmin + vmax*x) / (1+x)
+                newVmin = (vmin + vmax * x) / (1 + x);
+            } else {
+                // Scroll backwards: Decrease vmin (push away from vmax)
+                // vmin_decrease = vmin - x*(vmax-vmin)
+                newVmin = vmin - x * range;
+            }
+            // Ensure newVmin is always less than vmax
+            if (newVmin >= vmax) newVmin = vmax - 1e-9;
+            handleColorRangeChange('vmin', newVmin.toExponential(2));
+        }
+    };
+
     if (!displayConfig || !entityConfig) {
         return null;
     }
@@ -43,12 +97,19 @@ const ColorBar = ({ displayConfig, entityConfig, currentRange, readoutTitle }) =
     const vmax = currentRange.vmax !== '' ? parseFloat(currentRange.vmax) : entityConfig.vmax;
 
     return (
-        <Box sx={{
-            position: 'absolute', left: '16px', top: '16px', display: 'flex', flexDirection: 'column',
-            gap: 1, color: 'black', textShadow: '0 0 2px white', pointerEvents: 'none'
-        }}>
+        <Box
+            sx={{
+                position: 'absolute', left: '16px', top: '16px', display: 'flex', flexDirection: 'column',
+                gap: 1, color: 'black', textShadow: '0 0 2px white',
+                pointerEvents: 'auto', // Enable pointer events for the wheel
+                cursor: 'ns-resize', // Indicate vertical resizing
+            }}
+        >
             <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{readoutTitle}</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+                onWheel={handleWheel} // Add the wheel event listener here
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+            >
                 <Box sx={{ width: '20px', height: '150px', background: gradient, border: '1px solid black', borderRadius: '4px' }} />
                 <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '150px' }}>
                     <Typography variant="caption">{formatColorBarLabel(vmax)}</Typography>
@@ -81,9 +142,10 @@ const ThreeDViewer = (props) => {
   const [rotationSpeedState, setRotationSpeedState] = useState(0); 
   const [isReflective, setIsReflective] = useState(false);
   const [verticalAxis, setVerticalAxis] = useState('y'); // 'y', 'z', or 'x'
-  // --- NEW STATE ---
   const [isWorldFlipped, setIsWorldFlipped] = useState(false);
-  // --- END NEW STATE ---
+  
+  // --- NEW: Ref to track previous simulation state ---
+  const prevIsSimulatingRef = useRef();
 
   const showReplayControls = !isSimulating && simulationFrames.length > 0;
   const showSetupControls = !isSimulating && simulationFrames.length === 0;
@@ -124,12 +186,11 @@ const ThreeDViewer = (props) => {
         setActiveDrawableId(threeDConfig.drawables[0].groupId);
       }
 
-      // --- NEW: Reset view states on new scene load ---
+      // Reset view states on new scene load
       setIsWorldFlipped(false);
       setVerticalAxis('y');
       setIsReflective(false);
       setRotationSpeedState(0);
-      // --- END NEW ---
     }
   }, [threeDConfig, setDrawableVisibility, onSceneBuilt]);
 
@@ -149,8 +210,55 @@ const ThreeDViewer = (props) => {
           managerRef.current.setActiveGroupId(activeDrawableId);
       }
   }, [drawableVisibility, activeDrawableId]);
+  
+  // --- NEW: Auto-autoscale on sim complete ---
+  useEffect(() => {
+    const prevIsSimulating = prevIsSimulatingRef.current;
+  
+    // Check for simulation run completion (true -> false)
+    if (prevIsSimulating && !isSimulating && simulationFrames.length > 0) {
+      
+      const newRangesMap = new Map();
+      const visibleDrawables = drawables.filter(d => drawableVisibility[d.groupId]);
+  
+      visibleDrawables.forEach(drawable => {
+        const targetGroupId = drawable.groupId;
+        let globalMin = Infinity;
+        let globalMax = -Infinity;
+  
+        simulationFrames.forEach(frame => {
+          if (frame.groupId === targetGroupId) {
+            frame.data.forEach(value => {
+              if (value < globalMin) globalMin = value;
+              if (value > globalMax) globalMax = value;
+            });
+          }
+        });
+  
+        if (isFinite(globalMin) && isFinite(globalMax)) {
+          newRangesMap.set(targetGroupId, {
+            vmin: globalMin.toExponential(2),
+            vmax: globalMax.toExponential(2)
+          });
+        }
+      });
+
+      setColorRanges(prevColorRanges => {
+        const updatedRanges = { ...prevColorRanges };
+        newRangesMap.forEach((range, groupId) => {
+          updatedRanges[groupId] = range;
+        });
+        return updatedRanges;
+      });
+    }
+  
+    // Store the current value for the next render
+    prevIsSimulatingRef.current = isSimulating;
+  }, [isSimulating, simulationFrames, drawables, drawableVisibility, setColorRanges]);
+  // --- END NEW EFFECT ---
 
   const handleAutoscale = () => {
+      // ... (this function is now only for the manual button) ...
       if (!simulationFrames || simulationFrames.length === 0 || !activeDrawable) return;
       const targetGroupId = activeDrawable.groupId;
       let globalMin = Infinity; let globalMax = -Infinity;
@@ -171,7 +279,6 @@ const ThreeDViewer = (props) => {
   };
   const handleVisibilityChange = (groupId, isChecked) => { setDrawableVisibility(prev => ({ ...prev, [groupId]: isChecked })); };
 
-  // --- HANDLERS FOR NEW TOGGLES ---
   const handleToggleAutoRotate = () => {
       const newState = (rotationSpeedState + 1) % 3; // Cycles 0 -> 1 -> 2 -> 0
       setRotationSpeedState(newState);
@@ -189,7 +296,6 @@ const ThreeDViewer = (props) => {
   };
 
   const handleToggleVerticalAxis = () => {
-      // Cycle 'y' -> 'z' -> 'x' -> 'y'
       const cycle = { y: 'z', z: 'x', x: 'y' };
       const newState = cycle[verticalAxis];
       setVerticalAxis(newState);
@@ -198,7 +304,6 @@ const ThreeDViewer = (props) => {
       }
   };
 
-  // --- NEW HANDLER ---
   const handleToggleWorldFlip = () => {
       const newState = !isWorldFlipped;
       setIsWorldFlipped(newState);
@@ -206,7 +311,6 @@ const ThreeDViewer = (props) => {
           managerRef.current.setWorldFlip(newState);
       }
   };
-  // --- END NEW HANDLER ---
 
   const keybindingsText = `Mouse: Pan (Left), Zoom (Middle), Orbit (Right)
 Arrow keys: move display
@@ -230,8 +334,8 @@ Aa: Auto-position`;
   return (
     <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Main Control Bar (Always Visible) */}
-        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5f5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-            {/* Replay controls */}
+        <Box sx={{ p: 1, borderBottom: '1px solid #ccc', background: '#f5f5ff5', flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            {/* ... (Replay/Setup controls) ... */}
             {showReplayControls && (
                 <>
                     <Button
@@ -245,7 +349,7 @@ Aa: Auto-position`;
                     <Box sx={{ width: '280px', display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Typography variant="caption">0</Typography>
                         <Slider min={0} max={totalRuntime} step={Math.max(totalRuntime/1000, 1e-6)} value={Math.min(replayTime, totalRuntime)} onChangeCommitted={(e, v)=> onSeekReplay(v)} aria-label="progress slider"
-                            sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MiSlider-track': { transition: 'none' } }}
+                            sx={{ '& .MuiSlider-thumb': { transition: 'none' }, '& .MuiSlider-track': { transition: 'none' } }}
                         />
                         <Typography variant="caption">{totalRuntime.toFixed(2)}s</Typography>
                     </Box>
@@ -255,8 +359,6 @@ Aa: Auto-position`;
                     />
                 </>
             )}
-
-            {/* Setup controls */}
             {showSetupControls && (
                 <TextField
                     label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
@@ -267,32 +369,27 @@ Aa: Auto-position`;
             {/* Spacer and Settings Icon */}
             <Box sx={{ flexGrow: 1 }} />
 
+            {/* ... (Icon Buttons) ... */}
             <Tooltip title={getRotationTooltip()}>
                 <IconButton onClick={handleToggleAutoRotate} color={rotationSpeedState > 0 ? 'primary' : 'default'}>
                     <AutorenewIcon />
                 </IconButton>
             </Tooltip>
-
             <Tooltip title="Toggle Reflectivity">
                 <IconButton onClick={handleToggleReflectivity} color={isReflective ? 'primary' : 'default'}>
                     <FlareIcon />
                 </IconButton>
             </Tooltip>
-            
-            {/* --- NEW BUTTON --- */}
             <Tooltip title="Flip View">
                 <IconButton onClick={handleToggleWorldFlip} color={isWorldFlipped ? 'primary' : 'default'}>
                     <CompareArrowsIcon />
                 </IconButton>
             </Tooltip>
-            {/* --- END NEW BUTTON --- */}
-
             <Tooltip title={getVerticalAxisTooltip()}>
                 <IconButton onClick={handleToggleVerticalAxis} color={verticalAxis !== 'y' ? 'primary' : 'default'}>
                     <SwapVertIcon />
                 </IconButton>
             </Tooltip>
-
             <Tooltip title="View Options">
                 <IconButton onClick={() => setIsPanelOpen(true)}>
                     <SettingsIcon />
@@ -302,6 +399,7 @@ Aa: Auto-position`;
 
         {/* The Collapsible Side Panel (Drawer) */}
         <Drawer anchor="left" open={isPanelOpen} onClose={() => setIsPanelOpen(false)}>
+            {/* ... (Drawer content remains unchanged) ... */}
             <Box sx={{ width: 350, p: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <Typography variant="h6">View Options</Typography>
                 <Divider />
@@ -378,6 +476,9 @@ Aa: Auto-position`;
                     entityConfig={activeDrawable}
                     currentRange={activeColorRange}
                     readoutTitle={activeDrawable.title || activeDrawable.groupId}
+                    // --- PASS NEW PROPS ---
+                    activeDrawableId={activeDrawableId}
+                    handleColorRangeChange={handleColorRangeChange}
                 />
             )}
         </Box>
@@ -386,3 +487,6 @@ Aa: Auto-position`;
 };
 
 export default memo(ThreeDViewer);
+
+
+
