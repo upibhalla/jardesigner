@@ -227,10 +227,11 @@ class Segment():
     @staticmethod
     def endoChemCompt( mol, idx ):
         newc = np.zeros( 7 )
+        newc[0:3] = mol.coords[0:3]
         newc[3:6] = newc[0:3]
-        newc[6] = newc[3] 
+        newc[6] = mol.coords[3] 
         return Segment( "sphere", newc, mol.id.idValue, 
-            Segment.trimMolPath( mol ), 0, idx )
+            Segment.trimMolPath( mol ), 5, idx )
 
     @staticmethod
     def chanBase( icon, path, newc, simId, idx, iconNum, value ):
@@ -248,14 +249,14 @@ class Segment():
         # It replaces newc[0:3] with the middle of the cyl or soma.
         dx = np.cos( theta )
         dy = np.sin( theta )
-        if isSoma:
+        axisLength = np.linalg.norm(newc[3:6]-newc[0:3])
+        if isSoma or axisLength < 1e-9:
             newc[0:3] = (newc[0:3]+newc[3:6])/2
             newc[3] = 0
             newc[4] = dx
             newc[5] = dy
             return newc[6]
         else:
-            axisLength = np.linalg.norm(newc[3:6]-newc[0:3])
             axis = (newc[3:6]-newc[0:3])/axisLength
             if abs(np.dot( axis, unitX )) < 0.99:
                 perp = np.cross( axis, unitX )
@@ -327,8 +328,13 @@ class Segment():
         #   (Segmentlength, 5 microns.)
         # If diameter is > segment length, then go with segment length.
         # It touches cylinder at its surface.
+        # IF on a sphere, place the normal on the x axis.
         theta = idx*0.1 + 3*np.pi/2 + iconNum*np.pi/8
-        comptAxis = np.array( newc[0:3] - newc[3:6] )
+        axisLength = np.linalg.norm(newc[3:6]-newc[0:3])
+        if axisLength == 0:
+            comptAxis = np.array( newc[0:3] )
+        else:
+            comptAxis = np.array( newc[0:3] - newc[3:6] )
         axLen = Segment.normToCylAxis( newc, theta, path == "soma")
         start = np.array(newc[0:3] + comptAxis * 0.25 )
         planeNormal = np.cross( newc[3:6], comptAxis )
