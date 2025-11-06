@@ -240,87 +240,92 @@ class JarDesigner:
     """
     ################################################################
     def __init__(self, jsonFile = None, plotFile = None, jsonData = None,
-            verbose = False, dataChannelId = None, sessionDir = None,
-            modifiers = {} ):
-        schemaFile = "jardesignerSchema.json"
-        self.verbose = verbose
-        self.dataChannelId = dataChannelId # Used for server-mode jardes
-        self.sessionDir = sessionDir # Used for server-mode jardes
-        self.runMooView = None      # Used for runtime display
-        self.setupMooView = None    # Used to see model during construction
-        self.stims = []
-        self.moogli = []
-        self.chanDistrib = []
-        self.chemDistrib = []
-        self.adaptorElecComptList = {}
-        self.comptDict = {}     # dict of chem compartments
-        self.meshDict = {}      # dict of neuroMesh,spineMesh,psdMesh etc
-        self.meshMols = {}      # dict of meshName:[molPathTail] in each mesh
-        # Construct the absolute path to the schema file
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        schemaFile_path = os.path.join(script_dir, schemaFile)
+                verbose = False, dataChannelId = None, sessionDir = None,
+                modifiers = {} ):
+            schemaFile = "jardesignerSchema.json"
+            self.verbose = verbose
+            self.dataChannelId = dataChannelId # Used for server-mode jardes
+            self.sessionDir = sessionDir # Used for server-mode jardes
+            self.runMooView = None      # Used for runtime display
+            self.setupMooView = None    # Used to see model during construction
+            self.stims = []
+            self.moogli = []
+            self.chanDistrib = []
+            self.chemDistrib = []
+            self.adaptorElecComptList = {}
+            self.comptDict = {}     # dict of chem compartments
+            self.meshDict = {}      # dict of neuroMesh,spineMesh,psdMesh etc
+            self.meshMols = {}      # dict of meshName:[molPathTail] in each mesh
+            # Construct the absolute path to the schema file
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            schemaFile_path = os.path.join(script_dir, schemaFile)
 
-        if not jsonFile and not jsonData:
-            print( "No model specified either as file or data" )
-            quit()
-        if jsonFile and not jsonFile.endswith(".json"):
-            print(f"Model file '{jsonFile}' is not a json file.")
-            quit()
-        if plotFile != None:
-            if not (plotFile.endswith(".svg") or plotFile.endswith(".png") ):
-                print(f"Plot file '{plotFile}' should be svg or png.")
+            if not jsonFile and not jsonData:
+                print( "No model specified either as file or data" )
                 quit()
-        self.plotFile = plotFile
-        with open(schemaFile_path) as f:
-            try:
-                schema = json.load(f)
-            except json.JSONDecodeError as e:
-                print(f"schema file {schemaFile_path} did not load")
-                print( e )
+            if jsonFile and not jsonFile.endswith(".json"):
+                print(f"Model file '{jsonFile}' is not a json file.")
                 quit()
-        if jsonFile:
-            with open(jsonFile) as f:
-                try:
-                    data = json.load(f)
-                except:
-                    print(f"{jsonFile} did not load")
+            if plotFile != None:
+                if not (plotFile.endswith(".svg") or plotFile.endswith(".png") ):
+                    print(f"Plot file '{plotFile}' should be svg or png.")
                     quit()
-        if jsonData:
-            data = jsonData
-        try:
-            data = addDefaultsRecursive( data, schema )
-            jsonschema.validate(instance=data, schema=schema)
-            applyModifiers( data, modifiers )
-        except jsonschema.exceptions.ValidationError as e:
-            print(f"{jsonFile} fails to pass schema: {e}")
-            quit()
+            self.plotFile = plotFile
+            with open(schemaFile_path) as f:
+                try:
+                    schema = json.load(f)
+                except json.JSONDecodeError as e:
+                    print(f"schema file {schemaFile_path} did not load")
+                    print( e )
+                    quit()
+            if jsonFile:
+                with open(jsonFile) as f:
+                    try:
+                        data = json.load(f)
+                    except:
+                        print(f"{jsonFile} did not load")
+                        quit()
+            if jsonData:
+                data = jsonData
+            try:
+                data = addDefaultsRecursive( data, schema )
+                jsonschema.validate(instance=data, schema=schema)
+                applyModifiers( data, modifiers )
+            except jsonschema.exceptions.ValidationError as e:
+                print(f"{jsonFile} fails to pass schema: {e}")
+                quit()
 
-        #### Now we load in all the fields of the jardesigner class
-        for key, value in data.items():
-            setattr(self, key, value)
-        #### Check for command line overrides of content in json file.
-        if verbose:
-            self.verbose = True
-        #### Some internal fields
-        self._endos = []
-        self._finishedSaving = False
-        self._modelFileNameList = []    # Used to build NSDF files
-        #### Some empty defaults
-        self.passiveDistrib = []
-        self.plotNames = [] # Need to get rid of this, use the existing dict
-        self.wavePlotNames = [] # Need to get rid of this, use the existing dict
+            #### Now we load in all the fields of the jardesigner class
+            for key, value in data.items():
+                setattr(self, key, value)
+            #### Check for command line overrides of content in json file.
+            if verbose:
+                self.verbose = True
+            #### Some internal fields
+            self._endos = []
+            self._finishedSaving = False
+            self._modelFileNameList = []    # Used to build NSDF files
+            
+            #### Some empty defaults - BUT PRESERVE JSON VALUES IF THEY EXIST
+            # Only set empty defaults if the values don't already exist from JSON
+            if not hasattr(self, 'passiveDistrib') or self.passiveDistrib is None:
+                self.passiveDistrib = []
+            if not hasattr(self, 'plotNames') or self.plotNames is None:
+                self.plotNames = []
+            if not hasattr(self, 'wavePlotNames') or self.wavePlotNames is None:
+                self.wavePlotNames = []
 
-        if not moose.exists( '/library' ):
-            library = moose.Neutral( '/library' )
-        ## Build the protos
-        try:
-            self.buildCellProto()
-            self.buildChanProto()
-            self.buildSpineProto()
-            self.buildChemProto()
-        except BuildError as msg:
-            print("Error: jardesigner: Prototype build failed:", msg)
-            quit()
+            if not moose.exists( '/library' ):
+                library = moose.Neutral( '/library' )
+            ## Build the protos
+            try:
+                self.buildCellProto()
+                self.buildChanProto()
+                self.buildSpineProto()
+                self.buildChemProto()
+            except BuildError as msg:
+                print("Error: jardesigner: Prototype build failed:", msg)
+                quit()
 
     ################################################################
     def _printModelStats( self ):
@@ -749,13 +754,14 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
 	# Expression can use p, g, L, len, dia, maxP, maxG, maxL.
         temp = []
         for i in self.passiveDistrib:
+            print(f"DEBUG: Processing passiveDistrib entry: {i}")
             assert( "path" in i )
             temp.append( "." )
             temp.append( i["path"] )
             for key, val in i.items():
                 if key != "path":
                     temp.append( key )
-                    temp.append( str( value ) )
+                    temp.append( str( val ) )
             temp.append( "" )
         self.elecid.passiveDistribution = temp
 
