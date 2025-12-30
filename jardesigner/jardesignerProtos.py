@@ -62,7 +62,56 @@ FaradayConst = 96485.3365 # Coulomb/mol
 #CA_SCALE     = 25000 # Ratio of Traub units to mM. 250::0.01
 CA_SCALE     = 1.0 # I have now set sensible ranges in the KCA and KAHP
 
+RM = 1.0
+RA = 10.0
+CM = 0.01
+def make_axon( dia = 10e-6, comptLen = 10e-6, numAxonSegments = 200):
+    axon = moose.Neuron( '/library/axon' )
+    prev = rd.buildCompt( axon, 'soma', RM = 1.0, RA = 10.0, CM = 0.01, 
+            dia = 10e-6, x=0, dx=comptLen)
+    theta = 0
+    x = comptLen
+    y = 0.0
 
+    for i in range( numAxonSegments ):
+        dx = comptLen * np.cos( theta )
+        dy = comptLen * np.sin( theta )
+        r = np.sqrt( x * x + y * y )
+        theta += comptLen / r
+        compt = rd.buildCompt( axon, 'axon' + str(i), RM = RM, RA = RA, CM = CM, x = x, y = y, dx = dx, dy = dy, dia = comptDia )
+        moose.connect( prev, 'axial', compt, 'raxial' )
+        prev = compt
+        x += dx
+        y += dy
+    
+    return axon
+
+def make_myeliated_axon(comptLen = 10e-6, comptDia = 2e-6, 
+        numAxonSegments = 405, nodeSpacing=100):
+    axon = moose.Neuron( '/library/myelinated_axon' )
+    x = 0.0
+    y = 0.0
+    # Note how the membrane passive properties are different.
+    prev = rd.buildCompt( axon, 'soma', RM = 100, RA = 5, CM = 0.001, dia = 10e-6, x=0, dx=comptLen)
+    theta = 0
+    x = comptLen
+
+    for i in range( numAxonSegments ):
+        r = comptLen
+        dx = comptLen * np.cos( theta )
+        dy = comptLen * np.sin( theta )
+        r = np.sqrt( x * x + y * y )
+        theta += comptLen / r
+        if i % nodeSpacing == 0:
+            compt = rd.buildCompt( axon, 'axon' + str(i), RM = nodeRM, RA = RA, CM = nodeCM, x = x, y = y, dx = dx, dy = dy, dia = nodeDia )
+        else:
+            compt = rd.buildCompt( axon, 'axon' + str(i), RM = RM, RA = RA, CM = CM, x = x, y = y, dx = dx, dy = dy, dia = comptDia )
+        moose.connect( prev, 'axial', compt, 'raxial' )
+        prev = compt
+        x += dx
+        y += dy
+    
+    return axon
 
 def make_HH_Na(name = 'HH_Na', parent='/library', vmin=-110e-3, vmax=50e-3, vdivs=3000):
     """Create a Hodhkin-Huxley Na channel under `parent`.
