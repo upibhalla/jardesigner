@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Moose Plot Payload",
+  "description": "Schema for plot data exported from the Moose simulator via plots2json",
+  "type": "object",
+  "required": [
+    "numPlots",
+    "nrows",
+    "ncols",
+    "plots"
+  ],
+  "properties": {
+    "numPlots": {
+      "type": "integer",
+      "description": "Total number of plots in the payload",
+      "minimum": 0
+    },
+    "nrows": {
+      "type": "integer",
+      "description": "Number of rows in the grid layout"
+    },
+    "ncols": {
+      "type": "integer",
+      "description": "Number of columns in the grid layout"
+    },
+    "plots": {
+      "type": "array",
+      "description": "List of individual plot objects",
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "xlabel",
+          "ylabel",
+          "isRaster",
+          "numSubPlots",
+          "tmax",
+          "dt",
+          "val"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the plot"
+          },
+          "xlabel": {
+            "type": "string",
+            "description": "Label for the X-axis (usually Time)"
+          },
+          "ylabel": {
+            "type": "string",
+            "description": "Label for the Y-axis (units/quantity)"
+          },
+          "isRaster": {
+            "type": "boolean",
+            "description": "Flag indicating if this is a raster plot (spike times) or continuous data"
+          },
+          "numSubPlots": {
+            "type": "integer",
+            "description": "Number of sub-traces within this single plot"
+          },
+          "tmax": {
+            "type": "number",
+            "description": "The current simulation time (maximum x-value)"
+          },
+          "dt": {
+            "type": "number",
+            "description": "Time step size"
+          },
+          "val": {
+            "type": "array",
+            "description": "The actual plot data. A list of lists (one list per sub-plot)",
+            "items": {
+              "type": "array",
+              "description": "Data points for a single trace",
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

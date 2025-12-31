@@ -39,7 +39,6 @@ def stream_printer(stream, pid, stream_name):
         for line in iter(stream.readline, ''):
             if line:
                 print(f"[{pid}-{stream_name}] {line.strip()}")
-        # FIX: Corrected typo from .closee() to .close()
         stream.close()
         print(f"Stream printer for PID {pid} ({stream_name}) has finished.")
     except Exception as e:
@@ -140,28 +139,25 @@ def launch_simulation():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Could not save config file: {e}"}), 500
     
-    '''
-    if not os.path.exists(MOOSE_SCRIPT_PATH):
-        return jsonify({"status": "error", "message": f"MOOSE script '{MOOSE_SCRIPT_NAME}' not found."}), 500
-    '''
-
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
     os.makedirs(session_dir, exist_ok=True)
-    svg_filename = "plot.svg"
-    svg_filepath = os.path.abspath(os.path.join(session_dir, svg_filename))
+    
+    # CHANGE: Switched from .svg to .json
+    plot_filename = "plot.json"
+    plot_filepath = os.path.abspath(os.path.join(session_dir, plot_filename))
     data_channel_id = str(uuid.uuid4())
     
     command = [
         "python", "-u", "-m",
         "jardesigner.jardesigner",
         temp_file_path,
-        "--plotFile", svg_filepath,
+        "--plotFile", plot_filepath, # Passing the .json path tells the script to output JSON
         "--data-channel-id", data_channel_id,
         "--session-path", session_dir
     ]
     
     try:
-        env = os.environ.copy() # Copy local environment varialbs
+        env = os.environ.copy() 
         if 'PYTHONPATH' in env:
             env['PYTHONPATH'] = f"{BASE_DIR}:{env['PYTHONPATH']}"
         else:
@@ -173,7 +169,7 @@ def launch_simulation():
         )
 
         running_processes[process.pid] = {
-            "process": process, "svg_filename": svg_filename,
+            "process": process, "plot_filename": plot_filename,
             "temp_config_file_path": temp_file_path, "start_time": time.time(),
             "data_channel_id": data_channel_id, "client_id": client_id,
         }
@@ -187,7 +183,7 @@ def launch_simulation():
 
     return jsonify({
         "status": "success", "pid": process.pid,
-        "svg_filename": svg_filename, "data_channel_id": data_channel_id
+        "plot_filename": plot_filename, "data_channel_id": data_channel_id
     }), 200
 
 @app.route('/internal/push_data', methods=['POST'])
@@ -200,23 +196,14 @@ def push_data():
     socketio.emit('simulation_data', payload, room=channel_id)
     return jsonify({"status": "success"}), 200
 
-# MODIFIED: Restored the detailed diagnostic logging on connect.
 @socketio.on('connect')
 def handle_connect():
-    #print("-------------------------------------------")
-    #print(f"SERVER LOG: Client attempting to connect with sid: {request.sid}")
     headers = dict(request.headers)
     upgrade = headers.get("Upgrade", "Not found").lower()
-    connection = headers.get("Connection", "Not found").lower()
-    #print(f"SERVER LOG: Request Headers => {headers}")
-    #print(f"SERVER LOG: 'Upgrade' header value => '{upgrade}'")
-    #print(f"SERVER LOG: 'Connection' header value => '{connection}'")
     if "websocket" not in upgrade:
         print("SERVER LOG: >>> FATAL: 'Upgrade: websocket' header is MISSING.")
     else:
         print("SERVER LOG: >>> SUCCESS: 'Upgrade: websocket' header found.")
-    #print("-------------------------------------------")
-    #print(f"Client connected: {request.sid}")
 
 
 @socketio.on('register_client')
@@ -250,7 +237,6 @@ def handle_join_sim_channel(data):
     channel_id = data.get('data_channel_id')
     if not channel_id: return
     join_room(channel_id)
-    #print(f"Client {request.sid} joined data channel (room): {channel_id}")
 
 @app.route('/simulation_status/<int:pid>', methods=['GET'])
 def simulation_status(pid):
@@ -259,18 +245,18 @@ def simulation_status(pid):
     
     proc_info = running_processes[pid]
     process = proc_info["process"]
-    svg_filename = proc_info["svg_filename"]
+    plot_filename = proc_info["plot_filename"]
     client_id = proc_info["client_id"]
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
-    svg_filepath = os.path.abspath(os.path.join(session_dir, svg_filename))
+    plot_filepath = os.path.abspath(os.path.join(session_dir, plot_filename))
 
     poll_result = process.poll()
     if poll_result is None:
         return jsonify({"status": "running", "pid": pid, "message": "Simulation is still in progress."}), 200
     else:
-        plot_exists = os.path.exists(svg_filepath)
+        plot_exists = os.path.exists(plot_filepath)
         if plot_exists:
-            return jsonify({"status": "completed", "pid": pid, "svg_filename": svg_filename, "plot_ready": True}), 200
+            return jsonify({"status": "completed", "pid": pid, "plot_filename": plot_filename, "plot_ready": True}), 200
         else:
             return jsonify({"status": "completed_error", "pid": pid, "message": "Plot not found."}), 200
 

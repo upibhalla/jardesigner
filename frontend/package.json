@@ -8,13 +8,22 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.4.1",
     "@mui/material": "^6.4.1",
+    "@visx/axis": "^3.12.0",
+    "@visx/clip-path": "^3.12.0",
+    "@visx/group": "^3.12.0",
+    "@visx/responsive": "^3.12.0",
+    "@visx/scale": "^3.12.0",
+    "@visx/shape": "^3.12.0",
+    "@visx/zoom": "^3.12.0",
     "ajv": "^8.17.1",
     "cra-template": "1.2.0",
     "lodash": "^4.17.21",
+    "plotly.js": "^3.3.1",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-file-picker": "^0.0.6",
     "react-markdown": "^10.1.0",
+    "react-plotly.js": "^2.6.0",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1",
     "three": "^0.178.0",
@@ -22,10 +31,10 @@
     "web-vitals": "^4.2.4"
   },
   "scripts": {
-      "dev": "vite",
-      "build": "vite build --config vite.config.js",
-      "build:standalone": "vite build --config vite.config.standalone.js",
-      "preview": "vite preview"
+    "dev": "vite",
+    "build": "vite build --config vite.config.js",
+    "build:standalone": "vite build --config vite.config.standalone.js",
+    "preview": "vite preview"
   },
   "eslintConfig": {
     "extends": [

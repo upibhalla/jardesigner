@@ -1,4 +1,4 @@
-import React, { useState, memo, useCallback, useEffect, useRef } from 'react'; // Ensure useCallback is imported
+import React, { useState, memo, useCallback, useEffect, useRef } from 'react'; 
 import { Box, Tabs, Tab } from '@mui/material';
 import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
@@ -13,7 +13,7 @@ const DisplayWindow = (props) => {
   const {
     jsonContent,
     setActiveMenu,
-    svgPlotFilename,
+    plotDataUrl, // Changed prop name
     isPlotReady,
     plotError,
     threeDConfigs,
@@ -36,18 +36,15 @@ const DisplayWindow = (props) => {
   useEffect(() => {
     const hasNewSetupConfig = threeDConfigs?.setup && !prevThreeDConfigSetup.current;
     if (hasNewSetupConfig) {
-      // Switch to the "Setup 3D" tab (index 3)
       setTabIndex(3);
     }
-    // Keep track of the current config for the next render
     prevThreeDConfigSetup.current = threeDConfigs?.setup;
-  }, [threeDConfigs?.setup]); // Dependency array watches for config changes
+  }, [threeDConfigs?.setup]);
 
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
   };
   
-  // --- FIX: Wrap these state setters in useCallback ---
   const setSetupDrawableVisibility = useCallback((updater) => {
       setDrawableVisibility(prev => ({ ...prev, setup: typeof updater === 'function' ? updater(prev.setup) : updater }));
   }, [setDrawableVisibility]);
@@ -56,7 +53,6 @@ const DisplayWindow = (props) => {
       setDrawableVisibility(prev => ({ ...prev, run: typeof updater === 'function' ? updater(prev.run) : updater }));
   }, [setDrawableVisibility]);
 
-  // Stable callbacks for event handlers
   const onManagerReadySetup = useCallback((manager) => onManagerReady('setup', manager), [onManagerReady]);
   const onSelectionChangeSetup = useCallback((selection, isCtrlClick) => handleSelectionChange('setup', selection, isCtrlClick), [handleSelectionChange]);
   const onExplodeAxisToggleSetup = useCallback((axis) => onExplodeAxisToggle('setup', axis), [onExplodeAxisToggle]);
@@ -81,7 +77,7 @@ const DisplayWindow = (props) => {
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1, display: tabIndex === 0 ? 'flex' : 'none' }}>
-        <MemoizedGraphWindow svgPlotFilename={svgPlotFilename} isPlotReady={isPlotReady} plotError={plotError} />
+        <MemoizedGraphWindow plotDataUrl={plotDataUrl} isPlotReady={isPlotReady} plotError={plotError} />
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', display: tabIndex === 1 ? 'block' : 'none' }}>

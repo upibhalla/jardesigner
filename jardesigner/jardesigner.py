@@ -267,8 +267,8 @@ class JarDesigner:
             print(f"Model file '{jsonFile}' is not a json file.")
             quit()
         if plotFile != None:
-            if not (plotFile.endswith(".svg") or plotFile.endswith(".png") ):
-                print(f"Plot file '{plotFile}' should be svg or png.")
+            if not (plotFile.endswith(".svg") or plotFile.endswith(".png") or plotFile.endswith(".json") ):
+                print(f"Plot file '{plotFile}' should be json or svg or png.")
                 quit()
         self.plotFile = plotFile
         with open(schemaFile_path) as f:
@@ -1441,6 +1441,30 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         self._save()                                            
         self.display( startIndex, block )
 
+    def plots2json( self, nrows, ncols, plotFile ):
+        numPlots = len( self.plotNames )
+        payload = { "numPlots": numPlots,
+                "nrows": nrows,
+                "ncols": ncols,
+                "plots": []
+        }
+        for idx, pp in enumerate( self.plotNames ):
+            vtab = moose.vec( pp[0] )
+            payload["plots"].append( 
+                {
+                    "title": pp[1],
+                    "xlabel": "Time (s)",
+                    "ylabel": pp[4],
+                    "isRaster": (pp[5] == "spikeTime"),
+                    "numSubPlots": len( vtab ),
+                    "tmax": moose.element( "/clock").currentTime,
+                    "dt": vtab[0].dt,
+                    "val": [(vv.vector*pp[3]).tolist() for vv in vtab]
+                } 
+            )
+        with open(plotFile, 'w') as f:
+            json.dump(payload, f)
+
     def display( self, startIndex = 0, block=True ):
         FIG_HT = 5
         FIG_WID = 6
@@ -1465,6 +1489,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         else:
             sx = 3 * FIG_HT
             sy = 3 * FIG_WID
+
+        if self.plotFile.split('.')[-1] == "json":
+            self.plots2json( nrows, ncols, self.plotFile )
+            return
 
         fig, axes = plt.subplots( nrows = nrows, ncols = ncols, 
             figsize = (sx, sy), squeeze = False )
