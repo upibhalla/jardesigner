@@ -5,19 +5,19 @@ import uuid
 import time
 import threading
 import shutil
-from flask import Flask, request, jsonify, send_from_directory
+import re
+from flask import Flask, request, jsonify, send_from_directory, send_file, after_this_request
 from flask_cors import CORS
 from flask_socketio import SocketIO, join_room
 from werkzeug.utils import secure_filename
 
 # --- Configuration ---
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-TEMP_CONFIG_DIR = os.path.join(BASE_DIR, 'temp_configs')
+# Removed TEMP_CONFIG_DIR
 USER_UPLOADS_DIR = os.path.join(BASE_DIR, 'user_uploads')
 MOOSE_SCRIPT_NAME = "jardesigner.py"
 MOOSE_SCRIPT_PATH = os.path.join(BASE_DIR, MOOSE_SCRIPT_NAME)
 
-os.makedirs(TEMP_CONFIG_DIR, exist_ok=True)
 os.makedirs(USER_UPLOADS_DIR, exist_ok=True)
 
 # --- Flask App Initialization ---
@@ -62,6 +62,27 @@ def terminate_process(pid):
             if pid in running_processes:
                 del running_processes[pid]
     return False
+
+def get_next_model_filename(directory):
+    """
+    Scans the directory for files matching 'jardes_model_<n>.json'
+    and returns the filename for the next increment.
+    """
+    pattern = re.compile(r'^jardes_model_(\d+)\.json$')
+    max_n = 0
+    
+    if os.path.exists(directory):
+        for filename in os.listdir(directory):
+            match = pattern.match(filename)
+            if match:
+                try:
+                    n = int(match.group(1))
+                    if n > max_n:
+                        max_n = n
+                except ValueError:
+                    continue
+    
+    return f"jardes_model_{max_n + 1}.json"
 
 # --- API Endpoints ---
 @app.route('/')
@@ -124,25 +145,29 @@ def launch_simulation():
     if not client_id:
         return jsonify({"status": "error", "message": "Request is missing client_id"}), 400
     
+    # Terminate existing process for this client if any
     if client_id in client_sim_map:
         old_pid = client_sim_map[client_id]
         print(f"Client {client_id} has an existing simulation (PID: {old_pid}). Terminating it.")
         terminate_process(old_pid)
         client_sim_map.pop(client_id, None)
 
-    temp_file_path = None
+    # Prepare User Directory
+    session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    # Determine next filename: jardes_model_<n>.json
+    model_filename = get_next_model_filename(session_dir)
+    config_file_path = os.path.join(session_dir, model_filename)
+
+    # Save the model config
     try:
-        temp_file_name = f"config_{str(uuid.uuid4())}.json"
-        temp_file_path = os.path.join(TEMP_CONFIG_DIR, temp_file_name)
-        with open(temp_file_path, 'w', encoding='utf-8') as temp_file:
-            json.dump(config_data, temp_file, indent=2)
+        with open(config_file_path, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=2)
     except Exception as e:
         return jsonify({"status": "error", "message": f"Could not save config file: {e}"}), 500
     
-    session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
-    os.makedirs(session_dir, exist_ok=True)
-    
-    # CHANGE: Switched from .svg to .json
+    # Plot Output File
     plot_filename = "plot.json"
     plot_filepath = os.path.abspath(os.path.join(session_dir, plot_filename))
     data_channel_id = str(uuid.uuid4())
@@ -150,8 +175,8 @@ def launch_simulation():
     command = [
         "python", "-u", "-m",
         "jardesigner.jardesigner",
-        temp_file_path,
-        "--plotFile", plot_filepath, # Passing the .json path tells the script to output JSON
+        config_file_path,  # Use the new persistent path
+        "--plotFile", plot_filepath, 
         "--data-channel-id", data_channel_id,
         "--session-path", session_dir
     ]
@@ -170,7 +195,7 @@ def launch_simulation():
 
         running_processes[process.pid] = {
             "process": process, "plot_filename": plot_filename,
-            "temp_config_file_path": temp_file_path, "start_time": time.time(),
+            "config_file_path": config_file_path, "start_time": time.time(),
             "data_channel_id": data_channel_id, "client_id": client_id,
         }
         client_sim_map[client_id] = process.pid
@@ -185,6 +210,39 @@ def launch_simulation():
         "status": "success", "pid": process.pid,
         "plot_filename": plot_filename, "data_channel_id": data_channel_id
     }), 200
+
+@app.route('/download_project/<client_id>', methods=['GET'])
+def download_project(client_id):
+    # Security check for path traversal
+    if '..' in client_id or '/' in client_id or '\\' in client_id:
+        return jsonify({"status": "error", "message": "Invalid Client ID"}), 400
+
+    session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
+    if not os.path.exists(session_dir):
+        return jsonify({"status": "error", "message": "Project directory not found"}), 404
+    
+    # Create a unique temp filename for the zip in the root UPLOADS dir (not temp_configs)
+    timestamp = str(uuid.uuid4())
+    zip_base_name = os.path.join(USER_UPLOADS_DIR, f"project_{timestamp}")
+    
+    try:
+        # make_archive adds the .zip extension automatically
+        archive_path = shutil.make_archive(zip_base_name, 'zip', session_dir)
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to zip project: {str(e)}"}), 500
+
+    # Schedule file deletion after the request is finished
+    @after_this_request
+    def remove_file(response):
+        try:
+            if os.path.exists(archive_path):
+                os.remove(archive_path)
+                print(f"Deleted temp zip: {archive_path}")
+        except Exception as e:
+            print(f"Error removing temp zip: {e}")
+        return response
+
+    return send_file(archive_path, as_attachment=True, download_name="project.zip")
 
 @app.route('/internal/push_data', methods=['POST'])
 def push_data():
@@ -289,6 +347,6 @@ def reset_simulation():
 if __name__ == '__main__':
     print(f"MOOSE Script Path: {MOOSE_SCRIPT_PATH}")
     print(f"User Uploads Directory (absolute): {os.path.abspath(USER_UPLOADS_DIR)}")
-    print(f"Temporary Config Directory (absolute): {os.path.abspath(TEMP_CONFIG_DIR)}")
     print("Starting Flask-SocketIO server...")
     socketio.run(app, host='0.0.0.0', debug=False, port=5000)
+

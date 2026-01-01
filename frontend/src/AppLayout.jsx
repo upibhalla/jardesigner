@@ -48,12 +48,18 @@ export const AppLayout = (props) => {
     clientId,
     clickSelected,
     threeDConfigs,
-    meshMolsData, // Destructure the new prop
+    meshMolsData, 
   } = props;
 
 
   const menuComponents = useMemo(() => ({
-    File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} />,
+    File: <FileMenuBox 
+            setJsonContent={updateJsonString} 
+            onClearModel={handleClearModel} 
+            getCurrentJsonData={getCurrentJsonData} 
+            currentConfig={jsonData.fileinfo}
+            clientId={clientId} // <--- ADDED THIS PROP
+          />,
     SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
     Run: <RunMenuBox
       onConfigurationChange={updateJsonData}
@@ -72,7 +78,6 @@ export const AppLayout = (props) => {
         clientId={clientId} 
     />,
     Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
-    // FIX: Pass the clientId prop to ElecMenuBox
     Channels: <ElecMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} 
@@ -84,23 +89,23 @@ export const AppLayout = (props) => {
         currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} 
         getChemProtos={getChemProtos} 
         clientId={clientId}
-        meshMols={meshMolsData?.setup} // Pass the correct prop
+        meshMols={meshMolsData?.setup} 
     />,
     Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
     Stimuli: <StimMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={jsonData.stims} 
-        meshMols={meshMolsData?.setup} // Pass meshMols
+        meshMols={meshMolsData?.setup} 
     />,
     Plots: <PlotMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={jsonData.plots} 
-        meshMols={meshMolsData?.setup} // Pass meshMols
+        meshMols={meshMolsData?.setup} 
     />,
     '3D': <ThreeDMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} 
-        meshMols={meshMolsData?.setup} // Pass meshMols
+        meshMols={meshMolsData?.setup} 
     />,
   }), [
     jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,
@@ -108,7 +113,7 @@ export const AppLayout = (props) => {
     handleMorphologyFileChange, 
     clientId,
     threeDConfigs,
-    meshMolsData // Add to dependency array
+    meshMolsData 
   ]);
 
   return (

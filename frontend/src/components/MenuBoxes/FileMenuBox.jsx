@@ -9,7 +9,9 @@ import CloseIcon from '@mui/icons-material/Close';
 import jardesLogo from '../../assets/jardes_logo.png';
 import mooseLogo from '../../assets/moose_logo.png';
 
-const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
+const API_BASE_URL = `http://${window.location.hostname}:5000`;
+
+const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, clientId }) => {
     // --- Metadata State ---
     const [creator, setCreator] = useState('');
     const [license, setLicense] = useState('CC BY');
@@ -50,7 +52,6 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Fix #3: Set Suggested File Name from opened file (removing extension)
         const nameWithoutExt = file.name.replace(/\.json$/i, "");
         setModelFileName(nameWithoutExt);
 
@@ -93,15 +94,14 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
 
         setLastModified(currentTime);
 
-        // Fix #4: Removed root-level dateTime, ensuring it only goes into fileinfo
         const dataToSave = {
             ...currentJsonData,
             fileinfo: {
-                ...currentJsonData.fileinfo, // Preserve existing fileinfo if any
+                ...currentJsonData.fileinfo, 
                 creator,
                 licence: license,
                 modelNotes,
-                dateTime: currentTime // Only valid location
+                dateTime: currentTime 
             }
         };
 
@@ -132,6 +132,50 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
             link.click();
             document.body.removeChild(link);
             setTimeout(() => URL.revokeObjectURL(link.href), 100);
+        }
+    };
+
+    const handleDownloadProject = async () => {
+        if (!clientId) {
+            alert("Client ID is missing. Cannot download project.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/download_project/${clientId}`);
+            
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(errText || response.statusText);
+            }
+
+            const blob = await response.blob();
+            
+            // Format: jardes_YYYY-MM-DD_HH-MM-SS.zip
+            // Using logic to replace slashes/colons to make it filename safe
+            const now = new Date();
+            const dateStr = now.getFullYear() + "-" + 
+                            String(now.getMonth() + 1).padStart(2, '0') + "-" + 
+                            String(now.getDate()).padStart(2, '0') + "_" + 
+                            String(now.getHours()).padStart(2, '0') + "-" + 
+                            String(now.getMinutes()).padStart(2, '0') + "-" + 
+                            String(now.getSeconds()).padStart(2, '0');
+            
+            const fileName = `jardes_${dateStr}.zip`;
+
+            // Trigger Download
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Error downloading project:", error);
+            alert(`Failed to download project: ${error.message}`);
         }
     };
 
@@ -166,13 +210,11 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
             </DialogTitle>
             <DialogContent dividers>
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
-                    {/* Fix #1: Logo max size increased to 300px (2x larger) */}
                     <img src={logo} alt={`${title} Logo`} style={{ maxWidth: '300px', maxHeight: '200px', objectFit: 'contain' }} />
                 </Box>
                 <Box component="ul" sx={{ pl: 2 }}>
                     {content.map((item, index) => (
                         <li key={index} style={{ marginBottom: '12px' }}>
-                            {/* Fix #2: Increased font size by ~30% (body1 + custom rem) */}
                             <Typography variant="body1" sx={{ fontSize: '1.1rem' }}>{item}</Typography>
                         </li>
                     ))}
@@ -205,7 +247,8 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
 
                 <MenuButton label="Open Tutorial" onClick={() => {}} /> 
                 <MenuButton label="Save Model" onClick={handleSaveModel} />
-                <MenuButton label="Download Project" onClick={() => {}} /> 
+                {/* Updated Action */}
+                <MenuButton label="Download Project" onClick={handleDownloadProject} /> 
             </Grid>
 
             <Divider sx={{ my: 2, borderBottomWidth: 2 }} />
@@ -278,12 +321,11 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData }) => {
                 <MenuButton label="Print" onClick={() => {}} /> 
                 <MenuButton label="About Jardesigner" onClick={() => setShowAboutJardesigner(true)} />
                 <MenuButton label="About MOOSE" onClick={() => setShowAboutMoose(true)} />
-                {/* Fix #5: Quit button background is now standard grey, text remains red */}
                 <MenuButton 
                     label="Quit" 
                     onClick={handleQuit} 
                     sx={{ 
-                        color: '#c62828', // Red text
+                        color: '#c62828', 
                         fontWeight: 'bold'
                     }}
                 />
