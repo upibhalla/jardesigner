@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AppBar, Toolbar, Button, Grid } from '@mui/material';
+import { AppBar, Toolbar, Button, Grid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import runIcon from './assets/run.png';
 import morphoIcon from './assets/morpho.png';
 import spinesIcon from './assets/spines.png';
@@ -48,18 +48,14 @@ export const AppLayout = (props) => {
     clientId,
     clickSelected,
     threeDConfigs,
-    meshMolsData, 
+    meshMolsData,
+    simError,     // New props
+    setSimError,  // New props
   } = props;
 
 
   const menuComponents = useMemo(() => ({
-    File: <FileMenuBox 
-            setJsonContent={updateJsonString} 
-            onClearModel={handleClearModel} 
-            getCurrentJsonData={getCurrentJsonData} 
-            currentConfig={jsonData.fileinfo}
-            clientId={clientId} // <--- ADDED THIS PROP
-          />,
+    File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} clientId={clientId} />,
     SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
     Run: <RunMenuBox
       onConfigurationChange={updateJsonData}
@@ -181,6 +177,37 @@ export const AppLayout = (props) => {
           />
         </Grid>
       </Grid>
+
+      {/* Error Dialog */}
+      <Dialog
+        open={!!simError}
+        onClose={() => setSimError(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ color: 'error.main' }}>Simulation Error</DialogTitle>
+        <DialogContent>
+            <DialogContentText sx={{ mb: 2, fontWeight: 'bold' }}>
+                {simError?.message}
+            </DialogContentText>
+            {simError?.details && (
+                <pre style={{ 
+                    whiteSpace: 'pre-wrap', 
+                    wordBreak: 'break-word', 
+                    backgroundColor: '#f5f5f5', 
+                    padding: '10px',
+                    fontSize: '0.85rem'
+                }}>
+                    {simError.details}
+                </pre>
+            )}
+        </DialogContent>
+        <DialogActions>
+            <Button onClick={() => setSimError(null)} variant="contained" color="primary">
+                Close
+            </Button>
+        </DialogActions>
+      </Dialog>
     </ReplayContext.Provider>
   );
 };

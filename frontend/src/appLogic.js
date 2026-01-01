@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { io } from "socket.io-client";
 import { v4 as uuidv4 } from 'uuid';
@@ -90,14 +91,15 @@ export const useAppLogic = () => {
     const [jsonData, setJsonData] = useState(initialJsonData);
     const [jsonContent, setJsonContent] = useState(() => JSON.stringify(compactJsonData(initialJsonData, initialJsonData), null, 2));
     
-    // CHANGE: Renamed svgPlotFilename to plotDataUrl to reflect it is now a JSON data source
+    // UPDATED: Variable name changed to match appLogic37.js
     const [plotDataUrl, setPlotDataUrl] = useState(null);
     const [isPlotReady, setIsPlotReady] = useState(isStandalone);
     const [plotError, setPlotError] = useState('');
+    const [simError, setSimError] = useState(null);
     const [isSimulating, setIsSimulating] = useState(false);
     const [clientId] = useState(() => uuidv4());
     
-    // CHANGE: activeSim now tracks plot_filename
+    // UPDATED: 'svg_filename' changed to 'plot_filename'
     const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null, plot_filename: null });
     const socketRef = useRef(null);
     const frameQueueRef = useRef([]);
@@ -129,6 +131,7 @@ export const useAppLogic = () => {
         }
     }, []);
 
+    // UPDATED: Check plotDataUrl instead of svgPlotFilename
     const handleReplayEnd = useCallback(() => {
         if (plotDataUrl) setIsPlotReady(true);
     }, [plotDataUrl]);
@@ -212,12 +215,11 @@ export const useAppLogic = () => {
         const onSimulationEnded = () => {
             setIsSimulating(false);
             frameQueueRef.current = [];
-            
-            // CHANGE: Construct URL for .json file instead of .svg
+            // UPDATED: Access plot_filename and set plotDataUrl
             const currentFilename = activeSimRef.current.plot_filename;
             if (currentFilename) {
-                const url = `${API_BASE_URL}/session_file/${clientId}/${currentFilename}`;
-                setPlotDataUrl(url);
+                const plotUrl = `${API_BASE_URL}/session_file/${clientId}/${currentFilename}`;
+                setPlotDataUrl(plotUrl);
                 setIsPlotReady(true);
                 setPlotError('');
             } else {
@@ -229,27 +231,37 @@ export const useAppLogic = () => {
 
         socket.on('connect', () => socket.emit('register_client', { clientId: clientId }));
 
-		socket.on('simulation_data', (data) => {
-   			if (data?.type === 'sim_end') {
-       			onSimulationEnded();
-       			return;
-   			}
-   			const viewId = data.viewId;
-   			if (!viewId || !Object.values(VIEW_IDS).includes(viewId)) return;
-		
-   			if (data?.type === 'scene_init') {
-       			setThreeDConfigs(prev => ({ ...prev, [viewId]: data.scene }));
+        socket.on('simulation_data', (data) => {
+            if (data?.type === 'sim_end') {
+                onSimulationEnded();
+                return;
+            }
+            
+            const viewId = data.viewId;
+            if (!viewId || !Object.values(VIEW_IDS).includes(viewId)) return;
+        
+            if (data?.type === 'scene_init') {
+                setThreeDConfigs(prev => ({ ...prev, [viewId]: data.scene }));
                 setMeshMolsData(prev => ({ ...prev, [viewId]: data.meshMols }));
-       			const initialVisibility = {};
-       			(data.scene?.drawables || []).forEach(d => { initialVisibility[d.groupId] = true; });
-       			setDrawableVisibility(prev => ({ ...prev, [viewId]: initialVisibility }));
-   			}
-   			else if (data?.filetype === 'jardesignerDataFrame') {
-       			if (viewId === VIEW_IDS.RUN) frameQueueRef.current.push(data);
-       			setSimulationFrames(prev => ({ ...prev, [viewId]: [...prev[viewId], data].sort((a, b) => a.timestamp - b.timestamp) }));
-       			setLiveFrameData(prev => ({ ...prev, [viewId]: data }));
-   			}
-		});
+                const initialVisibility = {};
+                (data.scene?.drawables || []).forEach(d => { initialVisibility[d.groupId] = true; });
+                setDrawableVisibility(prev => ({ ...prev, [viewId]: initialVisibility }));
+            }
+            else if (data?.filetype === 'jardesignerDataFrame') {
+                if (viewId === VIEW_IDS.RUN) frameQueueRef.current.push(data);
+                setSimulationFrames(prev => ({ ...prev, [viewId]: [...prev[viewId], data].sort((a, b) => a.timestamp - b.timestamp) }));
+                setLiveFrameData(prev => ({ ...prev, [viewId]: data }));
+            }
+        });
+
+        // --- Handle Simulation Errors ---
+        socket.on('simulation_error', (data) => {
+             console.error("Received simulation error:", data);
+             setIsSimulating(false);
+             const errorMsg = data.message || "Unknown error";
+             const errorDetails = data.details || "";
+             setSimError({ message: errorMsg, details: errorDetails });
+        });
 
         socket.on('disconnect', (reason) => console.log(`Socket.IO disconnected. Reason: "${reason}"`));
         return () => { socket.disconnect(); socketRef.current = null; };
@@ -276,17 +288,35 @@ export const useAppLogic = () => {
     }, []);
 
     const buildModelOnServer = useCallback(async (newJsonData) => {
+        // UPDATED: Reset plotDataUrl
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
         handleRewindReplay();
         try {
-            const payload = { config_data: newJsonData, client_id: clientId };
+            // --- FIX FOR RACE CONDITION ---
+            // 1. Generate the Channel ID on the client
+            const newDataChannelId = uuidv4();
+
+            // 2. Join the channel IMMEDIATELY, before sending the request
+            if (socketRef.current?.connected) {
+                console.log("Joining channel before launch:", newDataChannelId);
+                socketRef.current.emit('join_sim_channel', { data_channel_id: newDataChannelId });
+            }
+
+            // 3. Send the ID to the server
+            const payload = { 
+                config_data: newJsonData, 
+                client_id: clientId,
+                data_channel_id: newDataChannelId // Include the ID here
+            };
+
             const response = await fetch(`${API_BASE_URL}/launch_simulation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
             const result = await response.json();
+            
             if (result.status === 'success') {
-                if (socketRef.current?.connected) { socketRef.current.emit('join_sim_channel', { data_channel_id: result.data_channel_id }); }
-                // CHANGE: Store plot_filename
+                // We are already joined, just update state
+                // UPDATED: Map result.plot_filename to plot_filename
                 setActiveSim({ pid: result.pid, data_channel_id: result.data_channel_id, plot_filename: result.plot_filename });
                 lastBuiltJsonDataRef.current = newJsonData;
             } else { throw new Error(result.message || 'Failed to launch simulation'); }
@@ -318,7 +348,9 @@ export const useAppLogic = () => {
 
     const handleStartRun = useCallback(() => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
+        // UPDATED: Reset plotDataUrl
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
+        setSimError(null);
         if (simulationFrames[VIEW_IDS.RUN].length === 0) {
             setThreeDConfigs(prev => ({ ...prev, [VIEW_IDS.RUN]: null }));
             handleRewindReplay();
@@ -332,11 +364,14 @@ export const useAppLogic = () => {
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
         setThreeDConfigs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
         setMeshMolsData({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
+        // UPDATED: Reset plotDataUrl
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
+        setSimError(null);
         handleRewindReplay();
         if (activeSim.pid) {
             try {
                 await fetch(`${API_BASE_URL}/reset_simulation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid: activeSim.pid, client_id: clientId }) });
+                // UPDATED: Reset plot_filename
                 setActiveSim({ pid: null, data_channel_id: null, plot_filename: null });
                 lastBuiltJsonDataRef.current = null;
             } catch (error) { console.error("Failed to reset previous simulation:", error); }
@@ -380,7 +415,7 @@ export const useAppLogic = () => {
     // --- Compatibility Layer ---
     const baseProps = {
         activeMenu, toggleMenu, jsonData, jsonContent,
-        plotDataUrl, // Renamed prop
+        plotDataUrl, // UPDATED: Exposing plotDataUrl instead of svgPlotFilename
         isPlotReady, plotError, isSimulating, activeSim, clientId,
         updateJsonData, setRunParameters, handleStartRun, handleResetRun, updateJsonString, 
         handleClearModel, getCurrentJsonData, getChemProtos, setActiveMenu, handleMorphologyFileChange,
@@ -389,6 +424,7 @@ export const useAppLogic = () => {
 		onStartReplay: handleStartReplay, onPauseReplay: handlePauseReplay,
         onRewindReplay: handleRewindReplay, onSeekReplay: handleSeekReplay,
         handleStartReplay, handlePauseReplay, handleRewindReplay, handleSeekReplay,
+        simError, setSimError, 
     };
 
     if (isStandalone) {

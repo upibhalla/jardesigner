@@ -16,7 +16,6 @@
 ## latter in the former, including mapping entities like calcium and
 ## channel conductances, between them.
 ##########################################################################
-#from __future__ import print_function, absolute_import, division
 import json
 import jsonschema
 import importlib.util
@@ -30,10 +29,10 @@ import matplotlib.pyplot as plt
 import argparse
 import requests
 import csv
+import traceback
 from . import jarmoogli
 from . import jardesignerProtos as jp
 from . import fixXreacs
-#import moose.fixXreacs as fixXreacs
 
 from moose.neuroml.NeuroML import NeuroML
 from moose.neuroml.ChannelML import ChannelML
@@ -2171,46 +2170,7 @@ def randomPlacementFunc( numModels, idx ):
     return np.random.random()*0.5e-3, np.random.random()*0.5e-3, 0.0
 
 
-
-def main():
-    #global rdes # Needed for the function called by the clocked functions.
-    parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
-    parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
-    parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
-    parser.add_argument( '-p', '--plotFile', type=str, help='Optional: Save plots to an svg file with the specified name, instead of displaying them.' )
-    parser.add_argument( '--placementFunc', type=str, help='Optional: Pick a builtin placement function for multiple models. Options: squareGrid, random. Default: None' )
-    parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
-    parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
-    parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface. If not set we are in standalone mode.')
-    parser.add_argument('--session-path', type=str, help='Temp directory for model and plot files, used in server mode for jardesigner interface.')
-    args = parser.parse_args()
-    rdes = JarDesigner( args.file, plotFile = args.plotFile, 
-        jsonData = None, dataChannelId = args.data_channel_id, 
-        sessionDir = args.session_path,
-        verbose = args.verbose )
-    context.setContext( rdes )
-    pf = None
-    if args.placementFunc == "squareGrid":
-        pf = squareGridPlacementFunc
-    elif args.placementFunc == "random":
-        pf = randomPlacementFunc
-    rdes.buildModel( numModels = args.numModels, placementFunc = pf )
-    #print( "jardesigner.py: built model" )
-    if rdes.dataChannelId:
-        rdes._buildSetupMoogli()
-        rdes.setupMooView.sendSceneGraph( "setup", meshMols=rdes.meshMols )
-        #print( "jardesigner.py: sent SceneGraph1 with meshMols:", rdes.meshMols )
-
-    moose.reinit()
-    if args.run and args.data_channel_id == None: # local run
-        #print( "Running locally")
-        moose.start( rdes.runtime )
-        rdes.display()
-        if rdes.runMooView and len( rdes.moogli ) > 0:
-            rdes.runMooView.sendSceneGraph( "run" )
-            rdes.runMooView.notifySimulationEnd( None )
-        quit()
-
+def serverCommandLoop( rdes ):
     # This loop will wait for commands from server.py via stdin
     for line in sys.stdin:
         try:
@@ -2226,6 +2186,7 @@ def main():
 
                 print( "starting on rdes = ", rdes )
                 moose.start(runtime)
+                moose.start() #deliberate error introduced to check reporting
                 # Notify client that the run is finished
                 rdes.display()
                 time.sleep(0.1) # Give the filesystem time to flush
@@ -2246,6 +2207,62 @@ def main():
         # Ensure the output buffer is flushed so the server sees the prints
         sys.stdout.flush()
 
+
+
+def main():
+    try:
+        parser = argparse.ArgumentParser(description="Load and optionally run MOOSE model specified using jardesigner.")
+        parser.add_argument( "file", type=str, help = "Required: Filename of model file, in json format." )
+        parser.add_argument( '-r', '--run', action="store_true", help='Run model immediately upon loading, as per directives in rdes file.' )
+        parser.add_argument( '-p', '--plotFile', type=str, help='Optional: Save plots to an svg file with the specified name, instead of displaying them.' )
+        parser.add_argument( '--placementFunc', type=str, help='Optional: Pick a builtin placement function for multiple models. Options: squareGrid, random. Default: None' )
+        parser.add_argument( '-n', '--numModels', type=int, help='Optional: Number of models to make. Default = 1', default = 1 )
+        parser.add_argument( '-v', '--verbose', action="store_true", help='Verbose flag. Prints out diagnostics when set.' )
+        parser.add_argument('--data-channel-id', help='Unique ID for this simulation run, used in server mode for jardesigner interface. If not set we are in standalone mode.')
+        parser.add_argument('--session-path', type=str, help='Temp directory for model and plot files, used in server mode for jardesigner interface.')
+        args = parser.parse_args()
+        rdes = JarDesigner( args.file, plotFile = args.plotFile, 
+            jsonData = None, dataChannelId = args.data_channel_id, 
+            sessionDir = args.session_path,
+            verbose = args.verbose )
+        context.setContext( rdes )
+        pf = None
+        if args.placementFunc == "squareGrid":
+            pf = squareGridPlacementFunc
+        elif args.placementFunc == "random":
+            pf = randomPlacementFunc
+        rdes.buildModel( numModels = args.numModels, placementFunc = pf )
+        #print( "jardesigner.py: built model" )
+        if rdes.dataChannelId:
+            rdes._buildSetupMoogli()
+            rdes.setupMooView.sendSceneGraph( "setup", meshMols=rdes.meshMols )
+            #print( "jardesigner.py: sent SceneGraph1 with meshMols:", rdes.meshMols )
+    
+        moose.reinit()
+        if args.run and args.data_channel_id == None: # local run
+            #print( "Running locally")
+            moose.start( rdes.runtime )
+            rdes.display()
+            if rdes.runMooView and len( rdes.moogli ) > 0:
+                rdes.runMooView.sendSceneGraph( "run" )
+                rdes.runMooView.notifySimulationEnd( None )
+            quit()
+    
+        serverCommandLoop( rdes )
+    except Exception as e:
+        # Create a structured error message
+        error_msg = {
+            # CHANGED: Use standard 'error' type in case frontend ignores 'sim_error'
+            "type": "error", 
+            "message": str(e),
+            "details": traceback.format_exc()
+        }
+        # Print JSON so server can parse it
+        print(json.dumps(error_msg))
+        sys.stdout.flush()
+        
+        # ADDED: Force non-zero exit code so server knows the process failed
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
