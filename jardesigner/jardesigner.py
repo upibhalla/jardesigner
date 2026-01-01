@@ -2184,9 +2184,8 @@ def serverCommandLoop( rdes ):
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
                         rdes.runMooView.sendSceneGraph( "run" )
 
-                print( "starting on rdes = ", rdes )
+                #print( "starting on rdes = ", rdes )
                 moose.start(runtime)
-                moose.start() #deliberate error introduced to check reporting
                 # Notify client that the run is finished
                 rdes.display()
                 time.sleep(0.1) # Give the filesystem time to flush

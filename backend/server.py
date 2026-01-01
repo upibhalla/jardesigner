@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import os
 import sys
 import subprocess
@@ -15,16 +17,15 @@ from werkzeug.utils import secure_filename
 # --- Configuration ---
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 USER_UPLOADS_DIR = os.path.join(BASE_DIR, 'user_uploads')
-MOOSE_SCRIPT_NAME = "jardesigner.py"
-MOOSE_SCRIPT_PATH = os.path.join(BASE_DIR, MOOSE_SCRIPT_NAME)
 
 os.makedirs(USER_UPLOADS_DIR, exist_ok=True)
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
 CORS(app)
-# Logger=True will print all SocketIO events to console for deep debugging
-socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+
+# Quiet logging
+socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
 
 # --- Store running process and session info ---
 running_processes = {}
@@ -36,6 +37,7 @@ def stream_printer(stream, pid, stream_name, emit_error_fn=None):
     Reads a stream line-by-line.
     1. Prints to console for debugging.
     2. Parses JSON lines to relay specific events (errors) to the frontend.
+    3. Scans plain text for "Error:" to catch C++ backend errors.
     """
     try:
         for line in iter(stream.readline, ''):
@@ -44,24 +46,32 @@ def stream_printer(stream, pid, stream_name, emit_error_fn=None):
                 # DEBUG: Raw output
                 print(f"[{pid}-{stream_name}] {stripped_line}")
                 
-                # If we have an emitter, check if this line is a JSON message intended for the UI
                 if emit_error_fn:
+                    # Case 1: JSON formatted errors (from Python exception handler)
                     if stripped_line.startswith('{'):
                         try:
                             data = json.loads(stripped_line)
                             msg_type = data.get("type")
                             
-                            # DEBUG: Found JSON
-                            # print(f"DEBUG: Parsed JSON from {stream_name}: type={msg_type}")
-
                             if msg_type in ["sim_error", "error", "simulation_error"]:
-                                print(f"DEBUG: Triggering emit_error_fn for type '{msg_type}'")
+                                #print(f"DEBUG: Triggering emit_error_fn for type '{msg_type}'")
                                 emit_error_fn(data)
                         except json.JSONDecodeError:
                             pass
+                    
+                    # Case 2: Plain text errors (from C++/MOOSE stdout)
+                    # Catches "Error:" or "Err:" patterns often used by MOOSE
+                    elif "Error:" in stripped_line or "Err:" in stripped_line:
+                        print(f"DEBUG: Detected plain text error in {stream_name}, probably MOOSE error")
+                        error_payload = {
+                            "type": "sim_error",
+                            "message": "Simulation Engine Error",
+                            "details": stripped_line
+                        }
+                        emit_error_fn(error_payload)
                         
         stream.close()
-        print(f"Stream printer for PID {pid} ({stream_name}) has finished.")
+        #print(f"Stream printer for PID {pid} ({stream_name}) has finished.")
     except Exception as e:
         print(f"Error in stream printer for PID {pid} ({stream_name}): {e}")
 
@@ -148,8 +158,6 @@ def launch_simulation():
     config_data = request_data.get('config_data')
     client_id = request_data.get('client_id')
     
-    # FIX 1: Capture the channel ID from the client.
-    # If the client sent one (which they should have), we MUST use it.
     data_channel_id = request_data.get('data_channel_id')
 
     if not config_data or not isinstance(config_data, dict):
@@ -157,7 +165,6 @@ def launch_simulation():
     if not client_id:
         return jsonify({"status": "error", "message": "Request is missing client_id"}), 400
 
-    # Fallback: only generate a new ID if the client didn't send one
     if not data_channel_id:
         data_channel_id = str(uuid.uuid4())
     
@@ -181,15 +188,9 @@ def launch_simulation():
     plot_filename = "plot.json"
     plot_filepath = os.path.abspath(os.path.join(session_dir, plot_filename))
     
-    # --- CRITICAL FIX: SUBPROCESS LAUNCH ---
-    
-    # 1. Define the path to the launcher script (launch_worker.py)
-    # This assumes launch_worker.py is one level up from this server.py file
     current_dir = os.path.dirname(os.path.abspath(__file__))
     launcher_path = os.path.normpath(os.path.join(current_dir, '..', 'launch_jardes.py'))
 
-    # 2. Define the arguments for the simulation script
-    # Note: We pass the data_channel_id we received from the client
     worker_args = [
         config_file_path,
         "--plotFile", plot_filepath, 
@@ -204,9 +205,8 @@ def launch_simulation():
         else:
             env['PYTHONPATH'] = BASE_DIR
         
-        print(f"DEBUG: Launching subprocess for client {client_id} with channel {data_channel_id}")
+        #print(f"DEBUG: Launching subprocess for client {client_id} with channel {data_channel_id}")
         
-        # 3. Launch the process using the launcher
         process = subprocess.Popen(
             [sys.executable, launcher_path] + worker_args,
             cwd=BASE_DIR, 
@@ -232,8 +232,8 @@ def launch_simulation():
             print(f"DEBUG: Error Payload: {msg}")
             socketio.emit('simulation_error', error_data, room=data_channel_id)
 
-        threading.Thread(target=stream_printer, args=(process.stdout, process.pid, 'stdout', emit_error), daemon=True).start()
-        threading.Thread(target=stream_printer, args=(process.stderr, process.pid, 'stderr', emit_error), daemon=True).start()
+        socketio.start_background_task(target=stream_printer, stream=process.stdout, pid=process.pid, stream_name='stdout', emit_error_fn=emit_error)
+        socketio.start_background_task(target=stream_printer, stream=process.stderr, pid=process.pid, stream_name='stderr', emit_error_fn=emit_error)
 
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to launch MOOSE script: {e}"}), 500
@@ -242,14 +242,6 @@ def launch_simulation():
         "status": "success", "pid": process.pid,
         "plot_filename": plot_filename, "data_channel_id": data_channel_id
     }), 200
-
-
-
-
-
-
-
-
 
 @app.route('/download_project/<client_id>', methods=['GET'])
 def download_project(client_id):
@@ -287,6 +279,8 @@ def push_data():
     payload = data.get('payload')
     if not channel_id or payload is None:
         return jsonify({"status": "error", "message": "Missing data_channel_id or payload"}), 400
+    
+    # Send data without printing (quiet mode)
     socketio.emit('simulation_data', payload, room=channel_id)
     return jsonify({"status": "success"}), 200
 
@@ -296,8 +290,6 @@ def handle_connect():
     upgrade = headers.get("Upgrade", "Not found").lower()
     if "websocket" not in upgrade:
         print("SERVER LOG: >>> FATAL: 'Upgrade: websocket' header is MISSING.")
-    else:
-        print("SERVER LOG: >>> SUCCESS: 'Upgrade: websocket' header found.")
 
 @socketio.on('register_client')
 def handle_register_client(data):
@@ -325,10 +317,9 @@ def handle_disconnect():
 @socketio.on('join_sim_channel')
 def handle_join_sim_channel(data):
     channel_id = data.get('data_channel_id')
-    print(f"DEBUG: Client {request.sid} requesting to join channel: {channel_id}")
     if not channel_id: return
     join_room(channel_id)
-    print(f"DEBUG: Client {request.sid} successfully JOINED channel: {channel_id}")
+    print(f"DEBUG: Client {request.sid} JOINED channel: {channel_id}")
 
 @app.route('/simulation_status/<int:pid>', methods=['GET'])
 def simulation_status(pid):
@@ -379,7 +370,6 @@ def reset_simulation():
         return jsonify({"status": "error", "message": "Process ID not found for reset."}), 404
 
 if __name__ == '__main__':
-    print(f"MOOSE Script Path: {MOOSE_SCRIPT_PATH}")
-    print(f"User Uploads Directory (absolute): {os.path.abspath(USER_UPLOADS_DIR)}")
-    print("Starting Flask-SocketIO server...")
+    #print(f"User Uploads Directory (absolute): {os.path.abspath(USER_UPLOADS_DIR)}")
+    #print("Starting Flask-SocketIO server...")
     socketio.run(app, host='0.0.0.0', debug=False, port=5000)

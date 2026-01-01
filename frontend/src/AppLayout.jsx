@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AppBar, Toolbar, Button, Grid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
+import { AppBar, Toolbar, Button, Grid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Typography, Box } from '@mui/material';
 import runIcon from './assets/run.png';
 import morphoIcon from './assets/morpho.png';
 import spinesIcon from './assets/spines.png';
@@ -27,6 +27,78 @@ import StimMenuBox from './components/MenuBoxes/StimMenuBox';
 import DisplayWindow from './components/DisplayWindow';
 import { ReplayContext } from './components/ReplayContext';
 
+// --- Helper: Analyze Error Message ---
+const analyzeError = (error) => {
+  if (!error) return { mean: null, do: null };
+  
+  const msg = error.message || "";
+  const details = error.details || "";
+  const fullText = (msg + " " + details);
+  const lowerText = fullText.toLowerCase();
+
+  // Define fallback response for "Any other error"
+  const fallback = {
+      mean: "We haven't noticed this one yet",
+      do: "File a bug report. We'll fix it or put in a better explanation"
+  };
+
+  // 1. Check for C++ allocation failure (std:bad_alloc)
+  if (lowerText.includes("std:bad_alloc") || lowerText.includes("std::bad_alloc")) {
+    return {
+      mean: "Congratulations! You have crashed the C++ code. Quite possibly you have removed a prototype channel after already using it in the channel distribution, or have renamed it",
+      do: "Check that your prototype list matches the channels or other objects made from them. If this doesn't help, file bug report."
+    };
+  }
+
+  // 2. Check for "invalid parser state"
+  if (lowerText.includes("invalid parser state")) {
+    return {
+      mean: "You have made a mistake in a stimulus expression",
+      do: "Check your stimulus expressions."
+    };
+  }
+
+  // 3. Check for "relpath"
+  if (lowerText.includes("relpath")) {
+    return {
+      mean: "You have selected a field which is not present on an electrical compartment. It probably is a field of a channel or Ca_conc object",
+      do: "Check your stimuli, plots and so on to see if you have mistakenly selected the wrong field."
+    };
+  }
+
+  // 4. Check for "list index out of range"
+  if (lowerText.includes("list index out of range")) {
+    if (fullText.includes("parentDendName")) {
+      return {
+        mean: "You have entered the wrong string for naming a dendrite or soma compartment",
+        do: "Check the allowed paths for compartments by clicking on the desired part of the cell in Setup 3D."
+      };
+    }
+    // Override: If list index is out of range but NOT parentDendName, 
+    // we return fallback immediately.
+    return fallback;
+  }
+  
+  // 5. Check for "Failed to find field" AND "on dest" (New Case)
+  if (lowerText.includes("failed to find field") && lowerText.includes("on dest")) {
+    return {
+        mean: "Possibly incorrect index for a molecule.",
+        do: "Check that the range is OK. Check that you put it in square brackets like [0]"
+    };
+  }
+
+  // 6. Check for "jardesigner.py" line number (Standard Base Code Error)
+  if (fullText.includes("jardesigner.py") && lowerText.includes("line ")) {
+    return {
+      mean: "Error in jardesigner base code",
+      do: "File bug report with jardesigner team"
+    };
+  }
+
+  // 7. Fallback for any other error
+  return fallback;
+};
+
 export const AppLayout = (props) => {
   const {
     activeMenu,
@@ -49,8 +121,8 @@ export const AppLayout = (props) => {
     clickSelected,
     threeDConfigs,
     meshMolsData,
-    simError,     // New props
-    setSimError,  // New props
+    simError,     
+    setSimError,  
   } = props;
 
 
@@ -111,6 +183,8 @@ export const AppLayout = (props) => {
     threeDConfigs,
     meshMolsData 
   ]);
+
+  const errorAnalysis = useMemo(() => analyzeError(simError), [simError]);
 
   return (
     <ReplayContext.Provider value={{ replayTime }}>
@@ -196,10 +270,35 @@ export const AppLayout = (props) => {
                     wordBreak: 'break-word', 
                     backgroundColor: '#f5f5f5', 
                     padding: '10px',
-                    fontSize: '0.85rem'
+                    fontSize: '0.85rem',
+                    maxHeight: '300px',
+                    overflow: 'auto'
                 }}>
                     {simError.details}
                 </pre>
+            )}
+
+            {/* Analysis Sections */}
+            {errorAnalysis.mean && (
+                <Box sx={{ mt: 3, mb: 1 }}>
+                    <Typography variant="h6" color="primary" sx={{ fontSize: '1rem', fontWeight: 'bold' }}>
+                        What does it mean?
+                    </Typography>
+                    <Typography variant="body1">
+                        {errorAnalysis.mean}
+                    </Typography>
+                </Box>
+            )}
+
+            {errorAnalysis.do && (
+                <Box sx={{ mt: 2 }}>
+                    <Typography variant="h6" color="primary" sx={{ fontSize: '1rem', fontWeight: 'bold' }}>
+                        What should I do?
+                    </Typography>
+                    <Typography variant="body1">
+                        {errorAnalysis.do}
+                    </Typography>
+                </Box>
             )}
         </DialogContent>
         <DialogActions>
