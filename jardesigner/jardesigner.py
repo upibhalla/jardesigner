@@ -2037,7 +2037,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         #comptlist = moose.wildcardFind( chem.path + '/##[ISA=ChemCompt]' )
         comptlist = moose.wildcardFind( '/library/##[ISA=ChemCompt]' )
         if len( comptlist ) == 0:
-            print("loadChem: No compartment found in file: ", fname)
+            print("Error: loadChem: No compartment found in file: ", fname)
             return
         fixXreacs.fixXreacs( chem.path )
         self.comptDict.update( {cc.name:cc.path for cc in comptlist } )
@@ -2134,7 +2134,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 #print( "EPATH = ", ePath )
                 #print( "NOT SPINE", ePath )
                 if not( moose.exists( ePath ) ):
-                    print( "NOT SPINE", ePath, "DOESN'T EXIST, bailing" )
+                    print( "Error: NOT SPINE", ePath, "DOESN'T EXIST, bailing" )
                     continue
                     #raise BuildError( "Error: buildAdaptor: no elec obj in " + ePath )
                 elObj = moose.element( i[0].path + '/' + elecRelPath )
