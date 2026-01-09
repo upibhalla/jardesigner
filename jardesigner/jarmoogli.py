@@ -613,11 +613,12 @@ class MooView:
         #print( "called updateMoogliViewer for {} at {:.3f}".format( idx, simTime ) )
         self.updateValues( simTime, idx )
 
-    def sendSceneGraph( self, viewId, meshMols = "" ):
+    def sendSceneGraph( self, viewId, meshMols = "", reacGraph = None ):
         payload = {
             "type": "scene_init",
             "viewId": viewId,
             "scene": self.getSceneGraph(),
+            "reactionGraph": reacGraph,
             "meshMols": meshMols
         }
         requestBody = {

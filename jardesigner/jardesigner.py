@@ -32,6 +32,7 @@ import csv
 import traceback
 from . import jarmoogli
 from . import jardesignerProtos as jp
+from . import jarReacGraph as jrg
 from . import fixXreacs
 
 from moose.neuroml.NeuroML import NeuroML
@@ -1250,6 +1251,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 ret.append( path )
             self.meshMols[ cc.name ] = ret
 
+    def _buildReactionGraph( self ):
+        #rpath = os.path.abspath(os.path.join(self.sessionDir, "reaction_graph.json") )
+        return jrg.get_reaction_graph( "/library" )
+
     def _buildSetupMoogli( self ):
         self.setupMooView = jarmoogli.MooView( self.dataChannelId )
         comptGroupId = "{}_{}_{}".format( "compt", "Vm", 0 )
@@ -1824,50 +1829,6 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             assert len(i) >= 8
             self._buildAdaptor( i[0],i[1],i[2],i[3],i[4],i[5],i[6],i[7] )
 
-    '''
-    ################################################################
-    # Utility function to add a single spine to the given parent.
-
-    # parent is parent compartment for this spine.
-    # spineProto is just that.
-    # pos is position (in metres ) along parent compartment
-    # angle is angle (in radians) to rotate spine wrt x in plane xy.
-    # Size is size scaling factor, 1 leaves as is.
-    # x, y, z are unit vectors. Z is along the parent compt.
-    # We first shift the spine over so that it is offset by the parent compt
-    # diameter.
-    # We then need to reorient the spine which lies along (i,0,0) to
-    #   lie along x. X is a unit vector so this is done simply by
-    #   multiplying each coord of the spine by x.
-    # Finally we rotate the spine around the z axis by the specified angle
-    # k is index of this spine.
-    def _addSpine( self, parent, spineProto, pos, angle, x, y, z, size, k ):
-        spine = moose.copy( spineProto, parent.parent, 'spine' + str(k) )
-        kids = spine[0].children
-        coords = []
-        ppos = np.array( [parent.x0, parent.y0, parent.z0] )
-        for i in kids:
-            #print i.name, k
-            j = i[0]
-            j.name += str(k)
-            #print 'j = ', j
-            coords.append( [j.x0, j.y0, j.z0] )
-            coords.append( [j.x, j.y, j.z] )
-            self._scaleSpineCompt( j, size )
-            moose.move( i, self.elecid )
-        origin = coords[0]
-        #print 'coords = ', coords
-        # Offset it so shaft starts from surface of parent cylinder
-        origin[0] -= parent.diameter / 2.0
-        coords = np.array( coords )
-        coords -= origin # place spine shaft base at origin.
-        rot = np.array( [x, [0,0,0], [0,0,0]] )
-        coords = np.dot( coords, rot )
-        moose.delete( spine )
-        moose.connect( parent, "raxial", kids[0], "axial" )
-        self._reorientSpine( kids, coords, ppos, pos, size, angle, x, y, z )
-
-    '''
     ################################################################
     ## The spineid is the parent object of the prototype spine. The
     ## spine prototype can include any number of compartments, and each
@@ -2234,7 +2195,9 @@ def main():
         #print( "jardesigner.py: built model" )
         if rdes.dataChannelId:
             rdes._buildSetupMoogli()
-            rdes.setupMooView.sendSceneGraph( "setup", meshMols=rdes.meshMols )
+            reacGraph = jrg.get_reaction_graph( "/library" )
+            #rdes._buildReactionGraph()
+            rdes.setupMooView.sendSceneGraph( "setup", meshMols=rdes.meshMols, reacGraph = reacGraph )
             #print( "jardesigner.py: sent SceneGraph1 with meshMols:", rdes.meshMols )
     
         moose.reinit()

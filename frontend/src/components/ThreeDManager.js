@@ -44,13 +44,20 @@ export default class ThreeDManager {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
 
-    this.world.add(new THREE.HemisphereLight(0xffffff, 0x888888, 1.0));
-    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    mainLight.position.set(5, 5, 5);
-    this.world.add(mainLight);
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    fillLight.position.set(-5, -3, -2);
-    this.world.add(fillLight);
+    // --- UPDATED LIGHTING (VPython Defaults) ---
+    // VPython default: Ambient 0.2 gray
+    this.world.add(new THREE.AmbientLight(0x333333));
+
+    // VPython default: Distant light 1 (Direction <0.22, 0.44, 0.88>, Color 0.8 gray)
+    const light1 = new THREE.DirectionalLight(0xcccccc, 1.0);
+    light1.position.set(0.22, 0.44, 0.88).normalize();
+    this.world.add(light1);
+
+    // VPython default: Distant light 2 (Direction <-0.88, -0.22, -0.44>, Color 0.3 gray)
+    const light2 = new THREE.DirectionalLight(0x4d4d4d, 1.0);
+    light2.position.set(-0.88, -0.22, -0.44).normalize();
+    this.world.add(light2);
+    // --- END UPDATED LIGHTING ---
 
     this.onWindowResize = this.onWindowResize.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -76,11 +83,11 @@ export default class ThreeDManager {
     switch (speedState) {
         case 1:
             this.isAutoRotating = true;
-            this.autoRotateSpeedRads = Math.PI / 180; // 1 deg/sec
+            this.autoRotateSpeedRads = 4 * Math.PI / 180; // 4 deg/sec
             break;
         case 2:
             this.isAutoRotating = true;
-            this.autoRotateSpeedRads = 4 * (Math.PI / 180); // 4 deg/sec
+            this.autoRotateSpeedRads = 12 * (Math.PI / 180); // 12 deg/sec
             break;
         case 0:
         default:
@@ -91,8 +98,11 @@ export default class ThreeDManager {
   }
 
   setReflectivity(isEnabled) {
-    const metalness = isEnabled ? 0.8 : 0.0;
-    const roughness = isEnabled ? 0.1 : 1.0;
+    // --- UPDATED REFLECTIVITY ---
+    // Instead of metalness (which makes things dark without an environment map),
+    // we use low roughness to create a "shiny plastic" look, similar to VPython's default shininess.
+    const metalness = 0.0; 
+    const roughness = isEnabled ? 0.2 : 0.8; // 0.2 = shiny/glossy, 0.8 = matte
     
     this.sceneObjects.forEach(obj => {
         if (obj.material) {
@@ -156,7 +166,8 @@ export default class ThreeDManager {
     this.entityConfigs.clear();
     this.diameterScales.clear();
 
-    while(this.world.children.length > 3){ // Keep the 3 lights
+    // Remove existing children but keep the first 3 (Ambient + 2 Directional Lights)
+    while(this.world.children.length > 3){ 
         const child = this.world.children[3];
         this.world.remove(child);
         if(child.geometry) child.geometry.dispose();
@@ -177,12 +188,14 @@ export default class ThreeDManager {
       entity.shape.forEach((primitive, i) => {
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
         const materialColor = getColor(normalizedValue, config.colormap, true);
+        
+        // Default to Matte (roughness 0.8) initially
         const material = new THREE.MeshStandardMaterial({
             color: materialColor, 
             transparent: true, 
             opacity: entity.transparency || 1.0,
             metalness: 0.0,
-            roughness: 1.0,
+            roughness: 0.8, 
         });
 
         const shapeObject = createShape(primitive, material);

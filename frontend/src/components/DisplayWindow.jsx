@@ -4,16 +4,18 @@ import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
 import MarkdownText from './MarkdownText';
 import ThreeDViewer from './ThreeDViewer';
+import ReactionGraph from './ReactionGraph'; 
 
 const MemoizedGraphWindow = memo(GraphWindow);
 const MemoizedJsonText = memo(JsonText);
 const MemoizedMarkdownText = memo(MarkdownText);
+const MemoizedReactionGraph = memo(ReactionGraph);
 
 const DisplayWindow = (props) => {
   const {
     jsonContent,
     setActiveMenu,
-    plotDataUrl, // Changed prop name
+    plotDataUrl,
     isPlotReady,
     plotError,
     threeDConfigs,
@@ -28,8 +30,13 @@ const DisplayWindow = (props) => {
     handleStartReplay,
     handlePauseReplay,
     handleSeekReplay,
+    clientId,
+    isSimulating,
+    // 1. NEW: Receive the graph data from appLogic
+    reactionGraphs
   } = props;
 
+  // ... (Keep all existing hooks/logic exactly as is) ...
   const [tabIndex, setTabIndex] = useState(0);
   const prevThreeDConfigSetup = useRef();
 
@@ -63,7 +70,6 @@ const DisplayWindow = (props) => {
   const onExplodeAxisToggleRun = useCallback((axis) => onExplodeAxisToggle('run', axis), [onExplodeAxisToggle]);
   const onSceneBuiltRun = useCallback((bbox) => onSceneBuilt('run', bbox), [onSceneBuilt]);
 
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f5f5f5', borderRadius: '8px', overflow: 'hidden' }}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
@@ -73,8 +79,11 @@ const DisplayWindow = (props) => {
           <Tab label="Documentation" />
           <Tab label="Setup 3D" />
           <Tab label="Run 3D" />
+          <Tab label="Reaction Graph" />
         </Tabs>
       </Box>
+
+      {/* ... (Keep existing TabPanels 0-4) ... */}
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1, display: tabIndex === 0 ? 'flex' : 'none' }}>
         <MemoizedGraphWindow plotDataUrl={plotDataUrl} isPlotReady={isPlotReady} plotError={plotError} />
@@ -88,8 +97,8 @@ const DisplayWindow = (props) => {
         <MemoizedMarkdownText />
       </Box>
       
-	  <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
-        {threeDConfigs?.setup && (
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
+         {threeDConfigs?.setup && (
             <ThreeDViewer
               {...props}
               defaultDiaScale={2.5}
@@ -130,6 +139,14 @@ const DisplayWindow = (props) => {
               onSeekReplay={handleSeekReplay}
             />
         )}
+      </Box>
+
+      {/* 2. REACTION GRAPH PANEL (Tab Index 5) */}
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 5 ? 'flex' : 'none', position: 'relative' }}>
+         <MemoizedReactionGraph 
+             // Pass the Setup graph data specifically
+             graphData={reactionGraphs?.setup} 
+         />
       </Box>
     </Box>
   );

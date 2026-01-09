@@ -62,8 +62,14 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
             const fileContent = e.target.result;
             try {
                 const parsed = JSON.parse(fileContent);
+                const info = parsed.fileinfo || {};
                 
-                const jsonTime = parsed.fileinfo?.dateTime;
+                // --- Update Properties from Loaded File ---
+                setCreator(info.creator || '');
+                setLicense(info.licence || 'CC BY');
+                setModelNotes(info.modelNotes || '');
+
+                const jsonTime = info.dateTime;
                 const displayTime = jsonTime || fileSystemTime || new Date().toLocaleString();
                 
                 setLastModified(displayTime);
@@ -152,7 +158,6 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
             const blob = await response.blob();
             
             // Format: jardes_YYYY-MM-DD_HH-MM-SS.zip
-            // Using logic to replace slashes/colons to make it filename safe
             const now = new Date();
             const dateStr = now.getFullYear() + "-" + 
                             String(now.getMonth() + 1).padStart(2, '0') + "-" + 
@@ -240,14 +245,13 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                         sx={{ bgcolor: '#e0e0e0', color: 'black', justifyContent: 'flex-start', pl: 2, ':hover': { bgcolor: '#bdbdbd' } }}
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        Open Model
+                        Load Model
                     </Button>
                     <input type="file" accept=".json" style={{ display: 'none' }} ref={fileInputRef} onChange={handleLoadModel} />
                 </Grid>
 
-                <MenuButton label="Open Tutorial" onClick={() => {}} /> 
+                <MenuButton label="Load Tutorial" onClick={() => {}} /> 
                 <MenuButton label="Save Model" onClick={handleSaveModel} />
-                {/* Updated Action */}
                 <MenuButton label="Download Project" onClick={handleDownloadProject} /> 
             </Grid>
 
