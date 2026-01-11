@@ -11,14 +11,19 @@ import {
     Button,
     Tooltip,
     FormHelperText,
-    ListSubheader
+    ListSubheader,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
+import RefreshIcon from '@mui/icons-material/Refresh';
 import helpText from './PlotMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 
 // --- Define options outside component ---
 const nonChemFieldOptions = [
@@ -26,7 +31,6 @@ const nonChemFieldOptions = [
     'Ca', 'activation', 'current', 'modulation', 'psdArea'
 ];
 const chemFieldOptions = ['n', 'conc', 'volume', 'concInit', 'nInit'];
-const fieldOptions = [...nonChemFieldOptions, ...chemFieldOptions];
 const modeOptions = ['time', 'space', 'wave', 'raster'];
 
 // --- Helper to safely convert value to string ---
@@ -39,11 +43,11 @@ const chemPathRegex = /([^/]+)\/([^[]+)(\[.*\])?/;
 
 // --- Default state for a new plot entry ---
 const createDefaultPlot = () => ({
-    path: '',
+    path: 'soma', // Default to soma
     field: nonChemFieldOptions[0],
-    chemProto: '.', // Will store meshName for chem fields
-    childPath: '', // Will store molName for chem fields
-    molIndex: '',  // New field for mol index
+    chemProto: '.', 
+    childPath: '', 
+    molIndex: '',  
     title: '',
     yMin: '0.0',
     yMax: '0.0',
@@ -52,11 +56,20 @@ const createDefaultPlot = () => ({
 });
 
 // --- Reusable HelpField Component ---
-const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullWidth = true, ...props }) => {
+const HelpField = React.memo(({ id, label, value, onChange, onBlur, type = "text", fullWidth = true, ...props }) => {
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-            <TextField {...props} fullWidth={fullWidth} size="small" label={label} variant="outlined" type={type}
-                value={value} onChange={(e) => onChange(id, e.target.value)} />
+            <TextField 
+                {...props} 
+                fullWidth={fullWidth} 
+                size="small" 
+                label={label} 
+                variant="outlined" 
+                type={type}
+                value={value} 
+                onChange={(e) => onChange(id, e.target.value)}
+                onBlur={(e) => onBlur && onBlur(id, e.target.value)}
+            />
             <Tooltip title={props.helptext} placement="right">
                 <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
             </Tooltip>
@@ -65,7 +78,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 });
 
 // --- Main Component ---
-const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
+const PlotMenuBox = ({ 
+    onConfigurationChange, 
+    currentConfig, 
+    meshMols,
+    elecPaths = [],
+    spinePaths = [],
+    channelPrototypes = [] // List of channel prototype names
+}) => {
     const [plots, setPlots] = useState(() => {
         const initialPlots = currentConfig?.map(p => {
             const field = p.field || nonChemFieldOptions[0];
@@ -80,9 +100,14 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                 if (match) {
                     initialChemProto = match[1] || '';
                     initialChildPath = match[2] || '';
-                    initialMolIndex = match[3] || '';
+                    
+                    // Logic to strip brackets from loaded index if present
+                    let rawIdx = match[3] || '';
+                    if (rawIdx.startsWith('[') && rawIdx.endsWith(']')) {
+                        rawIdx = rawIdx.substring(1, rawIdx.length - 1);
+                    }
+                    initialMolIndex = rawIdx;
                 } else {
-                    // Fallback for older/simpler paths
                     const slashIndex = relpath.indexOf('/');
                     if (slashIndex !== -1) {
                         initialChemProto = relpath.substring(0, slashIndex);
@@ -97,7 +122,7 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             }
 
             return {
-                path: p.path || '',
+                path: p.path || 'soma',
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
@@ -113,10 +138,31 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     });
     const [activePlot, setActivePlot] = useState(0);
 
+    // --- Dialog State ---
+    const [customPathDialogOpen, setCustomPathDialogOpen] = useState(false);
+    const [tempCustomPath, setTempCustomPath] = useState('');
+    const [pendingPlotIndex, setPendingPlotIndex] = useState(null);
+
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const plotsRef = useRef(plots);
     useEffect(() => { plotsRef.current = plots; }, [plots]);
+
+    // --- Helper to generate path options ---
+    const pathOptions = useMemo(() => {
+        const allPaths = [...elecPaths, ...spinePaths];
+        const opts = getCompartmentOptions(allPaths);
+        
+        if (plots[activePlot]) {
+            const currentVal = plots[activePlot].path;
+            if (currentVal && !opts.includes(currentVal) && currentVal !== OPTION_USER_SPECIFIED) {
+                 const last = opts.pop();
+                 opts.push(currentVal);
+                 opts.push(last);
+            }
+        }
+        return opts;
+    }, [elecPaths, spinePaths, plots, activePlot]);
 
     const addPlot = useCallback(() => {
         setPlots((prev) => [...prev, createDefaultPlot()]);
@@ -134,7 +180,6 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                 if (i === index) {
                     const updatedPlot = { ...plot, [key]: value };
                     
-                    // Handle switching field type
                     if (key === 'field') {
                         const isNowChem = chemFieldOptions.includes(value);
                         const wasChem = chemFieldOptions.includes(plot.field);
@@ -143,16 +188,25 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                             updatedPlot.childPath = '';
                             updatedPlot.molIndex = '';
                         } else if (!wasChem && isNowChem) {
-                            updatedPlot.chemProto = ''; // Require user selection
+                            updatedPlot.chemProto = ''; 
                             updatedPlot.childPath = '';
                             updatedPlot.molIndex = '';
                         }
                     }
 
-                    // Handle changing compartment
                     if (key === 'chemProto') {
-                        updatedPlot.childPath = ''; // Reset molecule path
-                        updatedPlot.molIndex = '';  // Reset index
+                        updatedPlot.childPath = ''; 
+                        updatedPlot.molIndex = '';  
+                    }
+
+                    // Validation for Mol Index (Positive Integers Only)
+                    if (key === 'molIndex') {
+                        // Allow empty string or non-negative integers only
+                        if (value === '' || /^\d+$/.test(value)) {
+                            updatedPlot.molIndex = value;
+                        } else {
+                            return plot; // Reject floats, negatives, or non-digits
+                        }
                     }
 
                     return updatedPlot;
@@ -162,17 +216,33 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
         );
     }, []);
 
-    // Create sorted list of chem compartment (mesh) names
+    // --- Custom Path Logic ---
+    const handlePathChange = (index, newValue) => {
+        if (newValue === OPTION_USER_SPECIFIED) {
+            setPendingPlotIndex(index);
+            setTempCustomPath('');
+            setCustomPathDialogOpen(true);
+        } else {
+            updatePlot(index, 'path', newValue);
+        }
+    };
+
+    const handleSaveCustomPath = () => {
+        if (pendingPlotIndex !== null && tempCustomPath.trim() !== "") {
+            updatePlot(pendingPlotIndex, 'path', tempCustomPath.trim());
+        }
+        setCustomPathDialogOpen(false);
+        setPendingPlotIndex(null);
+    };
+
     const chemCompartmentOptions = useMemo(() => {
         if (!meshMols || typeof meshMols !== 'object') return [];
         return Object.keys(meshMols).sort();
     }, [meshMols]);
 
-    // Get active plot data
     const activePlotData = plots[activePlot];
     const isChemField = activePlotData && chemFieldOptions.includes(activePlotData.field);
 
-    // Create sorted list of molecules for the selected compartment
     const moleculeOptions = useMemo(() => {
         if (!isChemField || !meshMols || !activePlotData.chemProto) return [];
         const mols = meshMols[activePlotData.chemProto];
@@ -180,10 +250,10 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     }, [isChemField, meshMols, activePlotData?.chemProto]);
 
 
-    // --- Refactored Save/Refresh Logic ---
+    // --- Save/Refresh Logic ---
     const getPlotDataForSave = useCallback(() => {
         return plotsRef.current.map(plotState => {
-                if (!plotState.path || !plotState.field) return null;
+            if (!plotState.path || !plotState.field) return null;
 
             const yminNum = parseFloat(plotState.yMin);
             const ymaxNum = parseFloat(plotState.yMax);
@@ -192,13 +262,15 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             let relpathValue = undefined;
 
             if (isChemField) {
-                // Mol path and compartment are now required
                 if (plotState.chemProto && plotState.childPath) {
-                    // Combine mol path and optional index
-                    const molIndex = plotState.molIndex || '';
-                    relpathValue = `${plotState.chemProto}/${plotState.childPath}${molIndex}`;
+                    let idx = plotState.molIndex || '';
+                    // Wrap in brackets if integer exists for saving
+                    if (idx !== '' && /^\d+$/.test(idx)) {
+                        idx = `[${idx}]`;
+                    }
+                    relpathValue = `${plotState.chemProto}/${plotState.childPath}${idx}`;
                 } else { 
-                    return null; // Invalid chemical plot
+                    return null; 
                 }
             } else {
                 if (plotState.childPath && plotState.childPath !== '') {
@@ -218,7 +290,7 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             };
             return plotSchemaItem;
         }).filter(item => item !== null);
-    }, []); // Uses plotsRef, no dependencies needed
+    }, []);
 
     const handleRefreshModel = useCallback(() => {
         if (onConfigurationChangeRef.current) {
@@ -228,13 +300,11 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     }, [getPlotDataForSave]);
 
     useEffect(() => {
-        // Register the handleRefreshModel function to be called on unmount
         return () => {
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
-    // --- End Refactor ---
-
+    
     const getTabLabel = (plot) => {
         const isChem = chemFieldOptions.includes(plot.field);
         if (isChem) {
@@ -267,9 +337,22 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             {activePlotData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                            <HelpField id="path" label="Path" required value={activePlotData.path} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.path} />
+                        {/* 1. Parent Elec Compartment: Top, Full Width, Menu+Dialog */}
+                        <Grid item xs={12}>
+                             <HelpField 
+                                id="path" 
+                                label="Parent Elec Compartment" 
+                                select
+                                value={activePlotData.path} 
+                                onChange={(id,v) => handlePathChange(activePlot, v)} 
+                                helptext={helpText.fields.path}
+                             >
+                                {pathOptions.map(opt => (
+                                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                                ))}
+                             </HelpField>
                         </Grid>
+
                         <Grid item xs={12} sm={6}>
                             <HelpField id="field" label="Field" select required value={activePlotData.field} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.field}>
                                 <MenuItem value=""><em>Select Field...</em></MenuItem>
@@ -309,7 +392,7 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                                         required 
                                         value={activePlotData.childPath} 
                                         onChange={(id, v) => updatePlot(activePlot, id, v)} 
-                                        helptext={helpText.fields.childPath} // You may want to update this help text
+                                        helptext={helpText.fields.childPath} 
                                         error={!activePlotData.childPath}
                                         disabled={!activePlotData.chemProto}
                                     >
@@ -321,34 +404,45 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                                 <Grid item xs={12} sm={6}>
                                     <HelpField 
                                         id="molIndex" 
-                                        label="Molecule Index (optional)" 
+                                        label="Molecule Index (int/blank)" 
                                         value={activePlotData.molIndex} 
                                         onChange={(id, v) => updatePlot(activePlot, id, v)} 
-                                        helptext="e.g., [0] or [Ca_cyto]" 
+                                        helptext="Enter a positive integer index (e.g., 0) or leave blank." 
+                                        type="text"
                                     />
                                 </Grid>
                              </>
                          ) : (
                              <>
+                                 {/* Relative Path as Menu for Non-Chem Fields */}
                                  <Grid item xs={12} sm={6}>
                                     <HelpField 
                                         id="childPath" 
                                         label="Relative Path (Optional)" 
+                                        select
                                         value={activePlotData.childPath} 
                                         onChange={(id, v) => updatePlot(activePlot, id, v)} 
                                         helptext={helpText.fields.childPath}
-                                    />
+                                    >
+                                        <MenuItem value=""><em>None</em></MenuItem>
+                                        {channelPrototypes.map(chan => (
+                                            <MenuItem key={chan} value={chan}>{chan}</MenuItem>
+                                        ))}
+                                    </HelpField>
                                 </Grid>
                              </>
                          )}
+                         
                          <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activePlotData.title} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.title} /></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="yMin" label="Y Min (Optional, 0=auto)" type="number" value={activePlotData.yMin} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMin} /></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="yMax" label="Y Max (Optional, 0=auto)" type="number" value={activePlotData.yMax} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMax} /></Grid>
+                        
+                        {/* Mode moved to bottom next to Wave Frames */}
                         <Grid item xs={12} sm={6}>
                             <HelpField id="mode" label="Mode (Optional)" select value={activePlotData.mode} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.mode}>
                                 {modeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                              </HelpField>
                          </Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="yMin" label="Y Min (Optional, 0=auto)" type="number" value={activePlotData.yMin} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMin} /></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="yMax" label="Y Max (Optional, 0=auto)" type="number" value={activePlotData.yMax} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMax} /></Grid>
                         <Grid item xs={12} sm={6}>
                              <HelpField id="waveFrames" label="# Wave Frames (if Mode='wave')" type="number" value={activePlotData.waveFrames} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.waveFrames} InputProps={{ inputProps: { min: 0, step: 1 } }} disabled={activePlotData.mode !== 'wave'}/>
                          </Grid>
@@ -359,6 +453,28 @@ const PlotMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                 </Box>
             )}
              {plots.length === 0 && <Typography sx={{ mt: 1, fontStyle: 'italic' }}>No plots defined.</Typography>}
+
+             {/* Dialog for User Specified Path */}
+            <Dialog open={customPathDialogOpen} onClose={() => setCustomPathDialogOpen(false)}>
+                <DialogTitle>Enter User Specified Path</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        id="customPath"
+                        label="Path"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={tempCustomPath}
+                        onChange={(e) => setTempCustomPath(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveCustomPath}>Set Path</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

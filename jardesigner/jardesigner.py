@@ -252,6 +252,7 @@ class JarDesigner:
         self.moogli = []
         self.chanDistrib = []
         self.chemDistrib = []
+        self.passiveDistrib = []
         self.adaptorElecComptList = {}
         self.comptDict = {}     # dict of chem compartments
         self.meshDict = {}      # dict of neuroMesh,spineMesh,psdMesh etc
@@ -306,7 +307,6 @@ class JarDesigner:
         self._finishedSaving = False
         self._modelFileNameList = []    # Used to build NSDF files
         #### Some empty defaults
-        self.passiveDistrib = []
         self.plotNames = [] # Need to get rid of this, use the existing dict
         self.wavePlotNames = [] # Need to get rid of this, use the existing dict
 
@@ -755,8 +755,9 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             for key, val in i.items():
                 if key != "path":
                     temp.append( key )
-                    temp.append( str( value ) )
+                    temp.append( str( val ) )
             temp.append( "" )
+        #print( "Passive distrib = ", temp )
         self.elecid.passiveDistribution = temp
 
     def buildChanDistrib( self ):

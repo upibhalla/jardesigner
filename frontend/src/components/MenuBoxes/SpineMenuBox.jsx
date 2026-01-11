@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -10,12 +10,17 @@ import {
     Button,
     Tooltip,
     IconButton,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './SpineMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 
 // --- Helper Functions ---
 const getNameFromType = (type) => {
@@ -55,12 +60,12 @@ const createDefaultPrototype = () => ({
     shaftDiameter: '0.2', shaftLength: '1', headDiameter: '0.5', headLength: '0.5',
     amparGbar: '200.0', nmdarGbar: '80.0',
     amparTau1: '2.0', amparTau2: '9.0', nmdarTau1: '20.0', nmdarTau2: '20.0',
-    CaTau: '0.013', // CaTau default, in seconds
+    CaTau: '0.013', 
 });
 const createDefaultDistribution = () => ({
-    prototype: '', path: 'dend', spacing: '10.0', minSpacing: '1.0',
+    prototype: '', path: 'dend#', spacing: '10.0', minSpacing: '1.0',
     sizeScale: '1.0', sizeStdDev: '0.5', angle: '0.0', angleStdDev: '6.2832',
-    randSeed: '1234', // Req 1: Added randSeed default
+    randSeed: '1234', 
 });
 
 // --- Reusable HelpField Component ---
@@ -78,7 +83,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
+const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.spineProto?.map(p => {
             const componentType = getComponentTypeFromSchema(p.type, p.source);
@@ -92,7 +97,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                 headLength: toMicrons(p.headLen) || createDefaultPrototype().headLength,
                 amparGbar: safeToString(p.amparGbar, createDefaultPrototype().amparGbar),
                 nmdarGbar: safeToString(p.nmdarGbar, createDefaultPrototype().nmdarGbar),
-                CaTau: safeToString(p.CaTau, createDefaultPrototype().CaTau), // Req 3: Load CaTau
+                CaTau: safeToString(p.CaTau, createDefaultPrototype().CaTau), 
                 amparTau1: createDefaultPrototype().amparTau1,
                 amparTau2: createDefaultPrototype().amparTau2,
                 nmdarTau1: createDefaultPrototype().nmdarTau1,
@@ -112,7 +117,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
             sizeStdDev: safeToString(d.sizeSdev, createDefaultDistribution().sizeStdDev),
             angle: safeToString(d.angle, createDefaultDistribution().angle),
             angleStdDev: safeToString(d.angleSdev, createDefaultDistribution().angleStdDev),
-            randSeed: safeToString(d.randSeed, createDefaultDistribution().randSeed), // Req 1: Load randSeed
+            randSeed: safeToString(d.randSeed, createDefaultDistribution().randSeed), 
         })) || [];
         return initialDists.length > 0 ? initialDists : [createDefaultDistribution()];
     });
@@ -120,12 +125,36 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
     const [activePrototype, setActivePrototype] = useState(0);
     const [activeDistribution, setActiveDistribution] = useState(0);
 
+    // --- State for User Specified Path Dialog ---
+    const [customPathDialogOpen, setCustomPathDialogOpen] = useState(false);
+    const [tempCustomPath, setTempCustomPath] = useState('');
+    const [pendingDistIndex, setPendingDistIndex] = useState(null);
+
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const prototypesRef = useRef(prototypes);
     useEffect(() => { prototypesRef.current = prototypes; }, [prototypes]);
     const distributionsRef = useRef(distributions);
     useEffect(() => { distributionsRef.current = distributions; }, [distributions]);
+
+    // --- Helper to generate path options ---
+    const pathOptions = useMemo(() => {
+        // We only use elecPaths because spines cannot be put on spines
+        const opts = getCompartmentOptions(elecPaths);
+        
+        // Ensure the current value is in the list if it's not standard
+        if (distributions[activeDistribution]) {
+            const currentVal = distributions[activeDistribution].path;
+            if (currentVal && !opts.includes(currentVal) && currentVal !== OPTION_USER_SPECIFIED) {
+                 // Insert it before the last option (which is usually User Specified)
+                 const last = opts.pop();
+                 opts.push(currentVal);
+                 opts.push(last);
+            }
+        }
+        return opts;
+    }, [elecPaths, distributions, activeDistribution]);
+
 
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultPrototype()]);
@@ -179,6 +208,25 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
         );
     }, []);
 
+    // --- Custom Path Handling ---
+    const handlePathChange = (index, newValue) => {
+        if (newValue === OPTION_USER_SPECIFIED) {
+            setPendingDistIndex(index);
+            setTempCustomPath('');
+            setCustomPathDialogOpen(true);
+        } else {
+            updateDistribution(index, 'path', newValue);
+        }
+    };
+
+    const handleSaveCustomPath = () => {
+        if (pendingDistIndex !== null && tempCustomPath.trim() !== "") {
+            updateDistribution(pendingDistIndex, 'path', tempCustomPath.trim());
+        }
+        setCustomPathDialogOpen(false);
+        setPendingDistIndex(null);
+    };
+
     useEffect(() => {
         const getSpineDataForUnmount = () => {
             const currentPrototypes = prototypesRef.current;
@@ -202,12 +250,10 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      headLen: (toMeters(protoState.headLength) || 0),
                  };
                 
-                 // Req 2: Modified condition to include 'makeExcSpine()'
                  if (schemaSource === 'makeActiveSpine()' || schemaSource === 'makeExcSpine()') {
                      protoSchemaItem.amparGbar = parseFloat(protoState.amparGbar) || 0;
                      protoSchemaItem.nmdarGbar = parseFloat(protoState.nmdarGbar) || 0;
                  }
-                 // Req 3: Added CaTau mapping only for 'makeActiveSpine()'
                  if (schemaSource === 'makeActiveSpine()') {
                     protoSchemaItem.CaTau = parseFloat(protoState.CaTau) || 13.0;
                  }
@@ -229,7 +275,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                      sizeSdev: parseFloat(distState.sizeStdDev) || 0.5,
                      angle: parseFloat(distState.angle) || 0,
                      angleSdev: parseFloat(distState.angleStdDev) || 6.2831853,
-                     randSeed: parseInt(distState.randSeed, 10) || 1234, // Req 1: Added randSeed mapping
+                     randSeed: parseInt(distState.randSeed, 10) || 1234, 
                  };
              }).filter(d => d !== null);
 
@@ -288,14 +334,12 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                              <HelpField id="headLength" label="Head Length (μm)" type="number" value={prototypes[activePrototype].headLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headLength} />
                         </Grid>
                         
-                        {/* Req 2: Modified condition to show block for 'makeActiveSpine()' OR 'makeExcSpine()' */}
                         {(prototypes[activePrototype].source === 'makeActiveSpine()' || prototypes[activePrototype].source === 'makeExcSpine()') && (
                             <>
                                 <Grid item xs={12}><Typography variant="caption" display="block">Receptor Params</Typography></Grid>
                                 <Grid item xs={6}><HelpField id="amparGbar" label="AMPAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].amparGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.amparGbar} /></Grid>
                                 <Grid item xs={6}><HelpField id="nmdarGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdarGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdarGbar} /></Grid>
                                 
-                                {/* Req 3: Added CaTau field, conditional on 'makeActiveSpine()' */}
                                 {(prototypes[activePrototype].source === 'makeActiveSpine()') && (
                                     <Grid item xs={6}>
                                         <HelpField id="CaTau" label="Ca decay time (s)" type="number" value={prototypes[activePrototype].CaTau} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.CaTau} />
@@ -326,15 +370,29 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
              {distributions[activeDistribution] && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={2}>
+                        {/* 1. Moved Path to first position, renamed, full width, and made into a Menu */}
+                        <Grid item xs={12}>
+                             <HelpField 
+                                id="path" 
+                                label="Parent Elec Compartment" 
+                                select
+                                value={distributions[activeDistribution].path} 
+                                onChange={(id,v) => handlePathChange(activeDistribution, v)} 
+                                helptext={helpText.distributions.path}
+                             >
+                                {pathOptions.map(opt => (
+                                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                                ))}
+                             </HelpField>
+                        </Grid>
+
                         <Grid item xs={6}>
                              <HelpField id="prototype" label="Prototype" select value={distributions[activeDistribution].prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </HelpField>
                         </Grid>
-                        <Grid item xs={6}>
-                             <HelpField id="path" label="Path" value={distributions[activeDistribution].path} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.path}/>
-                        </Grid>
+                        {/* 'path' was here previously */}
                         <Grid item xs={6}>
                              <HelpField id="spacing" label="Spacing (μm)" type="number" value={distributions[activeDistribution].spacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing}/>
                         </Grid>
@@ -353,7 +411,6 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                         <Grid item xs={6}>
                              <HelpField id="angleStdDev" label="Angle Std Dev (rad)" type="number" value={distributions[activeDistribution].angleStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angleStdDev}/>
                         </Grid>
-                        {/* Req 1: Added randSeed field */}
                         <Grid item xs={6}>
                              <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>
                         </Grid>
@@ -363,6 +420,28 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig }) => {
                     </Button>
                 </Box>
              )}
+
+            {/* Custom Path Dialog */}
+            <Dialog open={customPathDialogOpen} onClose={() => setCustomPathDialogOpen(false)}>
+                <DialogTitle>Enter User Specified Path</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        id="customPath"
+                        label="Path"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={tempCustomPath}
+                        onChange={(e) => setTempCustomPath(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveCustomPath}>Set Path</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

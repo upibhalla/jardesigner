@@ -122,13 +122,26 @@ export const AppLayout = (props) => {
     threeDConfigs,
     meshMolsData,
     simError,     
-    setSimError,  
+    setSimError,
+    elecPaths,
+    spinePaths
   } = props;
 
+  // Extract channel names for use in Plots, Stimuli, and Adaptors
+  const channelPrototypes = useMemo(() => 
+    jsonData.chanProto?.map(p => p.name).filter(Boolean) || [], 
+    [jsonData.chanProto]
+  );
 
   const menuComponents = useMemo(() => ({
     File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} clientId={clientId} />,
-    SimOutput: <SimOutputMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.files} getChemProtos={getChemProtos} />,
+    SimOutput: <SimOutputMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={jsonData.files} 
+        getChemProtos={getChemProtos} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths} 
+    />,
     Run: <RunMenuBox
       onConfigurationChange={updateJsonData}
       currentConfig={{ ...jsonData }}
@@ -145,35 +158,66 @@ export const AppLayout = (props) => {
         onFileChange={handleMorphologyFileChange} 
         clientId={clientId} 
     />,
-    Spines: <SpineMenuBox onConfigurationChange={updateJsonData} currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} />,
+    Spines: <SpineMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths} 
+    />,
     Channels: <ElecMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} 
         clientId={clientId}
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths} 
     />,
-    Passive: <PassiveMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.passiveDistrib} />,
+    Passive: <PassiveMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={jsonData.passiveDistrib} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths} 
+    />,
     Signaling: <ChemMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} 
         getChemProtos={getChemProtos} 
         clientId={clientId}
         meshMols={meshMolsData?.setup} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths} 
     />,
-    Adaptors: <AdaptorsMenuBox onConfigurationChange={updateJsonData} currentConfig={jsonData.adaptors} />,
+    Adaptors: <AdaptorsMenuBox 
+        onConfigurationChange={updateJsonData} 
+        currentConfig={jsonData.adaptors}
+        meshMols={meshMolsData?.setup} 
+        // --- Added channelPrototypes ---
+        channelPrototypes={channelPrototypes}
+    />,
     Stimuli: <StimMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={jsonData.stims} 
         meshMols={meshMolsData?.setup} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths}
+        // --- Added channelPrototypes ---
+        channelPrototypes={channelPrototypes}
     />,
     Plots: <PlotMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={jsonData.plots} 
         meshMols={meshMolsData?.setup} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths} 
+        // --- Added channelPrototypes ---
+        channelPrototypes={channelPrototypes}
     />,
     '3D': <ThreeDMenuBox 
         onConfigurationChange={updateJsonData} 
         currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} 
         meshMols={meshMolsData?.setup} 
+        elecPaths={elecPaths} 
+        spinePaths={spinePaths}
+        channelPrototypes={channelPrototypes}
     />,
   }), [
     jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,
@@ -181,7 +225,10 @@ export const AppLayout = (props) => {
     handleMorphologyFileChange, 
     clientId,
     threeDConfigs,
-    meshMolsData 
+    meshMolsData,
+    elecPaths, 
+    spinePaths,
+    channelPrototypes // Added to dependency array
   ]);
 
   const errorAnalysis = useMemo(() => analyzeError(simError), [simError]);

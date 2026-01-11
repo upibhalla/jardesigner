@@ -14,14 +14,19 @@ import {
     FormControlLabel,
     Tooltip,
     ListSubheader,
-    FormHelperText
+    FormHelperText,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
+import RefreshIcon from '@mui/icons-material/Refresh';
 import helpText from './ThreeDMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 
 // --- Define options outside component ---
 const nonChemFieldOptions = [
@@ -29,7 +34,7 @@ const nonChemFieldOptions = [
     'Ca', 'activation', 'current', 'modulation', 'psdArea'
 ];
 const chemFieldOptions = ['n', 'conc', 'concInit', 'nInit'];
-const chemFields = [...chemFieldOptions]; // Keep this for quick lookup
+const chemFields = [...chemFieldOptions];
 const fastDtFields = ['Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'activation', 'current', 'Ca'];
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
 const backgroundOptions = ['default', 'white', 'black', 'grey', 'beige'];
@@ -41,7 +46,7 @@ const safeToString = (value, defaultValue = '') => {
 
 // --- Default state creators ---
 const createDefaultMoogliEntry = () => ({
-    path: 'soma',
+    path: '#', // Default to # per request
     field: nonChemFieldOptions[0],
     chemProto: '.',
     childPath: '',
@@ -49,7 +54,7 @@ const createDefaultMoogliEntry = () => ({
     diameterScale: '1.0',
     min: '0',
     max: '0',
-    dt: '0.001', // Default dt for Vm
+    dt: '0.001',
 });
 
 const createDefaultGlobalSettings = () => ({
@@ -79,7 +84,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
+const ThreeDMenuBox = ({ 
+    onConfigurationChange, 
+    currentConfig, 
+    meshMols,
+    elecPaths = [], 
+    spinePaths = [],
+    channelPrototypes = [] 
+}) => {
     const [tabs, setTabs] = useState(() => {
         const defaults = createDefaultMoogliEntry();
         const initialTabs = currentConfig?.moogli?.map(m => {
@@ -133,6 +145,11 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
 
     const [activeTab, setActiveTab] = useState(0);
 
+    // --- Dialog State ---
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [dialogField, setDialogField] = useState(''); // 'path' or 'childPath'
+    const [tempDialogValue, setTempDialogValue] = useState('');
+
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const tabsRef = useRef(tabs);
@@ -157,7 +174,6 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                     const updatedTab = { ...tab, [key]: value };
                     
                     if (key === 'field') {
-                        // Handle chem proto logic
                         const isNowChem = chemFields.includes(value);
                         const wasChem = chemFields.includes(tab.field);
                         if (wasChem && !isNowChem) {
@@ -167,14 +183,11 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                             updatedTab.chemProto = '';
                             updatedTab.childPath = '';
                         }
-
-                        // Set dt based on field type
                         updatedTab.dt = fastDtFields.includes(value) ? '0.001' : '0.2';
                     }
 
-                    // Handle changing compartment
                     if (key === 'chemProto') {
-                        updatedTab.childPath = ''; // Reset molecule path
+                        updatedTab.childPath = ''; 
                     }
 
                     return updatedTab;
@@ -191,17 +204,57 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
 
     const handleTabChange = (event, newValue) => setActiveTab(newValue);
 
-    // Create sorted list of chem compartment (mesh) names
+    // --- Dialog Handlers ---
+    const handleOpenDialog = (field) => {
+        setDialogField(field);
+        setTempDialogValue('');
+        setDialogOpen(true);
+    };
+
+    const handleSaveDialog = () => {
+        if (tempDialogValue.trim() !== '') {
+            updateTab(activeTab, dialogField, tempDialogValue.trim());
+        }
+        setDialogOpen(false);
+    };
+
+    const handlePathChange = (e) => {
+        const val = e.target.value;
+        if (val === OPTION_USER_SPECIFIED) {
+            handleOpenDialog('path');
+        } else {
+            updateTab(activeTab, 'path', val);
+        }
+    };
+
+    const handleChildPathChange = (e) => {
+        const val = e.target.value;
+        if (val === OPTION_USER_SPECIFIED) {
+            handleOpenDialog('childPath');
+        } else {
+            updateTab(activeTab, 'childPath', val);
+        }
+    };
+
+    // --- Options Generation ---
+    const pathOptions = useMemo(() => {
+        const allPaths = [...elecPaths, ...spinePaths];
+        const opts = getCompartmentOptions(allPaths);
+        // Ensure '#' is present as the default/root option
+        if (!opts.includes('#')) {
+            opts.unshift('#');
+        }
+        return opts;
+    }, [elecPaths, spinePaths]);
+
     const chemCompartmentOptions = useMemo(() => {
         if (!meshMols || typeof meshMols !== 'object') return [];
         return Object.keys(meshMols).sort();
     }, [meshMols]);
 
-    // Get active plot data
     const activeTabData = tabs[activeTab];
     const isChemField = activeTabData && chemFields.includes(activeTabData.field);
 
-    // Create sorted list of molecules for the selected compartment
     const moleculeOptions = useMemo(() => {
         if (!isChemField || !meshMols || !activeTabData.chemProto) return [];
         const mols = meshMols[activeTabData.chemProto];
@@ -235,8 +288,6 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             if (!isNaN(diaScaleNum) && safeToString(diaScaleNum) !== defaultsMoogli.diameterScale) moogliSchemaItem.diaScale = diaScaleNum;
             if (!isNaN(minNum) && safeToString(minNum) !== defaultsMoogli.min) moogliSchemaItem.ymin = minNum;
             if (!isNaN(maxNum) && safeToString(maxNum) !== defaultsMoogli.max) moogliSchemaItem.ymax = maxNum;
-            
-            // --- MODIFIED: Always add the 'dt' property if it's a valid number ---
             if (!isNaN(dtNum)) moogliSchemaItem.dt = dtNum;
 
             return moogliSchemaItem;
@@ -267,7 +318,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             ...(globalSettingsRef.current.fullScreen !== defaultsGlobal.fullScreen && { fullscreen: globalSettingsRef.current.fullScreen }),
         };
         return { moogli: moogliData, displayMoogli: displayMoogliData };
-    }, []); // Uses refs, no dependencies
+    }, []); 
 
     const handleRefreshModel = useCallback(() => {
         if (onConfigurationChangeRef.current) {
@@ -277,12 +328,10 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
     }, [getThreeDDataForSave]);
 
     useEffect(() => {
-        // Register the handleRefreshModel function to be called on unmount
         return () => {
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
-    // --- End Refactor ---
 
     const getTabLabel = (tab) => {
         const isChem = chemFields.includes(tab.field);
@@ -319,7 +368,23 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
             {activeTabData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}><HelpField id="path" label="Path" required value={activeTabData.path} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.path} /></Grid>
+                        {/* 1. Parent Elec Compartment: First entry, Full Width */}
+                        <Grid item xs={12}>
+                             <HelpField 
+                                id="path" 
+                                label="Parent Elec Compartment" 
+                                select
+                                required 
+                                value={activeTabData.path} 
+                                onChange={(id, v) => handlePathChange({ target: { value: v } })} 
+                                helptext={helpText.dataSources.path}
+                             >
+                                {pathOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                <Divider />
+                                <MenuItem value={OPTION_USER_SPECIFIED}>{OPTION_USER_SPECIFIED}</MenuItem>
+                             </HelpField>
+                        </Grid>
+
                         <Grid item xs={12} sm={6}>
                             <HelpField id="field" label="Field" required select value={activeTabData.field} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.field}>
                                 <ListSubheader>Electrical/Other</ListSubheader>
@@ -358,7 +423,7 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                                         required 
                                         value={activeTabData.childPath} 
                                         onChange={(id, v) => updateTab(activeTab, id, v)} 
-                                        helptext={helpText.dataSources.childPath} // You may want to update this help text
+                                        helptext={helpText.dataSources.childPath} 
                                         error={!activeTabData.childPath}
                                         disabled={!activeTabData.chemProto}
                                     >
@@ -370,7 +435,22 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                              </>
                          ) : (
                              <>
-                                 <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeTabData.childPath} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.childPath}/></Grid>
+                                 {/* Relative Path as Menu for Non-Chem Fields */}
+                                 <Grid item xs={12} sm={6}>
+                                    <HelpField 
+                                        id="childPath" 
+                                        label="Relative Path (Optional)" 
+                                        select
+                                        value={activeTabData.childPath} 
+                                        onChange={(id, v) => handleChildPathChange({ target: { value: v } })} 
+                                        helptext={helpText.dataSources.childPath}
+                                    >
+                                        <MenuItem value=""><em>None</em></MenuItem>
+                                        {channelPrototypes.map(chan => <MenuItem key={chan} value={chan}>{chan}</MenuItem>)}
+                                        <Divider />
+                                        <MenuItem value={OPTION_USER_SPECIFIED}>{OPTION_USER_SPECIFIED}</MenuItem>
+                                    </HelpField>
+                                </Grid>
                              </>
                          )}
                         <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
@@ -403,6 +483,27 @@ const ThreeDMenuBox = ({ onConfigurationChange, currentConfig, meshMols }) => {
                     </Grid>
                 </Grid>
             </Box>
+
+             {/* Dialog for User Specified Inputs */}
+             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
+                <DialogTitle>Enter {dialogField === 'path' ? 'Parent Elec Compartment' : 'Relative Path'}</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Value"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={tempDialogValue}
+                        onChange={(e) => setTempDialogValue(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveDialog}>Set</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

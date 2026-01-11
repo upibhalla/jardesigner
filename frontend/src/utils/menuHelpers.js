@@ -1,7 +1,3 @@
-{
-type: "file",
-fileName: "src/utils/menuHelpers.js",
-fullContent: `
 /**
  * Constant for the "User specified" menu option.
  * Import this in MenuBoxes to check if this option was selected.
@@ -23,11 +19,6 @@ export const getCompartmentOptions = (simPaths = []) => {
         return [OPTION_USER_SPECIFIED];
     }
 
-    // Helper to clean paths if necessary (currently assumes simPaths are just the names or full paths)
-    // If simPaths are like "/model/soma", we might want to extract just "soma" for display/logic?
-    // Assuming for now the logic applies to the string as-is or the "name" part.
-    // Let's assume the input strings are the values we check against.
-    
     const options = new Set();
     const sortedPaths = [...simPaths].sort();
 
@@ -42,10 +33,7 @@ export const getCompartmentOptions = (simPaths = []) => {
     priorityTargets.forEach(target => {
         // Check if exact match exists in simPaths (or maybe ends with it?)
         // Assuming strict match or check if the path ends with /target or [target]
-        // Adjusting logic: The prompt implies these are distinct entries. 
-        // We will look for partial matches if full paths are provided, or exact if names.
-        
-        const found = sortedPaths.find(p => p.endsWith(target) || p.endsWith(\`/\${target}\`) || p === target);
+        const found = sortedPaths.find(p => p.endsWith(target) || p.endsWith(`/${target}`) || p === target);
         if (found) {
             options.add(found);
         }
@@ -71,5 +59,3 @@ export const getCompartmentOptions = (simPaths = []) => {
 
     return finalOptions;
 };
-`
-}

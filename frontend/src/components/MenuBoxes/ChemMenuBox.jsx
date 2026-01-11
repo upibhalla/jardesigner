@@ -10,14 +10,19 @@ import {
     MenuItem,
     Button,
     Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import RefreshIcon from '@mui/icons-material/Refresh'; // Import Refresh Icon
+import RefreshIcon from '@mui/icons-material/Refresh';
 import helpText from './ChemMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 
 // --- Helper Functions ---
 const getChemSourceString = (componentType) => {
@@ -72,8 +77,8 @@ const createDefaultChemPrototype = () => ({
 const createDefaultChemDistribution = () => ({
     prototype: '',
     location: locationOptions[0],
-    path: 'soma',
-    diffusionLength_um: '',
+    path: 'soma', // Default path
+    diffusionLength_um: '500', // Default diffusion length
     parent: '',
     radius_um: '',
     radiusSdev_um: '',
@@ -99,7 +104,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols }) => {
+const ChemMenuBox = ({ 
+    onConfigurationChange, 
+    currentConfig, 
+    clientId, 
+    meshMols,
+    elecPaths = [],
+    spinePaths = []
+}) => {
 	console.log("ChemMenuBox rendered. meshMols prop:", meshMols);
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chemProto?.map(p => {
@@ -171,6 +183,11 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
     const [activePrototype, setActivePrototype] = useState(0);
     const [activeDistribution, setActiveDistribution] = useState(0);
 
+    // --- State for User Specified Path Dialog ---
+    const [customPathDialogOpen, setCustomPathDialogOpen] = useState(false);
+    const [tempCustomPath, setTempCustomPath] = useState('');
+    const [pendingDistIndex, setPendingDistIndex] = useState(null);
+
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const prototypesRef = useRef(prototypes);
@@ -186,6 +203,22 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
         return Object.keys(meshMols).sort();
     }, [meshMols]);
 
+    // --- Helper to generate path options ---
+    const pathOptions = useMemo(() => {
+        const allPaths = [...elecPaths, ...spinePaths];
+        const opts = getCompartmentOptions(allPaths);
+        
+        if (distributions[activeDistribution]) {
+            const currentVal = distributions[activeDistribution].path;
+            if (currentVal && !opts.includes(currentVal) && currentVal !== OPTION_USER_SPECIFIED) {
+                 const last = opts.pop();
+                 opts.push(currentVal);
+                 opts.push(last);
+            }
+        }
+        return opts;
+    }, [elecPaths, spinePaths, distributions, activeDistribution]);
+
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultChemPrototype()]);
         setActivePrototype(prototypes.length);
@@ -194,8 +227,6 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
     const removePrototype = useCallback((indexToRemove) => {
         const removedProtoName = prototypesRef.current[indexToRemove]?.name;
         setPrototypes((prev) => prev.filter((_, i) => i !== indexToRemove));
-        // Note: This logic may need to be updated if distributions ever link back to prototypes
-        // For now, we only update distributions if the *prototype* is deleted, not the compartment
         setDistributions(prevDists => prevDists.map(dist =>
             dist.prototype === removedProtoName ? { ...dist, prototype: '' } : dist
         ));
@@ -276,6 +307,26 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
         );
     }, []);
 
+    // --- Custom Path Handling ---
+    const handlePathChange = (index, newValue) => {
+        if (newValue === OPTION_USER_SPECIFIED) {
+            setPendingDistIndex(index);
+            setTempCustomPath('');
+            setCustomPathDialogOpen(true);
+        } else {
+            updateDistribution(index, 'path', newValue);
+        }
+    };
+
+    const handleSaveCustomPath = () => {
+        if (pendingDistIndex !== null && tempCustomPath.trim() !== "") {
+            updateDistribution(pendingDistIndex, 'path', tempCustomPath.trim());
+        }
+        setCustomPathDialogOpen(false);
+        setPendingDistIndex(null);
+    };
+
+
     // --- Refactored Save/Refresh Logic ---
     const getChemDataForSave = useCallback(() => {
         const currentPrototypes = prototypesRef.current;
@@ -302,12 +353,10 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
         }).filter(p => p !== null);
 
         const chemDistribData = currentDistributions.map(distState => {
-            // VALIDATION REMOVED: const selectedProtoExists = chemProtoData.some(p => p.name === distState.prototype);
-            // We no longer validate against the prototype list. We just need a value.
             if (!distState.prototype || !distState.path) return null;
 
             const baseDistrib = {
-                proto: distState.prototype, // This 'proto' now refers to the 'Chem Compartment' (meshName)
+                proto: distState.prototype,
                 path: distState.path,
             };
             
@@ -369,7 +418,7 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
         }).filter(item => item !== null);
 
         return { chemProto: chemProtoData, chemDistrib: chemDistribData };
-    }, []); // Uses refs, so no dependencies needed
+    }, []);
 
     const handleRefreshModel = useCallback(() => {
         if (onConfigurationChangeRef.current) {
@@ -379,13 +428,11 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
     }, [getChemDataForSave]);
 
     useEffect(() => {
-        // Register the handleRefreshModel function to be called on unmount
         return () => {
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
-    // --- End Refactor ---
-
+    
     const activeProtoData = prototypes[activePrototype];
     const activeDistribData = distributions[activeDistribution];
 
@@ -479,28 +526,47 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
             {activeDistribData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={2}>
-                         {/* --- Common Fields --- */}
+                         {/* Row 1: Parent Elec Compartment (Full Width, Menu) */}
+                         <Grid item xs={12}>
+                             <HelpField 
+                                id="path" 
+                                label="Parent Elec Compartment" 
+                                select
+                                value={activeDistribData.path} 
+                                onChange={(id,v) => handlePathChange(activeDistribution, v)} 
+                                helptext={helpText.distributions.path}
+                             >
+                                {pathOptions.map(opt => (
+                                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                                ))}
+                             </HelpField>
+                         </Grid>
+
+                         {/* Row 2: Type of chemical compartment (Full Width) */}
+                         <Grid item xs={12}>
+                              <HelpField id="location" label="Type of chemical compartment" select required value={activeDistribData.location} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.location}>
+                                 {locationOptions.map(loc => (
+                                     <MenuItem key={loc} value={loc}>
+                                         {loc === 'Endo' ? 'Endosome' : loc}
+                                     </MenuItem>
+                                 ))}
+                             </HelpField>
+                          </Grid>
+                         
+                         {/* Row 3: Chem Compartment and Diffusion Length */}
                          <Grid item xs={12} sm={6}>
                              <HelpField id="prototype" label="Chem Compartment" select required value={activeDistribData.prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {chemCompartmentOptions.map((meshName) => <MenuItem key={meshName} value={meshName}>{meshName}</MenuItem>)}
                             </HelpField>
                          </Grid>
-                          <Grid item xs={12} sm={6}>
-                             <HelpField id="path" label="Path" required value={activeDistribData.path} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.path} />
-                         </Grid>
-                          <Grid item xs={12}>
-                              <HelpField id="location" label="Location" select required value={activeDistribData.location} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.location}>
-                                 {locationOptions.map(loc => <MenuItem key={loc} value={loc}>{loc}</MenuItem>)}
-                             </HelpField>
-                          </Grid>
-                         
-                         {/* --- Location-Specific Fields --- */}
                          {activeDistribData.location === 'Dendrite' && (
                              <Grid item xs={12} sm={6}>
                                  <HelpField id="diffusionLength_um" label="Diffusion Length (μm)" type="number" value={activeDistribData.diffusionLength_um} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.diffusionLength} />
                              </Grid>
                          )}
+
+                         {/* --- Location-Specific Fields --- */}
 
                          {(activeDistribData.location === 'Spine' || activeDistribData.location === 'PSD') && (
                              <Grid item xs={12} sm={6}>
@@ -552,6 +618,28 @@ const ChemMenuBox = ({ onConfigurationChange, currentConfig, clientId, meshMols 
                      </Button>
                  </Box>
              )}
+
+            {/* Custom Path Dialog */}
+            <Dialog open={customPathDialogOpen} onClose={() => setCustomPathDialogOpen(false)}>
+                <DialogTitle>Enter User Specified Path</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        id="customPath"
+                        label="Path"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={tempCustomPath}
+                        onChange={(e) => setTempCustomPath(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveCustomPath}>Set Path</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

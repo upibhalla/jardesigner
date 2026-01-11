@@ -108,7 +108,7 @@ export const useAppLogic = () => {
     const [threeDConfigs, setThreeDConfigs] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SCENE_CONFIG__, [VIEW_IDS.RUN]: null } : { [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
     const [meshMolsData, setMeshMolsData] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
     
-    // 1. NEW: State to store the reaction graph data received from socket
+    // State to store the reaction graph data received from socket
     const [reactionGraphs, setReactionGraphs] = useState({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
 
     const [simulationFrames, setSimulationFrames] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SIMULATION_FRAMES__, [VIEW_IDS.RUN]: [] } : { [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
@@ -119,6 +119,29 @@ export const useAppLogic = () => {
     const [modelBboxSize, setModelBboxSize] = useState({ [VIEW_IDS.SETUP]: { x: 0, y: 0, z: 0 }, [VIEW_IDS.RUN]: { x: 0, y: 0, z: 0 } });
     const [explodeOffset, setExplodeOffset] = useState({ [VIEW_IDS.SETUP]: { x: 0, y: 0, z: 0 }, [VIEW_IDS.RUN]: { x: 0, y: 0, z: 0 } });
     const threeDManagerRefs = useRef({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
+
+    // --- NEW: Extract elecPaths and spinePaths ---
+    const { elecPaths, spinePaths } = useMemo(() => {
+        const config = threeDConfigs[VIEW_IDS.SETUP];
+        let ePaths = [];
+        let sPaths = [];
+
+        if (config && config.drawables) {
+            // Extract Elec compartments
+            const elecDrawable = config.drawables.find(d => d.title === "Elec compartments");
+            if (elecDrawable && elecDrawable.shape) {
+                ePaths = elecDrawable.shape.map(s => s.simPath).filter(Boolean);
+            }
+
+            // Extract Spines
+            const spineDrawable = config.drawables.find(d => d.title === "Spines");
+            if (spineDrawable && spineDrawable.shape) {
+                sPaths = spineDrawable.shape.map(s => s.simPath).filter(Boolean);
+            }
+        }
+        return { elecPaths: ePaths, spinePaths: sPaths };
+    }, [threeDConfigs]);
+    // ---------------------------------------------
 
     const totalRuntime = useMemo(() => {
         const frames = simulationFrames[VIEW_IDS.RUN] || [];
@@ -241,7 +264,6 @@ export const useAppLogic = () => {
                 setThreeDConfigs(prev => ({ ...prev, [viewId]: data.scene }));
                 setMeshMolsData(prev => ({ ...prev, [viewId]: data.meshMols }));
                 
-                // 2. NEW: Capture the reaction graph sibling
                 if (data.reactionGraph) {
 					console.log("AppLogic: Received reactionGraph from Socket!", data.reactionGraph);
 
@@ -298,7 +320,6 @@ export const useAppLogic = () => {
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
         
-        // 3. NEW: Clear graph data on rebuild so we don't show old data
         setReactionGraphs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
 
         handleRewindReplay();
@@ -365,7 +386,6 @@ export const useAppLogic = () => {
         setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
         setThreeDConfigs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
         setMeshMolsData({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-        // NEW: Clear reaction graphs
         setReactionGraphs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
 
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
@@ -425,6 +445,8 @@ export const useAppLogic = () => {
         onRewindReplay: handleRewindReplay, onSeekReplay: handleSeekReplay,
         handleStartReplay, handlePauseReplay, handleRewindReplay, handleSeekReplay,
         simError, setSimError, 
+        // --- NEW: Pass the extracted paths ---
+        elecPaths, spinePaths 
     };
 
     if (isStandalone) {
@@ -432,7 +454,6 @@ export const useAppLogic = () => {
             ...baseProps,
             threeDConfig: threeDConfigs[VIEW_IDS.SETUP],
             simulationFrames: simulationFrames[VIEW_IDS.SETUP],
-            // Note: Standalone mode ignores reaction graphs for now, or you can add if available in window globals
             reactionGraphs: { setup: null }, 
             drawableVisibility: drawableVisibility[VIEW_IDS.SETUP],
             setDrawableVisibility: (updater) => setDrawableVisibility(prev => ({ ...prev, [VIEW_IDS.SETUP]: typeof updater === 'function' ? updater(prev[VIEW_IDS.SETUP]) : updater })),
@@ -449,7 +470,6 @@ export const useAppLogic = () => {
         ...baseProps,
         threeDConfigs, simulationFrames, drawableVisibility, 
         meshMolsData, 
-        // 4. NEW: Return the captured graph data
         reactionGraphs, 
 		setDrawableVisibility, clickSelected, explodeAxis,
         handleSelectionChange, onManagerReady, 

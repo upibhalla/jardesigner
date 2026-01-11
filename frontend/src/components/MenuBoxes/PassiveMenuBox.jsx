@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -9,12 +9,19 @@ import {
     IconButton,
     Button,
     Tooltip,
+    MenuItem,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Divider
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './PassiveMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 
 // --- Helper to safely convert value to string ---
 const safeToString = (value, defaultValue = '') => {
@@ -46,10 +53,15 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const PassiveMenuBox = ({ onConfigurationChange, currentConfig }) => {
+const PassiveMenuBox = ({ 
+    onConfigurationChange, 
+    currentConfig, 
+    elecPaths = [], 
+    spinePaths = [] 
+}) => {
     const [tabs, setTabs] = useState(() => {
         const initialTabs = currentConfig?.map(p => ({
-            path: p.path || '',
+            path: p.path || 'soma',
             leakReversalPotential: formatFloat(p.Em * 1000) || createDefaultPassiveEntry().leakReversalPotential,
             initialPotential: formatFloat(p.initVm * 1000) || createDefaultPassiveEntry().initialPotential,
             membraneCapacitance: formatFloat(p.CM) || createDefaultPassiveEntry().membraneCapacitance,
@@ -59,6 +71,10 @@ const PassiveMenuBox = ({ onConfigurationChange, currentConfig }) => {
         return initialTabs.length > 0 ? initialTabs : [createDefaultPassiveEntry()];
     });
     const [activeTab, setActiveTab] = useState(0);
+
+    // --- Dialog State ---
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [tempDialogValue, setTempDialogValue] = useState('');
 
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
@@ -90,6 +106,30 @@ const PassiveMenuBox = ({ onConfigurationChange, currentConfig }) => {
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
     };
+
+    // --- Path Handling (FIXED) ---
+    // HelpField sends (id, value), not an event object.
+    const handlePathChange = (id, val) => {
+        if (val === OPTION_USER_SPECIFIED) {
+            setTempDialogValue('');
+            setDialogOpen(true);
+        } else {
+            updateTab(activeTab, 'path', val);
+        }
+    };
+
+    const handleSaveDialog = () => {
+        if (tempDialogValue.trim() !== '') {
+            updateTab(activeTab, 'path', tempDialogValue.trim());
+        }
+        setDialogOpen(false);
+    };
+
+    // --- Options Generation ---
+    const pathOptions = useMemo(() => {
+        const allPaths = [...elecPaths, ...spinePaths];
+        return getCompartmentOptions(allPaths);
+    }, [elecPaths, spinePaths]);
 
     useEffect(() => {
         const getPassiveDataForUnmount = () => {
@@ -145,9 +185,23 @@ const PassiveMenuBox = ({ onConfigurationChange, currentConfig }) => {
             {activeTabData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={2}>
+                        {/* Modified Path Field: Dropdown + Dialog Logic */}
                         <Grid item xs={12}>
-                            <HelpField id="path" label="Path (e.g., soma, dend)" required value={activeTabData.path} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.path} />
+                            <HelpField 
+                                id="path" 
+                                label="Electrical Compartment" 
+                                select
+                                required 
+                                value={activeTabData.path} 
+                                onChange={handlePathChange} 
+                                helptext={helpText.fields.path} 
+                            >
+                                {pathOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+                                <Divider />
+                                <MenuItem value={OPTION_USER_SPECIFIED}>{OPTION_USER_SPECIFIED}</MenuItem>
+                            </HelpField>
                         </Grid>
+
                         <Grid item xs={6}>
                             <HelpField id="leakReversalPotential" label="Em (Leak Reversal, mV)" type="number" required value={activeTabData.leakReversalPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.leakReversalPotential} />
                         </Grid>
@@ -172,6 +226,28 @@ const PassiveMenuBox = ({ onConfigurationChange, currentConfig }) => {
             {tabs.length === 0 && (
                  <Typography sx={{mt: 2, fontStyle: 'italic'}}>No passive distribution entries defined. Click 'Add Entry' to begin.</Typography>
              )}
+
+            {/* Dialog for User Specified Path */}
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
+                <DialogTitle>Enter Electrical Compartment</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        id="customPath"
+                        label="Compartment Name"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={tempDialogValue}
+                        onChange={(e) => setTempDialogValue(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveDialog}>Set</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     Box,
     Tabs,
@@ -10,12 +10,17 @@ import {
     MenuItem,
     Button,
     Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import helpText from './ElecMenuBox.Help.json';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 
 // --- Helper Functions ---
 const getChannelSourceString = (componentType) => {
@@ -77,7 +82,13 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
+const ElecMenuBox = ({ 
+    onConfigurationChange, 
+    currentConfig, 
+    clientId, 
+    elecPaths = [], 
+    spinePaths = [] 
+}) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chanProto?.map(p => {
             let componentType = p.source;
@@ -108,6 +119,11 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
     const [activePrototype, setActivePrototype] = useState(0);
     const [activeDistribution, setActiveDistribution] = useState(0);
 
+    // --- State for User Specified Path Dialog ---
+    const [customPathDialogOpen, setCustomPathDialogOpen] = useState(false);
+    const [tempCustomPath, setTempCustomPath] = useState('');
+    const [pendingDistIndex, setPendingDistIndex] = useState(null);
+
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const prototypesRef = useRef(prototypes);
@@ -115,8 +131,25 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
     const distributionsRef = useRef(distributions);
     useEffect(() => { distributionsRef.current = distributions; }, [distributions]);
 
-    // NEW: Ref for the hidden file input.
     const fileInputRef = useRef(null);
+
+    // --- Helper to generate path options ---
+    const pathOptions = useMemo(() => {
+        // Use both elecPaths and spinePaths for allowed compartments
+        const allPaths = [...elecPaths, ...spinePaths];
+        const opts = getCompartmentOptions(allPaths);
+        
+        // Ensure the current value is in the list if it's not standard
+        if (distributions[activeDistribution]) {
+            const currentVal = distributions[activeDistribution].path;
+            if (currentVal && !opts.includes(currentVal) && currentVal !== OPTION_USER_SPECIFIED) {
+                 const last = opts.pop();
+                 opts.push(currentVal);
+                 opts.push(last);
+            }
+        }
+        return opts;
+    }, [elecPaths, spinePaths, distributions, activeDistribution]);
 
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultPrototype()]);
@@ -158,10 +191,8 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
         );
     }, []);
 
-    // NEW: Handler to programmatically click the hidden file input.
     const handleFileSelect = () => fileInputRef.current.click();
 
-    // NEW: Handler to upload the file and update the state.
     const handleFileChange = async (event) => {
         const file = event.target.files[0];
         if (!file || !clientId) return;
@@ -181,8 +212,6 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
                 const errorText = await response.text();
                 throw new Error(errorText || 'File upload failed');
             }
-            
-            // On success, update the 'file' field of the current prototype with the original filename.
             updatePrototype(activePrototype, 'file', file.name);
             
         } catch (error) {
@@ -208,6 +237,25 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
             )
         );
     }, []);
+
+    // --- Custom Path Handling ---
+    const handlePathChange = (index, newValue) => {
+        if (newValue === OPTION_USER_SPECIFIED) {
+            setPendingDistIndex(index);
+            setTempCustomPath('');
+            setCustomPathDialogOpen(true);
+        } else {
+            updateDistribution(index, 'path', newValue);
+        }
+    };
+
+    const handleSaveCustomPath = () => {
+        if (pendingDistIndex !== null && tempCustomPath.trim() !== "") {
+            updateDistribution(pendingDistIndex, 'path', tempCustomPath.trim());
+        }
+        setCustomPathDialogOpen(false);
+        setPendingDistIndex(null);
+    };
 
     useEffect(() => {
         const getElecDataForUnmount = () => {
@@ -255,7 +303,6 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
-            {/* NEW: Hidden file input for channel models */}
             <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -290,7 +337,6 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
                             <HelpField id="name" label="Prototype Name" value={prototypes[activePrototype].name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required />
                         </Grid>
                         
-                        {/* MODIFIED: Replaced text field with file upload UI */}
                         {prototypes[activePrototype].type === 'File' && (
                            <Grid item xs={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
@@ -340,14 +386,27 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
             {distributions[activeDistribution] && (
                  <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={2}>
+                        {/* 1. Moved Path to first position, full width, and made into a Menu */}
+                        <Grid item xs={12}>
+                             <HelpField 
+                                id="path" 
+                                label="Parent Elec Compartment" 
+                                select
+                                value={distributions[activeDistribution].path} 
+                                onChange={(id,v) => handlePathChange(activeDistribution, v)} 
+                                helptext={helpText.distributions.path}
+                             >
+                                {pathOptions.map(opt => (
+                                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                                ))}
+                             </HelpField>
+                        </Grid>
+
                         <Grid item xs={12} sm={6}>
                              <HelpField id="prototype" label="Prototype" select required value={distributions[activeDistribution].prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </HelpField>
-                            <Box mt={1}>
-                                <HelpField id="path" label="Path" required value={distributions[activeDistribution].path} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.path} />
-                            </Box>
                          </Grid>
                          <Grid item xs={12} sm={6}>
                              {prototypes.find(p => p.name === distributions[activeDistribution].prototype)?.type === 'Ca_conc' ? (
@@ -362,6 +421,28 @@ const ElecMenuBox = ({ onConfigurationChange, currentConfig, clientId }) => {
                      </Button>
                 </Box>
              )}
+
+            {/* Custom Path Dialog */}
+            <Dialog open={customPathDialogOpen} onClose={() => setCustomPathDialogOpen(false)}>
+                <DialogTitle>Enter User Specified Path</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        id="customPath"
+                        label="Path"
+                        type="text"
+                        fullWidth
+                        variant="standard"
+                        value={tempCustomPath}
+                        onChange={(e) => setTempCustomPath(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSaveCustomPath}>Set Path</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
