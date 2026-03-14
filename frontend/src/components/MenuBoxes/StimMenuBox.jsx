@@ -232,19 +232,42 @@ const StimMenuBox = ({
         return Object.keys(meshMols).sort();
     }, [meshMols]);
 
-    // Combined elecPaths and spinePaths for Parent Elec Compartment
+    // Build the Parent Elec Compartment dropdown options:
+    //   - Start with soma + regular elec paths (no shafts).
+    //   - From spinePaths: exclude shaft compartments, add a base# wildcard for
+    //     any base name that appears with multiple numeric suffixes (head0, head1…
+    //     → head#), then show at most 10 individual spine compartments.
     const elecCompartmentOptions = useMemo(() => {
-        const opts = new Set(['soma']); // Default always available
-        
+        const opts = ['soma'];
+
         if (Array.isArray(elecPaths)) {
-            elecPaths.forEach(p => opts.add(p));
+            elecPaths
+                .filter(p => !p.includes('shaft'))
+                .forEach(p => { if (!opts.includes(p)) opts.push(p); });
         }
-        
+
         if (Array.isArray(spinePaths)) {
-            spinePaths.forEach(p => opts.add(p));
+            const filtered = spinePaths.filter(p => !p.includes('shaft'));
+
+            // Detect bases with repeating numeric suffixes (e.g. head0, head1 → head#)
+            const baseCounts = {};
+            filtered.forEach(p => {
+                const m = p.match(/^([a-zA-Z_]+)\d+$/);
+                if (m) baseCounts[m[1]] = (baseCounts[m[1]] || 0) + 1;
+            });
+            Object.entries(baseCounts).forEach(([base, count]) => {
+                if (count > 1) opts.push(base + '#');
+            });
+
+            // Add up to 10 individual spine compartments
+            let added = 0;
+            for (const p of filtered) {
+                if (added >= 10) break;
+                if (!opts.includes(p)) { opts.push(p); added++; }
+            }
         }
-        
-        return Array.from(opts).sort();
+
+        return opts;
     }, [elecPaths, spinePaths]);
 
     // Get active plot data
@@ -374,6 +397,12 @@ const StimMenuBox = ({
                                 onChange={(id, v) => handlePathChange({ target: { value: v } })} 
                                 helptext={helpText.fields.path}
                               >
+                                  {/* If the current value was user-typed, show it so MUI can display it as selected */}
+                                  {activeStimData.path &&
+                                   !elecCompartmentOptions.includes(activeStimData.path) &&
+                                   activeStimData.path !== OPTION_USER_SPECIFIED && (
+                                      <MenuItem key="__current__" value={activeStimData.path}>{activeStimData.path}</MenuItem>
+                                  )}
                                   {elecCompartmentOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                                   <Divider />
                                   <MenuItem value={OPTION_USER_SPECIFIED}>{OPTION_USER_SPECIFIED}</MenuItem>
