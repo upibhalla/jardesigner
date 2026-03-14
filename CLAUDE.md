@@ -102,3 +102,7 @@ The `jsonData` structure (defined in `backend/jardesignerSchema.json`) that flow
 - `backend/CELL_MODELS/` — Example neuronal morphologies
 - `backend/CHAN_MODELS/` — Ion channel definitions
 - `backend/CHEM_MODELS/` — Chemical reaction models (SBML/Genesis format)
+
+## Build & Deploy
+- Build: `npm run build`
+- Deploy: `cp -r frontend/dist/* /var/www/html/jardesigner/`
