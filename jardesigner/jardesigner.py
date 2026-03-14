@@ -1519,7 +1519,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             sx = 3 * FIG_HT
             sy = 3 * FIG_WID
 
-        if self.plotFile.split('.')[-1] == "json":
+        if self.plotFile != None and (self.plotFile.split('.')[-1] == "json"):
             self.plots2json( nrows, ncols, self.plotFile )
             return
 
