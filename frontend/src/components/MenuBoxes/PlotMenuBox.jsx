@@ -347,6 +347,11 @@ const PlotMenuBox = ({
                                 onChange={(id,v) => handlePathChange(activePlot, v)} 
                                 helptext={helpText.fields.path}
                              >
+                                {activePlotData.path &&
+                                 !pathOptions.includes(activePlotData.path) &&
+                                 activePlotData.path !== OPTION_USER_SPECIFIED && (
+                                    <MenuItem key="__current__" value={activePlotData.path}>{activePlotData.path}</MenuItem>
+                                )}
                                 {pathOptions.map(opt => (
                                     <MenuItem key={opt} value={opt}>{opt}</MenuItem>
                                 ))}
