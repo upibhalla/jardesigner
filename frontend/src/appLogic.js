@@ -273,7 +273,9 @@ export const useAppLogic = () => {
 				}
 
                 const initialVisibility = {};
-                (data.scene?.drawables || []).forEach(d => { initialVisibility[d.groupId] = true; });
+                // Respect the visible field from the scene graph (e.g. invisible spine
+                // receptor channels registered for relpath use but not for display).
+                (data.scene?.drawables || []).forEach(d => { initialVisibility[d.groupId] = d.visible !== false; });
                 setDrawableVisibility(prev => ({ ...prev, [viewId]: initialVisibility }));
             }
             else if (data?.filetype === 'jardesignerDataFrame') {
