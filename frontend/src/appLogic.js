@@ -383,24 +383,22 @@ export const useAppLogic = () => {
         socketRef.current.emit('sim_command', { command: 'start', pid: activeSim.pid, params: { runtime: jsonData.runtime } });
     }, [activeSim.pid, jsonData.runtime, simulationFrames, handleRewindReplay]);
 
-    const handleResetRun = useCallback(async () => {
+    const handleResetRun = useCallback(() => {
         setIsSimulating(false);
-        setSimulationFrames({ [VIEW_IDS.SETUP]: [], [VIEW_IDS.RUN]: [] });
-        setThreeDConfigs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-        setMeshMolsData({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-        setReactionGraphs({ [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
-
+        // Only clear the run view — keep the setup view (morphology/3D) intact.
+        setSimulationFrames(prev => ({ ...prev, [VIEW_IDS.RUN]: [] }));
+        setThreeDConfigs(prev => ({ ...prev, [VIEW_IDS.RUN]: null }));
+        setMeshMolsData(prev => ({ ...prev, [VIEW_IDS.RUN]: null }));
+        setReactionGraphs(prev => ({ ...prev, [VIEW_IDS.RUN]: null }));
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
         setSimError(null);
         handleRewindReplay();
-        if (activeSim.pid) {
-            try {
-                await fetch(`${API_BASE_URL}/reset_simulation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid: activeSim.pid, client_id: clientId }) });
-                setActiveSim({ pid: null, data_channel_id: null, plot_filename: null });
-                lastBuiltJsonDataRef.current = null;
-            } catch (error) { console.error("Failed to reset previous simulation:", error); }
+        // Send reinit to the subprocess via socket — does NOT kill it, PID is preserved
+        // so the user can click Start again immediately.
+        if (activeSim.pid && socketRef.current?.connected) {
+            socketRef.current.emit('sim_command', { command: 'reset', pid: activeSim.pid });
         }
-    }, [activeSim.pid, clientId, handleRewindReplay]);
+    }, [activeSim.pid, handleRewindReplay]);
 
     const handleSelectionChange = useCallback((viewId, selection, isCtrlClick) => {
         setClickSelected(prev => {
