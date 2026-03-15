@@ -48,16 +48,16 @@ export default class ThreeDManager {
     this.mouse = new THREE.Vector2();
 
     // Lighting: VPython directions, boosted ambient and fill for more brightness.
-    // A: Ambient raised from 0x333333 (20%) to 0x888888 (53%) — lifts shadow floor.
-    this.world.add(new THREE.AmbientLight(0x888888));
+    // A: Ambient at 0x5d5d5d (37%) — midpoint between original 20% and boosted 53%.
+    this.world.add(new THREE.AmbientLight(0x5d5d5d));
 
     // Main light (direction <0.22, 0.44, 0.88>, 80% gray)
     const light1 = new THREE.DirectionalLight(0xcccccc, 1.0);
     light1.position.set(0.22, 0.44, 0.88).normalize();
     this.world.add(light1);
 
-    // B: Fill light raised from 0x4d4d4d (30%) to 0x999999 (60%) — brightens shaded side.
-    const light2 = new THREE.DirectionalLight(0x999999, 1.0);
+    // B: Fill light at 0x737373 (45%) — midpoint between original 30% and boosted 60%.
+    const light2 = new THREE.DirectionalLight(0x737373, 1.0);
     light2.position.set(-0.88, -0.22, -0.44).normalize();
     this.world.add(light2);
 
