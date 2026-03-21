@@ -62,12 +62,13 @@ FaradayConst = 96485.3365 # Coulomb/mol
 #CA_SCALE     = 25000 # Ratio of Traub units to mM. 250::0.01
 CA_SCALE     = 1.0 # I have now set sensible ranges in the KCA and KAHP
 
-RM = 1.0
-RA = 10.0
-CM = 0.01
 def make_axon( dia = 10e-6, comptLen = 10e-6, numAxonSegments = 200):
+    RM = 1.0
+    RA = 10.0
+    CM = 0.01
+    comptDia = 2e-6
     axon = moose.Neuron( '/library/axon' )
-    prev = rd.buildCompt( axon, 'soma', RM = 1.0, RA = 10.0, CM = 0.01, 
+    prev = rd.buildCompt( axon, 'soma', RM = RM, RA = RA, CM = CM,
             dia = 10e-6, x=0, dx=comptLen)
     theta = 0
     x = comptLen
@@ -86,13 +87,20 @@ def make_axon( dia = 10e-6, comptLen = 10e-6, numAxonSegments = 200):
     
     return axon
 
-def make_myeliated_axon(comptLen = 10e-6, comptDia = 2e-6, 
+def make_myelinated_axon(comptLen = 10e-6, comptDia = 2e-6, 
         numAxonSegments = 405, nodeSpacing=100):
+    nodeDia = 1e-6
+    nodeRM = 1.0
+    nodeCM = 0.01
+    RM = 100
+    RA = 5
+    CM = 0.001
+
     axon = moose.Neuron( '/library/myelinated_axon' )
     x = 0.0
     y = 0.0
     # Note how the membrane passive properties are different.
-    prev = rd.buildCompt( axon, 'soma', RM = 100, RA = 5, CM = 0.001, dia = 10e-6, x=0, dx=comptLen)
+    prev = rd.buildCompt( axon, 'soma', RM = RM, RA = RA, CM = CM, dia = 10e-6, x=0, dx=comptLen)
     theta = 0
     x = comptLen
 
