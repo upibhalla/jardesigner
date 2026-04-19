@@ -291,7 +291,11 @@ class JarDesigner:
         try:
             data = addDefaultsRecursive( data, schema )
             jsonschema.validate(instance=data, schema=schema)
-            applyModifiers( data, modifiers )
+            if len( modifiers ) > 0:
+                applyModifiers( data, modifiers )
+                # Clean up and check all over again.
+                data = addDefaultsRecursive( data, schema )
+                jsonschema.validate(instance=data, schema=schema)
         except jsonschema.exceptions.ValidationError as e:
             print(f"{jsonFile} fails to pass schema: {e}")
             quit()
