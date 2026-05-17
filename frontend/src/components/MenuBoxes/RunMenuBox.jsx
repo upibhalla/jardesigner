@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
 import StopIcon from '@mui/icons-material/Stop';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 const helpText = {
@@ -48,10 +48,12 @@ const InfoTooltip = ({ title }) => (
 
 const RunMenuBox = ({
     onConfigurationChange,
-    setRunParameters, // NEW: Receive the lightweight updater function
+    setRunParameters,
     currentConfig,
     onStartRun,
     onResetRun,
+    onBuildAndStartRun,
+    onStopRun,
     isSimulating,
     activeSimPid,
     liveFrameData,
@@ -168,28 +170,26 @@ const RunMenuBox = ({
 
     const handleStart = () => {
         const latestConfig = buildConfigPayload();
-        
-        // For a new "Start", trigger the full check-and-rebuild logic.
         if (currentTime === 0) {
-            if (onConfigurationChange) {
-                onConfigurationChange(latestConfig);
+            // New start: delegate to parent which decides if rebuild is needed.
+            if (onBuildAndStartRun) {
+                onBuildAndStartRun(latestConfig);
             }
-        } 
-        // For a "Continue", just update the params in the parent state without a rebuild.
-        else {
+        } else {
+            // Continue: update params without rebuild, then start with explicit runtime.
             if (setRunParameters) {
                 setRunParameters(latestConfig);
             }
-        }
-
-        // In both cases, start the run.
-        if (onStartRun) {
-            onStartRun();
+            if (onStartRun) {
+                onStartRun(latestConfig.runtime);
+            }
         }
     };
 
-    const handlePause = () => {
-        setStatusMessage({ type: 'warning', text: 'Pause functionality is not implemented.' });
+    const handleStop = () => {
+        if (onStopRun) {
+            onStopRun();
+        }
     };
 
     const handleReset = () => {
@@ -203,8 +203,8 @@ const RunMenuBox = ({
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || !activeSimPid}>{startButtonText}</Button></Grid>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<PauseIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handlePause} disabled={!isSimulating}>Pause</Button></Grid>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleStop} disabled={!isSimulating}>Stop</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<RestartAltIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
             </Grid>
 
             {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}

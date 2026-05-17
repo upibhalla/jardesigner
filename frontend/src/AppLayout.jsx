@@ -111,6 +111,9 @@ export const AppLayout = (props) => {
     getChemProtos,
     handleStartRun,
     handleResetRun,
+    handleBuildAndStartRun,
+    handleStopRun,
+    setRunParameters,
     isSimulating,
     activeSim,
     liveFrameData,
@@ -154,9 +157,12 @@ export const AppLayout = (props) => {
     />,
     Run: <RunMenuBox
       onConfigurationChange={updateJsonData}
+      setRunParameters={setRunParameters}
       currentConfig={{ ...jsonData }}
       onStartRun={handleStartRun}
       onResetRun={handleResetRun}
+      onBuildAndStartRun={handleBuildAndStartRun}
+      onStopRun={handleStopRun}
       isSimulating={isSimulating}
       activeSimPid={activeSim.pid}
       liveFrameData={liveFrameData}

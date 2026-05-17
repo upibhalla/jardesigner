@@ -25,6 +25,8 @@ import numpy as np
 import math
 import sys
 import time
+import threading
+import queue
 import matplotlib.pyplot as plt
 import argparse
 import requests
@@ -38,6 +40,31 @@ from . import fixXreacs
 from moose.neuroml.NeuroML import NeuroML
 from moose.neuroml.ChannelML import ChannelML
 from . import context
+
+_cmd_queue = queue.Queue()
+_sim_flags = {'stop': False, 'reset_pending': False}
+
+def _stdin_reader():
+    for line in sys.stdin:
+        _cmd_queue.put(line)
+
+def _pyrun_check():
+    try:
+        line = _cmd_queue.get_nowait()
+        try:
+            command_data = json.loads(line)
+            cmd = command_data.get('command')
+            if cmd in ('stop', 'reset'):
+                _sim_flags['stop'] = True
+                if cmd == 'reset':
+                    _sim_flags['reset_pending'] = True
+                moose.stop()
+            else:
+                _cmd_queue.put(line)
+        except Exception:
+            _cmd_queue.put(line)
+    except queue.Empty:
+        pass
 
 knownFieldInfo = {
     'Vm': {'fieldScale': 1000, 'dataUnits': 'mV', 
@@ -2186,39 +2213,48 @@ def randomPlacementFunc( numModels, idx ):
 
 
 def serverCommandLoop( rdes ):
-    # This loop will wait for commands from server.py via stdin
-    for line in sys.stdin:
+    reader_thread = threading.Thread(target=_stdin_reader, daemon=True)
+    reader_thread.start()
+    while True:
         try:
-            # Parse the command, which is expected to be a JSON string
+            line = _cmd_queue.get()
             command_data = json.loads(line)
             command = command_data.get("command")
 
             if command == "start":
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
+                _sim_flags['stop'] = False
+                _sim_flags['reset_pending'] = False
                 if moose.element( "/clock" ).currentTime == 0:
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
                         rdes.runMooView.sendSceneGraph( "run" )
-
-                #print( "starting on rdes = ", rdes )
                 moose.start(runtime)
-                # Notify client that the run is finished
+                stopped = _sim_flags['stop']
+                reset_pending = _sim_flags['reset_pending']
+                _sim_flags['stop'] = False
+                _sim_flags['reset_pending'] = False
                 rdes.display()
-                time.sleep(0.1) # Give the filesystem time to flush
+                time.sleep(0.1)
                 rdes.runMooView.notifySimulationEnd( rdes.dataChannelId )
+                if reset_pending:
+                    moose.reinit()
+
+            elif command == "stop":
+                _sim_flags['stop'] = True
+                moose.stop()
 
             elif command == "reset":
                 moose.reinit()
 
             elif command == "quit":
                 print("Received 'quit' command. Exiting.")
-                break # Exit the while loop and terminate the script
+                break
             else:
                 print(f"Warning: Unknown command '{command}'")
 
         except json.JSONDecodeError:
             print(f"Warning: Received non-JSON command: {line.strip()}")
 
-        # Ensure the output buffer is flushed so the server sees the prints
         sys.stdout.flush()
 
 
@@ -2253,7 +2289,13 @@ def main():
             #rdes._buildReactionGraph()
             rdes.setupMooView.sendSceneGraph( "setup", meshMols=rdes.meshMols, reacGraph = reacGraph )
             #print( "jardesigner.py: sent SceneGraph1 with meshMols:", rdes.meshMols )
-    
+            import __main__
+            __main__._pyrun_check = _pyrun_check
+            ctrl = moose.PyRun('/jardes_ctrl')
+            ctrl.runString = '_pyrun_check()'
+            ctrl.tick = 19
+            moose.setClock(19, 0.1)
+
         moose.reinit()
         if args.run and args.data_channel_id == None: # local run
             #print( "Running locally")
