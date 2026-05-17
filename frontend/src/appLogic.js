@@ -98,7 +98,8 @@ export const useAppLogic = () => {
     const [simError, setSimError] = useState(null);
     const [isSimulating, setIsSimulating] = useState(false);
     const [clientId] = useState(() => uuidv4());
-    
+    const sessionTokenRef = useRef('');
+
     const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null, plot_filename: null });
     const socketRef = useRef(null);
     const frameQueueRef = useRef([]);
@@ -249,7 +250,8 @@ export const useAppLogic = () => {
             }
         };
 
-        socket.on('connect', () => socket.emit('register_client', { clientId: clientId }));
+        socket.on('connect', () => socket.emit('register_client', { clientId, sessionToken: sessionTokenRef.current }));
+        socket.on('session_token', (data) => { sessionTokenRef.current = data.token ?? ''; });
 
         socket.on('simulation_data', (data) => {
             if (data?.type === 'sim_end') {

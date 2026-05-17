@@ -12,7 +12,7 @@ import re
 import secrets
 from flask import Flask, request, jsonify, send_from_directory, send_file, after_this_request
 from flask_cors import CORS
-from flask_socketio import SocketIO, join_room, leave_room
+from flask_socketio import SocketIO, join_room, leave_room, emit as sock_emit
 from werkzeug.utils import secure_filename
 
 # --- Configuration ---
@@ -35,7 +35,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger
 # --- Store running process and session info ---
 running_processes = {}
 client_sim_map = {}
-sid_clientid_map = {}
+sid_clientid_map = {}   # sid → client_id
+client_owner_map = {}   # client_id → (sid, session_token)
 
 def stream_printer(stream, pid, stream_name, emit_error_fn=None):
     """
@@ -363,22 +364,35 @@ def handle_connect():
 @socketio.on('register_client')
 def handle_register_client(data):
     client_id = data.get('clientId')
-    if client_id and _is_safe_client_id(client_id):
-        sid_clientid_map[request.sid] = client_id
-        print(f"Registered client {client_id} to SID {request.sid}")
+    if not client_id or not _is_safe_client_id(client_id):
+        return
+    existing = client_owner_map.get(client_id)
+    if existing:
+        # client_id already claimed — require the correct token to take over
+        _, stored_token = existing
+        provided = data.get('sessionToken', '')
+        if not secrets.compare_digest(provided, stored_token):
+            return  # reject: spoofing attempt or stale reconnect without token
+    session_token = secrets.token_hex(16)
+    sid_clientid_map[request.sid] = client_id
+    client_owner_map[client_id] = (request.sid, session_token)
+    sock_emit('session_token', {'token': session_token})
+    print(f"Registered client {client_id} to SID {request.sid}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    client_id = sid_clientid_map.get(request.sid)
+    client_id = sid_clientid_map.pop(request.sid, None)
     if client_id:
-        session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
-        if os.path.exists(session_dir):
-            try:
-                shutil.rmtree(session_dir)
-            except Exception as e:
-                print(f"Error deleting session directory {session_dir}: {e}")
-        
-        sid_clientid_map.pop(request.sid, None)
+        owner_sid, _ = client_owner_map.get(client_id, (None, None))
+        if owner_sid == request.sid:
+            # This socket is still the registered owner — safe to clean up.
+            client_owner_map.pop(client_id, None)
+            session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
+            if os.path.exists(session_dir):
+                try:
+                    shutil.rmtree(session_dir)
+                except Exception as e:
+                    print(f"Error deleting session directory {session_dir}: {e}")
         pid = client_sim_map.pop(client_id, None)
         if pid:
             terminate_process(pid)
