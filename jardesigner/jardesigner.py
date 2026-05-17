@@ -42,13 +42,36 @@ from moose.neuroml.ChannelML import ChannelML
 from . import context
 
 _cmd_queue = queue.Queue()
-_sim_flags = {'stop': False, 'reset_pending': False}
+_sim_flags = {
+    'stop': False, 'reset_pending': False,
+    'last_status_wallclock': 0.0,
+    'data_channel_id': None,
+}
+_STATUS_URL   = "http://127.0.0.1:5000/internal/push_data"
+_STATUS_TOKEN = os.environ.get('JARDESIGNER_INTERNAL_TOKEN', '')
 
 def _stdin_reader():
     for line in sys.stdin:
         _cmd_queue.put(line)
 
+def _send_time_update_async(sim_time):
+    channel_id = _sim_flags['data_channel_id']
+    if not channel_id:
+        return
+    def _post():
+        try:
+            requests.post(_STATUS_URL,
+                          json={"data_channel_id": channel_id,
+                                "payload": {"type": "sim_time_update",
+                                            "currentTime": sim_time}},
+                          headers={'X-Internal-Token': _STATUS_TOKEN},
+                          timeout=1.0)
+        except Exception:
+            pass
+    threading.Thread(target=_post, daemon=True).start()
+
 def _pyrun_check():
+    # Check for stop/reset commands from the client
     try:
         line = _cmd_queue.get_nowait()
         try:
@@ -65,6 +88,11 @@ def _pyrun_check():
             _cmd_queue.put(line)
     except queue.Empty:
         pass
+    # Wallclock-gated time update: at most one every 0.5 s
+    now = time.time()
+    if now - _sim_flags['last_status_wallclock'] >= 0.5:
+        _sim_flags['last_status_wallclock'] = now
+        _send_time_update_async(moose.element('/clock').currentTime)
 
 knownFieldInfo = {
     'Vm': {'fieldScale': 1000, 'dataUnits': 'mV', 
@@ -2225,6 +2253,8 @@ def serverCommandLoop( rdes ):
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
                 _sim_flags['stop'] = False
                 _sim_flags['reset_pending'] = False
+                _sim_flags['last_status_wallclock'] = 0.0
+                _sim_flags['data_channel_id'] = rdes.dataChannelId
                 if moose.element( "/clock" ).currentTime == 0:
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
                         rdes.runMooView.sendSceneGraph( "run" )

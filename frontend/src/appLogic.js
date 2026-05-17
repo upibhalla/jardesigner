@@ -259,6 +259,14 @@ export const useAppLogic = () => {
                 return;
             }
 
+            if (data?.type === 'sim_time_update') {
+                setLiveFrameData(prev => ({
+                    ...prev,
+                    [VIEW_IDS.RUN]: { ...(prev[VIEW_IDS.RUN] ?? {}), timestamp: data.currentTime }
+                }));
+                return;
+            }
+
             if (data?.type === 'sim_batch') {
                 const frames = data.frames || [];
                 if (frames.length > 0) {
