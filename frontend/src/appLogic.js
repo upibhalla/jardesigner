@@ -258,14 +258,25 @@ export const useAppLogic = () => {
                 onSimulationEnded();
                 return;
             }
-            
+
+            if (data?.type === 'sim_batch') {
+                const frames = data.frames || [];
+                if (frames.length > 0) {
+                    setSimulationFrames(prev => ({ ...prev, [VIEW_IDS.RUN]: frames }));
+                    const lastFrame = frames[frames.length - 1];
+                    setLiveFrameData(prev => ({ ...prev, [VIEW_IDS.RUN]: lastFrame }));
+                    frameQueueRef.current = [...frames];
+                }
+                return;
+            }
+
             const viewId = data.viewId;
             if (!viewId || !Object.values(VIEW_IDS).includes(viewId)) return;
-        
+
             if (data?.type === 'scene_init') {
                 setThreeDConfigs(prev => ({ ...prev, [viewId]: data.scene }));
                 setMeshMolsData(prev => ({ ...prev, [viewId]: data.meshMols }));
-                
+
                 if (data.reactionGraph) {
 					console.log("AppLogic: Received reactionGraph from Socket!", data.reactionGraph);
 
@@ -282,7 +293,7 @@ export const useAppLogic = () => {
             }
             else if (data?.filetype === 'jardesignerDataFrame') {
                 if (viewId === VIEW_IDS.RUN) frameQueueRef.current.push(data);
-                setSimulationFrames(prev => ({ ...prev, [viewId]: [...prev[viewId], data].sort((a, b) => a.timestamp - b.timestamp) }));
+                setSimulationFrames(prev => ({ ...prev, [viewId]: [...prev[viewId], data] }));
                 setLiveFrameData(prev => ({ ...prev, [viewId]: data }));
             }
         });

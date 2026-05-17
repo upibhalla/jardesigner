@@ -552,6 +552,7 @@ class MooView:
         self.dataChannelId = dataChannelId
         self.standalone = ( dataChannelId == None )
         self.standaloneFrames = []
+        self._pendingFrames = []
         self.standaloneSceneGraph = None
         if displayConfig:
             self.displayConfig = displayConfig
@@ -583,19 +584,10 @@ class MooView:
             return
 
         payload = self.drawables[idx].getDataFrame( simTime )
-        
-        requestBody = {
-            "data_channel_id": self.dataChannelId,
-            "payload": payload,
-        }
         if self.standalone:
             self.standaloneFrames.append( payload )
         else:
-            try:
-                http_session.post(FLASK_SERVER_URL, json=requestBody, timeout=0.5)
-            except Exception as e:
-                # This will now print any network errors to the server console
-                print(f"ERROR in updateValues: Failed to send data frame. {e}")
+            self._pendingFrames.append( payload )
 
 
     def makeMoogli(self, mooObj, fdict, groupId ):
@@ -647,24 +639,27 @@ class MooView:
         if self.standalone:
             self.generateStandaloneHtml()
             return
-        payload = {
-            "type": "sim_end",
-            "message": "Simulation has finished."
-        }
-        requestBody = {
-            "data_channel_id": dataChannelId,
-            "payload": payload
-        }
+        if self._pendingFrames:
+            try:
+                requests.post(FLASK_SERVER_URL,
+                              json={"data_channel_id": dataChannelId,
+                                    "payload": {"type": "sim_batch",
+                                                "frames": self._pendingFrames}},
+                              headers={'X-Internal-Token': _INTERNAL_TOKEN},
+                              timeout=30.0)
+            except Exception as e:
+                print(f"Warning: Could not send simulation frame batch. {e}")
+            self._pendingFrames = []
         try:
-            requests.post(FLASK_SERVER_URL, json=requestBody,
-                          headers={'X-Internal-Token': _INTERNAL_TOKEN}, timeout=2.0)
+            requests.post(FLASK_SERVER_URL,
+                          json={"data_channel_id": dataChannelId,
+                                "payload": {"type": "sim_end",
+                                            "message": "Simulation has finished."}},
+                          headers={'X-Internal-Token': _INTERNAL_TOKEN},
+                          timeout=2.0)
             print("Sent simulation end notification.")
         except Exception as e:
             print(f"Warning: Could not send simulation end notification. {e}")
-            http_session.post(FLASK_SERVER_URL, json={
-                "data_channel_id": dataChannelId,
-                "payload": {"type": "error", "message": str(e)}
-            })
 
 
 
