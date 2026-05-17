@@ -94,6 +94,35 @@ def terminate_process(pid):
                 del running_processes[pid]
     return False
 
+_UPLOADS_REAL = os.path.realpath(USER_UPLOADS_DIR)
+
+def _is_safe_client_id(client_id):
+    """Return True only if client_id resolves to a path within USER_UPLOADS_DIR."""
+    if not isinstance(client_id, str) or not client_id:
+        return False
+    if '..' in client_id or '/' in client_id or '\\' in client_id:
+        return False
+    resolved = os.path.realpath(os.path.join(USER_UPLOADS_DIR, client_id))
+    return resolved.startswith(_UPLOADS_REAL + os.sep)
+
+def _validate_config_sources(config_data):
+    """Return a list of violation strings; empty means the config is safe."""
+    violations = []
+    def _check(section, src):
+        if isinstance(src, str) and (src.startswith('/') or '..' in src):
+            violations.append(f"{section}.source={src!r}")
+
+    for section in ('spineProto', 'chanProto', 'chemProto'):
+        for item in config_data.get(section, []):
+            if isinstance(item, dict) and item.get('type') in ('func', 'builtin'):
+                _check(section, item.get('source', ''))
+
+    cp = config_data.get('cellProto')
+    if isinstance(cp, dict) and cp.get('type') == 'func':
+        _check('cellProto', cp.get('source', ''))
+
+    return violations
+
 def get_next_model_filename(directory):
     pattern = re.compile(r'^jardes_model_(\d+)\.json$')
     max_n = 0
@@ -120,6 +149,8 @@ def upload_file():
     client_id = request.form.get('clientId')
     if not client_id:
         return jsonify({"status": "error", "message": "No clientId provided"}), 400
+    if not _is_safe_client_id(client_id):
+        return jsonify({"status": "error", "message": "Invalid client ID"}), 400
     if file.filename == '':
         return jsonify({"status": "error", "message": "No selected file"}), 400
     if file:
@@ -164,6 +195,16 @@ def launch_simulation():
         return jsonify({"status": "error", "message": "Invalid or missing JSON config data"}), 400
     if not client_id:
         return jsonify({"status": "error", "message": "Request is missing client_id"}), 400
+    if not _is_safe_client_id(client_id):
+        return jsonify({"status": "error", "message": "Invalid client ID"}), 400
+
+    violations = _validate_config_sources(config_data)
+    if violations:
+        return jsonify({
+            "status": "error",
+            "message": "Config rejected: source paths must be simple function names, not file paths.",
+            "details": violations
+        }), 400
 
     if not data_channel_id:
         data_channel_id = str(uuid.uuid4())
@@ -245,7 +286,7 @@ def launch_simulation():
 
 @app.route('/download_project/<client_id>', methods=['GET'])
 def download_project(client_id):
-    if '..' in client_id or '/' in client_id or '\\' in client_id:
+    if not _is_safe_client_id(client_id):
         return jsonify({"status": "error", "message": "Invalid Client ID"}), 400
 
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
@@ -294,7 +335,7 @@ def handle_connect():
 @socketio.on('register_client')
 def handle_register_client(data):
     client_id = data.get('clientId')
-    if client_id:
+    if client_id and _is_safe_client_id(client_id):
         sid_clientid_map[request.sid] = client_id
         print(f"Registered client {client_id} to SID {request.sid}")
 

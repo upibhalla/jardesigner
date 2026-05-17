@@ -414,6 +414,17 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     ################################################################
     # Some utility functions for building prototypes.
     ################################################################
+
+    def _safe_session_path( self, source ):
+        """Return the resolved path of source within sessionDir, or raise BuildError."""
+        session_real = os.path.realpath( self.sessionDir )
+        resolved = os.path.realpath( os.path.join( self.sessionDir, source ) )
+        if not ( resolved == session_real or resolved.startswith( session_real + os.sep ) ):
+            raise BuildError(
+                "Source file '" + source + "' must be within the session directory."
+            )
+        return resolved
+
     # Return true if it is a function.
     def buildProtoFromFunction( self, func, protoName ):
         if callable( func ):
@@ -428,12 +439,24 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         modPos = func.rfind( "." )
         if ( modPos != -1 ): # Function is in a file, load and check
             resolvedPath = os.path.realpath( func[0:modPos] )
+
+            # Only permit loading from the built-in library dir or session dir.
+            jardes_dir = os.path.dirname(os.path.realpath(__file__))
+            allowed_dirs = [jardes_dir]
+            if hasattr(self, 'sessionDir') and self.sessionDir:
+                allowed_dirs.append(os.path.realpath(self.sessionDir))
+            if not any(resolvedPath == d or resolvedPath.startswith(d + os.sep)
+                       for d in allowed_dirs):
+                raise BuildError(
+                    protoName + ": source file '" + func[0:modPos] +
+                    "' must be within the session or built-in library directory."
+                )
+
             pathTokens = resolvedPath.split('/')
             pathTokens = ['/'] + pathTokens
             modulePath = os.path.realpath(os.path.join(*pathTokens[:-1]))
             moduleName = pathTokens[-1]
             funcName = func[modPos+1:bracePos]
-
 
             moduleFilePath = os.path.join(modulePath, f"{moduleName}.py")
 
@@ -450,6 +473,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 else:
                     print(f"Could not load module: {moduleName}")
                     return False
+            except BuildError:
+                raise
             except Exception as e:
                 print(f"Error loading module {moduleName}: {e}")
                 return False
@@ -543,7 +568,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             elif ptype == 'file':
                 fpath = pp['source']
                 if self.sessionDir != None:
-                    fpath = self.sessionDir + "/" + fpath
+                    fpath = self._safe_session_path( fpath )
                 print( "Server log: Loading cell morpho file: ", fpath )
                 self._loadElec( fpath, 'cell' )
             elif ptype == 'in_memory':
@@ -644,7 +669,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                 elif ctype in ['kkit', 'sbml']:
                     sourceFile = cp['source']
                     if self.sessionDir != None:
-                        sourceFile = self.sessionDir + "/" + sourceFile
+                        sourceFile = self._safe_session_path( sourceFile )
                     self._loadChem( sourceFile, cp['name'] )
                     #self.chemid = moose.element( '/library/' + cp['name'] )
                 #elif ctype == 'in_memory':
