@@ -17,8 +17,11 @@ import importlib.resources
 # Define the URL for the internal server endpoint
 FLASK_SERVER_URL = "http://127.0.0.1:5000/internal/push_data"
 
-# --- MODIFIED: Create a single session object for reuse ---
+_INTERNAL_TOKEN = os.environ.get('JARDESIGNER_INTERNAL_TOKEN', '')
+
+# Create a single session object for reuse; attach the internal auth header once.
 http_session = requests.Session()
+http_session.headers.update({'X-Internal-Token': _INTERNAL_TOKEN})
 
 knownFieldInfo = {
     'Vm': {'fieldScale': 1000, 'dataUnits': 'mV', 
@@ -629,7 +632,8 @@ class MooView:
             self.standaloneSceneGraph = payload['scene']
         else:
             try:
-                requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
+                requests.post(FLASK_SERVER_URL, json=requestBody,
+                              headers={'X-Internal-Token': _INTERNAL_TOKEN}, timeout=2.0)
                 #print( "Sent Scene Graph: \n", requestBody )
             except Exception as e:
                 print(f"FATAL ERROR: Could not send initial scene graph to server. {e}")
@@ -652,11 +656,11 @@ class MooView:
             "payload": payload
         }
         try:
-            requests.post(FLASK_SERVER_URL, json=requestBody, timeout=2.0)
+            requests.post(FLASK_SERVER_URL, json=requestBody,
+                          headers={'X-Internal-Token': _INTERNAL_TOKEN}, timeout=2.0)
             print("Sent simulation end notification.")
         except Exception as e:
             print(f"Warning: Could not send simulation end notification. {e}")
-            # This was malformed. Correcting it.
             http_session.post(FLASK_SERVER_URL, json={
                 "data_channel_id": dataChannelId,
                 "payload": {"type": "error", "message": str(e)}
