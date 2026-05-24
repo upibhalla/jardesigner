@@ -177,7 +177,7 @@ def upload_file():
         save_path = os.path.join(session_dir, filename)
         file.save(save_path)
         print(f"Saved file for client {client_id} to {save_path}")
-        return jsonify({"status": "success", "message": "File uploaded successfully"}), 200
+        return jsonify({"status": "success", "filename": filename, "message": "File uploaded successfully"}), 200
     return jsonify({"status": "error", "message": "File upload failed for unknown reasons"}), 500
 
 @socketio.on('sim_command')
@@ -203,6 +203,84 @@ def handle_sim_command(data):
                 process.stdin.flush()
             except Exception as e:
                 print(f"Error writing to PID {pid} stdin: {e}")
+
+
+# --- Proto Registry Endpoints ---
+
+PROTO_REGISTRY_DIR = os.path.join(BASE_DIR, 'proto_registry')
+_ALLOWED_STAGING_DIRS = {'CELL_MODELS', 'CHEM_MODELS', 'CHAN_MODELS'}
+
+def _load_registry(proto_type):
+    path = os.path.join(PROTO_REGISTRY_DIR, f'{proto_type}_protos.json')
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r') as f:
+        return json.load(f)
+
+@app.route('/proto_digest/<proto_type>', methods=['GET'])
+def get_proto_digest(proto_type):
+    if proto_type not in ('morpho', 'elec', 'chem'):
+        return jsonify({'error': 'Invalid type'}), 400
+    data = _load_registry(proto_type)
+    if data is None:
+        return jsonify({'items': []})
+    return jsonify(data)
+
+@app.route('/proto_detail/<proto_id>', methods=['GET'])
+def get_proto_detail(proto_id):
+    for proto_type in ('morpho', 'elec', 'chem'):
+        data = _load_registry(proto_type)
+        if data:
+            for item in data.get('items', []):
+                if item.get('id') == proto_id:
+                    return jsonify(item.get('details', {}))
+    return jsonify({'error': 'Not found'}), 404
+
+@app.route('/proto_search/<proto_type>', methods=['GET'])
+def search_protos(proto_type):
+    if proto_type not in ('morpho', 'elec', 'chem'):
+        return jsonify({'error': 'Invalid type'}), 400
+    q = request.args.get('q', '').lower().strip()
+    data = _load_registry(proto_type)
+    if data is None:
+        return jsonify({'items': []})
+    if not q:
+        return jsonify(data)
+    filtered = [
+        item for item in data.get('items', [])
+        if q in item.get('name', '').lower()
+        or q in item.get('description', '').lower()
+        or q in item.get('source', '').lower()
+    ]
+    return jsonify({'items': filtered})
+
+@app.route('/proto_stage/<proto_id>/<client_id>', methods=['POST'])
+def stage_proto_file(proto_id, client_id):
+    """Copy a server-side proto file into the user's uploads directory."""
+    if not _is_safe_client_id(client_id):
+        return jsonify({'error': 'Invalid client_id'}), 400
+    for proto_type in ('morpho', 'elec', 'chem'):
+        data = _load_registry(proto_type)
+        if data:
+            for item in data.get('items', []):
+                if item.get('id') == proto_id:
+                    server_file = item.get('server_file', '')
+                    if not server_file:
+                        return jsonify({'error': 'No server file for this proto'}), 400
+                    # Security: only allow files from known safe subdirectories.
+                    parts = server_file.replace('\\', '/').split('/')
+                    if len(parts) < 2 or parts[0] not in _ALLOWED_STAGING_DIRS or '..' in parts:
+                        return jsonify({'error': 'Invalid server file path'}), 400
+                    src = os.path.join(BASE_DIR, server_file)
+                    if not os.path.exists(src):
+                        return jsonify({'error': 'File not found on server'}), 404
+                    dest_dir = os.path.join(USER_UPLOADS_DIR, client_id)
+                    os.makedirs(dest_dir, exist_ok=True)
+                    filename = os.path.basename(src)
+                    dest = os.path.join(dest_dir, filename)
+                    shutil.copy2(src, dest)
+                    return jsonify({'filename': filename})
+    return jsonify({'error': 'Proto not found'}), 404
 
 
 @app.route('/launch_simulation', methods=['POST'])

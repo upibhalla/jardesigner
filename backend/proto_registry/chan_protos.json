@@ -1,0 +1,174 @@
+{
+  "type": "elec",
+  "items": [
+    {
+      "id": "Na_HH",
+      "name": "Na_HH",
+      "source": "Hodgkin & Huxley 1952",
+      "description": "Classic Hodgkin-Huxley sodium channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_HH_Na()",
+      "details": {
+        "full_description": "Sodium channel with m³h gating kinetics as originally described for the squid giant axon. Fast activation, fast inactivation.",
+        "parameters": {
+          "Ek":   { "value": "0.045",  "units": "V" },
+          "Gbar": { "value": "0.12",   "units": "S/m²" }
+        },
+        "references": [
+          { "text": "Hodgkin AL & Huxley AF (1952). A quantitative description of membrane current and its application to conduction and excitation in nerve. J Physiol 117:500-544.", "url": "https://pubmed.ncbi.nlm.nih.gov/12991237/" }
+        ]
+      }
+    },
+    {
+      "id": "KDR_HH",
+      "name": "KDR_HH",
+      "source": "Hodgkin & Huxley 1952",
+      "description": "Classic Hodgkin-Huxley potassium delayed rectifier",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_HH_K()",
+      "details": {
+        "full_description": "Delayed rectifier potassium channel with n⁴ gating kinetics from the original Hodgkin-Huxley model.",
+        "parameters": {
+          "Ek":   { "value": "-0.077", "units": "V" },
+          "Gbar": { "value": "0.036",  "units": "S/m²" }
+        },
+        "references": [
+          { "text": "Hodgkin AL & Huxley AF (1952). J Physiol 117:500-544.", "url": "https://pubmed.ncbi.nlm.nih.gov/12991237/" }
+        ]
+      }
+    },
+    {
+      "id": "Na",
+      "name": "Na",
+      "source": "Bhalla & Bower 1993",
+      "description": "Bhalla-Bower soma fast sodium channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_Na()",
+      "details": {
+        "full_description": "Soma fast sodium channel from the Bhalla & Bower mitral cell model.",
+        "references": [
+          { "text": "Bhalla US & Bower JM (1993). Exploring parameter space in detailed single neuron models. J Neurophysiol 69:1948-1965." }
+        ]
+      }
+    },
+    {
+      "id": "KDR",
+      "name": "KDR",
+      "source": "Bhalla & Bower 1993",
+      "description": "Bhalla-Bower delayed rectifier potassium channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_K_DR()",
+      "details": {
+        "references": [
+          { "text": "Bhalla US & Bower JM (1993). J Neurophysiol 69:1948-1965." }
+        ]
+      }
+    },
+    {
+      "id": "LCa",
+      "name": "LCa",
+      "source": "Bhalla & Bower 1993",
+      "description": "L-type long-lasting calcium channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_LCa()",
+      "details": {
+        "full_description": "Long-lasting (L-type) calcium channel with slow inactivation. Important for calcium-dependent processes."
+      }
+    },
+    {
+      "id": "Ca_conc",
+      "name": "Ca_conc",
+      "source": "MOOSE/rdesigneur",
+      "description": "Intracellular calcium concentration pool",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_Ca_conc()",
+      "details": {
+        "full_description": "Models intracellular calcium concentration as a shell with exponential decay. Driven by Ca channel currents. Required when using Ca-activated channels (K_AHP, K_C)."
+      }
+    },
+    {
+      "id": "K_A",
+      "name": "K_A",
+      "source": "Bhalla & Bower 1993",
+      "description": "A-type rapidly inactivating potassium channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_K_A()",
+      "details": {
+        "full_description": "Fast-inactivating A-type potassium channel important for controlling spike timing and repetitive firing frequency."
+      }
+    },
+    {
+      "id": "gluR",
+      "name": "gluR",
+      "source": "MOOSE/rdesigneur",
+      "description": "Glutamate (AMPA) receptor channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_glu()",
+      "details": {}
+    },
+    {
+      "id": "NMDAR",
+      "name": "NMDAR",
+      "source": "MOOSE/rdesigneur",
+      "description": "NMDA receptor with Mg²⁺ block",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_NMDA()",
+      "details": {
+        "full_description": "NMDA receptor with voltage-dependent magnesium block. Permeable to Ca²⁺. Important for LTP induction."
+      }
+    },
+    {
+      "id": "GABAR",
+      "name": "GABAR",
+      "source": "MOOSE/rdesigneur",
+      "description": "GABAₐ receptor channel",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "make_GABA()",
+      "details": {}
+    },
+    {
+      "id": "Ca",
+      "name": "Ca",
+      "source": "Bhalla & Bower 1993",
+      "description": "High-voltage-activated calcium channel",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "make_Ca()",
+      "details": {}
+    },
+    {
+      "id": "K_AHP",
+      "name": "K_AHP",
+      "source": "Bhalla & Bower 1993",
+      "description": "Ca²⁺-activated AHP potassium channel",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "make_K_AHP()",
+      "details": {
+        "full_description": "After-hyperpolarization potassium channel activated by intracellular calcium. Underlies spike frequency adaptation. Requires Ca_conc."
+      }
+    },
+    {
+      "id": "K_C",
+      "name": "K_C",
+      "source": "Bhalla & Bower 1993",
+      "description": "Ca²⁺- and voltage-activated K channel",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "make_K_C()",
+      "details": {
+        "full_description": "BK-type potassium channel activated by both intracellular calcium and depolarization. Requires Ca_conc."
+      }
+    }
+  ]
+}

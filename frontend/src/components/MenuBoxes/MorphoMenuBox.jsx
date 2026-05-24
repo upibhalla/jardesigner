@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Tabs, Tab, Typography, TextField, Grid, Tooltip, IconButton, Button } from '@mui/material';
+import { Box, Tabs, Tab, Typography, TextField, Grid, Tooltip, IconButton, Button, Chip } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './MorphoMenuBox.Help.json';
-import fileIcon from '../../assets/file.png';
+import ProtoPickerDialog from '../ProtoPickerDialog';
+import fileIcon from '../../assets/file.svg';
 import somaIcon from '../../assets/soma.png';
 import ballAndStickIcon from '../../assets/ballAndStick.png';
 import yBranchIcon from '../../assets/ybranch.png';
@@ -32,9 +33,9 @@ const initialYBranchState = {
     branchDia: '2.5', branchLen: '150', branchNumSeg: '1'
 };
 
-// --- Mappings for tabs ---
-const typeToIndexMap = { "file": 0, "soma": 1, "ballAndStick": 2, "branchedCell": 3 };
-const indexToTypeMap = ["file", "soma", "ballAndStick", "branchedCell"];
+// Tab order: Soma(0), Ball&Stick(1), Y Branch(2), Uploaded(3)
+const typeToIndexMap = { "soma": 0, "ballAndStick": 1, "branchedCell": 2, "file": 3 };
+const indexToTypeMap = ["soma", "ballAndStick", "branchedCell", "file"];
 
 // --- Reusable Field Component ---
 const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullWidth = true, ...props }) => {
@@ -81,60 +82,40 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
         } : initialYBranchState
     );
 
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [uploadedItem, setUploadedItem] = useState(() =>
+        currentConfig?.type === 'file' && currentConfig.source
+            ? { name: currentConfig.source, staged_filename: currentConfig.source, source: 'Local', description: '', source_type: 'file' }
+            : null
+    );
+
+    const handleProtoPickerSelect = useCallback((item) => {
+        if (item.source_type === 'parametric') {
+            setTabIndex(typeToIndexMap[item.morpho_type] ?? 0);
+        } else if (item.staged_filename) {
+            onFileChange({ filename: item.staged_filename });
+            setUploadedItem(item);
+            setTabIndex(3);
+        }
+    }, [onFileChange]);
+
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
     const stateRefs = useRef({});
     useEffect(() => {
-      stateRefs.current = { tabIndex, somaValues, ballAndStickValues, yBranchValues };
+        stateRefs.current = { tabIndex, somaValues, ballAndStickValues, yBranchValues };
     }, [tabIndex, somaValues, ballAndStickValues, yBranchValues]);
-    const fileInputRef = useRef(null);
 
     const handleSomaChange = useCallback((field, value) => setSomaValues(prev => ({...prev, [field]: value})), []);
     const handleBallAndStickChange = useCallback((field, value) => setBallAndStickValues(prev => ({...prev, [field]: value})), []);
     const handleYBranchChange = useCallback((field, value) => setYBranchValues(prev => ({...prev, [field]: value})), []);
     const handleTabChange = (event, newIndex) => setTabIndex(newIndex);
-    const handleFileSelect = () => fileInputRef.current.click();
-
-    // This function now handles the file upload to the server.
-    const handleFileChange = async (event) => {
-		console.log("File selected. Checking required props:", { onFileChange, clientId });
-
-        const file = event.target.files[0];
-        if (!file || !onFileChange || !clientId) return;
-
-        // 1. Create FormData to send the file and session ID.
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('clientId', clientId);
-
-        try {
-            // 2. POST the file to the server's upload endpoint.
-			const uploadUrl = `http://${window.location.hostname}:5000/upload_file`;
-
-            const response = await fetch(uploadUrl, {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(errorText || 'File upload failed');
-            }
-
-            // 3. On success, update the main app state with the original filename for portability.
-            onFileChange({ filename: file.name });
-            
-        } catch (error) {
-            console.error("Error uploading file:", error);
-            alert(`Failed to upload the selected file: ${error.message}`);
-        }
-    };
 
     useEffect(() => {
         const getMorphologyDataForUnmount = () => {
             const { tabIndex, somaValues, ballAndStickValues, yBranchValues } = stateRefs.current;
-            // Only process if a procedural morphology tab is active. File-based is handled separately.
-            if (tabIndex === 0) return null;
+            // Uploaded tab: file-based morphology is handled by onFileChange, not here
+            if (tabIndex === 3) return null;
 
             const type = indexToTypeMap[tabIndex];
             if (!type) return null;
@@ -142,18 +123,18 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
             let cellProtoData = { type };
             try {
                 switch (tabIndex) {
-                    case 1:
+                    case 0:
                         cellProtoData.somaDia = toMeters(somaValues.somaDia);
                         cellProtoData.somaLen = toMeters(somaValues.somaLen);
                         break;
-                    case 2:
+                    case 1:
                         cellProtoData.somaDia = toMeters(ballAndStickValues.somaDia);
                         cellProtoData.somaLen = toMeters(ballAndStickValues.somaLen);
                         cellProtoData.dendDia = toMeters(ballAndStickValues.dendDia);
                         cellProtoData.dendLen = toMeters(ballAndStickValues.dendLen);
                         cellProtoData.dendNumSeg = parseInt(ballAndStickValues.dendNumSeg, 10) || 1;
                         break;
-                    case 3:
+                    case 2:
                         cellProtoData.somaDia = toMeters(yBranchValues.somaDia);
                         cellProtoData.somaLen = toMeters(yBranchValues.somaLen);
                         cellProtoData.dendDia = toMeters(yBranchValues.dendDia);
@@ -184,29 +165,31 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
-            <Tabs value={tabIndex} onChange={handleTabChange} variant="fullWidth">
-                <Tooltip title={helpText.tabs.file} placement="top"><Tab icon={<img src={fileIcon} alt="File" style={{ height: 24 }} />} label="File" /></Tooltip>
-                <Tooltip title={helpText.tabs.soma} placement="top"><Tab icon={<img src={somaIcon} alt="Soma" style={{ height: 24 }} />} label="Soma" /></Tooltip>
-                <Tooltip title={helpText.tabs.ballAndStick} placement="top"><Tab icon={<img src={ballAndStickIcon} alt="Ball and Stick" style={{ height: 24 }} />} label="Ball & Stick" /></Tooltip>
-                <Tooltip title={helpText.tabs.yBranch} placement="top"><Tab icon={<img src={yBranchIcon} alt="Y Branch" style={{ height: 24 }} />} label="Y Branch" /></Tooltip>
+            <ProtoPickerDialog
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={handleProtoPickerSelect}
+                type="morpho"
+                title="Select Morphology Prototype"
+                clientId={clientId}
+            />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>Morphology</Typography>
+                <Button size="small" variant="outlined" startIcon={<LibraryBooksIcon fontSize="small" />} onClick={() => setPickerOpen(true)}>
+                    Browse Library…
+                </Button>
+            </Box>
+
+            <Tabs value={tabIndex} onChange={handleTabChange} variant="fullWidth" sx={{ '& .MuiTab-root': { minHeight: 72 } }}>
+                <Tooltip title={helpText.tabs.soma} placement="top"><Tab icon={<img src={somaIcon} alt="Soma" style={{ height: 40 }} />} label="Soma" /></Tooltip>
+                <Tooltip title={helpText.tabs.ballAndStick} placement="top"><Tab icon={<img src={ballAndStickIcon} alt="Ball & Stick" style={{ height: 40 }} />} label="Ball & Stick" /></Tooltip>
+                <Tooltip title={helpText.tabs.yBranch} placement="top"><Tab icon={<img src={yBranchIcon} alt="Y Branch" style={{ height: 40 }} />} label="Y Branch" /></Tooltip>
+                <Tooltip title={helpText.tabs.file} placement="top"><Tab icon={<img src={fileIcon} alt="Uploaded" style={{ height: 40 }} />} label="Uploaded" /></Tooltip>
             </Tabs>
+
             <Box sx={{ mt: 2, p: 1 }}>
                 {tabIndex === 0 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>File-based Morphology</Typography>
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".swc,.xml" />
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={handleFileSelect}>Select Morphology File...</Button>
-                            <Tooltip title={helpText.fields.file.source} placement="right"><IconButton size="small"><InfoOutlinedIcon /></IconButton></Tooltip>
-                        </Box>
-                        {currentConfig.source && (
-                            <Typography sx={{ mt: 1, fontStyle: 'italic' }}>
-                                Active File: {currentConfig.source}
-                            </Typography>
-                        )}
-                    </Box>
-                )}
-                {tabIndex === 1 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>Soma</Typography>
                         <Grid container spacing={2}>
@@ -215,7 +198,7 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
                         </Grid>
                     </Box>
                 )}
-                {tabIndex === 2 && (
+                {tabIndex === 1 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>Ball and Stick</Typography>
                         <Grid container spacing={2} rowSpacing={1.5}>
@@ -229,7 +212,7 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
                         </Grid>
                     </Box>
                 )}
-                {tabIndex === 3 && (
+                {tabIndex === 2 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>Y Branch</Typography>
                         <Grid container spacing={2} rowSpacing={1.5}>
@@ -245,6 +228,34 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
                             <Grid item xs={6}><HelpField id="branchLen" label="Length (μm)" value={yBranchValues.branchLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.branchLen} /></Grid>
                             <Grid item xs={12}><HelpField id="branchNumSeg" label="Segments (#)" value={yBranchValues.branchNumSeg} onChange={handleYBranchChange} type="number" helptext={helpText.fields.yBranch.branchNumSeg} InputProps={{ inputProps: { min: 1, step: 1 } }} /></Grid>
                         </Grid>
+                    </Box>
+                )}
+                {tabIndex === 3 && (
+                    <Box>
+                        <Typography variant="h6" gutterBottom>Uploaded Morphology</Typography>
+                        {uploadedItem ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                <Typography variant="body2">
+                                    <strong>File:</strong> {uploadedItem.staged_filename || uploadedItem.name}
+                                </Typography>
+                                {uploadedItem.name && uploadedItem.name !== uploadedItem.staged_filename && (
+                                    <Typography variant="body2"><strong>Name:</strong> {uploadedItem.name}</Typography>
+                                )}
+                                {uploadedItem.source && uploadedItem.source !== 'Upload' && (
+                                    <Typography variant="body2"><strong>Source:</strong> {uploadedItem.source}</Typography>
+                                )}
+                                {uploadedItem.description && (
+                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>{uploadedItem.description}</Typography>
+                                )}
+                                <Box sx={{ mt: 0.5 }}>
+                                    <Chip label={uploadedItem.source_type || 'file'} size="small" variant="outlined" />
+                                </Box>
+                            </Box>
+                        ) : (
+                            <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                                No file loaded. Use "Browse Library…" to upload or select a morphology file.
+                            </Typography>
+                        )}
                     </Box>
                 )}
             </Box>

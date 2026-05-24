@@ -1,0 +1,125 @@
+{
+  "type": "morpho",
+  "items": [
+    {
+      "id": "soma",
+      "name": "Soma",
+      "source": "Parametric",
+      "description": "Single spherical/cylindrical soma compartment",
+      "topTen": true,
+      "source_type": "parametric",
+      "morpho_type": "soma",
+      "details": {
+        "full_description": "A single-compartment soma model. Use when you want the simplest possible neuron geometry with no dendrites. Dimensions are set in the Morphology panel after selection."
+      }
+    },
+    {
+      "id": "ballAndStick",
+      "name": "Ball and Stick",
+      "source": "Parametric",
+      "description": "Soma plus one unbranched dendrite",
+      "topTen": true,
+      "source_type": "parametric",
+      "morpho_type": "ballAndStick",
+      "details": {
+        "full_description": "Classic ball-and-stick neuron: one soma compartment and a single unbranched dendritic cable. Useful for studying dendritic computation, cable properties, and propagation. Dimensions are configured in the Morphology panel."
+      }
+    },
+    {
+      "id": "branchedCell",
+      "name": "Y Branch",
+      "source": "Parametric",
+      "description": "Soma with trunk dendrite and two daughter branches",
+      "topTen": true,
+      "source_type": "parametric",
+      "morpho_type": "branchedCell",
+      "details": {
+        "full_description": "Y-branched morphology with soma, a trunk dendrite, and two symmetric daughter branches. Models a minimal branched dendritic tree. Good for studying branch-point effects and dendritic computation."
+      }
+    },
+    {
+      "id": "h10_CA1",
+      "name": "h10 CA1 Pyramidal",
+      "source": "NeuroMorpho.org",
+      "description": "CA1 hippocampal pyramidal cell reconstruction",
+      "topTen": true,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/h10.CNG.swc",
+      "details": {
+        "full_description": "Reconstructed CA1 hippocampal pyramidal cell morphology from NeuroMorpho.org (CNG standardized format).",
+        "references": [
+          { "text": "NeuroMorpho.org — h10.CNG.swc", "url": "https://neuromorpho.org" }
+        ]
+      }
+    },
+    {
+      "id": "mitral_cell",
+      "name": "Mitral Cell",
+      "source": "NeuroMorpho.org",
+      "description": "Olfactory bulb mitral cell (Genesis .p format)",
+      "topTen": true,
+      "source_type": "file",
+      "file_type": "p",
+      "server_file": "CELL_MODELS/mit.p",
+      "details": {
+        "full_description": "Olfactory bulb mitral cell morphology in Genesis .p format."
+      }
+    },
+    {
+      "id": "SDB_CA1_pyramidal",
+      "name": "SDB CA1 Pyramidal",
+      "source": "NeuroMorpho.org",
+      "description": "Hippocampal CA1 pyramidal cell (SDB140319c4)",
+      "topTen": false,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/SDB140319c4-hippocampal-CA1-pyramidal-cell.CNG.swc",
+      "details": {}
+    },
+    {
+      "id": "fs_basket",
+      "name": "FS Basket Cell",
+      "source": "NeuroMorpho.org",
+      "description": "Fast-spiking basket interneuron",
+      "topTen": false,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/fs-basket-cell-02-10-08-2.CNG.swc",
+      "details": {}
+    },
+    {
+      "id": "TF29_PV_basket",
+      "name": "TF29 PV Basket Cell",
+      "source": "NeuroMorpho.org",
+      "description": "Parvalbumin+ basket cell interneuron",
+      "topTen": false,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/TF29-PV-basket-cell.CNG.swc",
+      "details": {}
+    },
+    {
+      "id": "mouse_CA2",
+      "name": "Mouse CA2 Pyramidal",
+      "source": "NeuroMorpho.org",
+      "description": "Mouse hippocampal CA2 pyramidal cell",
+      "topTen": false,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/Mouse-CA2-Mc-Pyramidal-Cell.CNG.swc",
+      "details": {}
+    },
+    {
+      "id": "mitral_SDB_2013",
+      "name": "Mitral Cell 2013",
+      "source": "NeuroMorpho.org",
+      "description": "Mitral cell reconstruction (SDB20130216)",
+      "topTen": false,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/mitral-cell-08-SDB20130216pair2_0.CNG.swc",
+      "details": {}
+    }
+  ]
+}

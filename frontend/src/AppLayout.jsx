@@ -17,7 +17,7 @@ import SimOutputMenuBox from './components/MenuBoxes/SimOutputMenuBox';
 import RunMenuBox from './components/MenuBoxes/RunMenuBox';
 import MorphoMenuBox from './components/MenuBoxes/MorphoMenuBox';
 import SpineMenuBox from './components/MenuBoxes/SpineMenuBox';
-import ElecMenuBox from './components/MenuBoxes/ElecMenuBox';
+import ChanMenuBox from './components/MenuBoxes/ChanMenuBox';
 import PassiveMenuBox from './components/MenuBoxes/PassiveMenuBox';
 import ChemMenuBox from './components/MenuBoxes/ChemMenuBox';
 import AdaptorsMenuBox from './components/MenuBoxes/AdaptorsMenuBox';
@@ -180,7 +180,7 @@ export const AppLayout = (props) => {
         elecPaths={elecPaths} 
         spinePaths={spinePaths} 
     />,
-    Channels: <ElecMenuBox 
+    Channels: <ChanMenuBox
         onConfigurationChange={updateJsonData} 
         currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} 
         clientId={clientId}

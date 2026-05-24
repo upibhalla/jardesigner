@@ -10,6 +10,7 @@ import {
     MenuItem,
     Button,
     Tooltip,
+    Chip,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -19,10 +20,11 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import RefreshIcon from '@mui/icons-material/Refresh';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './ChemMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
 import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import ProtoPickerDialog from '../ProtoPickerDialog';
 
 // --- Helper Functions ---
 const getChemSourceString = (componentType) => {
@@ -127,7 +129,7 @@ const ChemMenuBox = ({
                 manualName: p.name !== componentType,
             };
         }) || [];
-        return initialProtos.length > 0 ? initialProtos : [createDefaultChemPrototype()];
+        return initialProtos;
     });
 
     const [distributions, setDistributions] = useState(() => {
@@ -182,6 +184,22 @@ const ChemMenuBox = ({
 
     const [activePrototype, setActivePrototype] = useState(0);
     const [activeDistribution, setActiveDistribution] = useState(0);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [triggerRefresh, setTriggerRefresh] = useState(false);
+
+    const handleProtoPickerSelect = useCallback((item) => {
+        let newProto;
+        if (item.source_type === 'builtin') {
+            newProto = { type: item.id, name: item.id, source: '', manualName: false };
+        } else if ((item.source_type === 'kkit' || item.source_type === 'sbml') && item.staged_filename) {
+            newProto = { type: item.source_type, name: item.name, source: item.staged_filename, manualName: true };
+        }
+        if (newProto) {
+            setPrototypes(prev => [...prev, newProto]);
+            setActivePrototype(prototypes.length);
+            setTriggerRefresh(true);
+        }
+    }, [prototypes]);
 
     // --- State for User Specified Path Dialog ---
     const [customPathDialogOpen, setCustomPathDialogOpen] = useState(false);
@@ -194,7 +212,7 @@ const ChemMenuBox = ({
     useEffect(() => { prototypesRef.current = prototypes; }, [prototypes]);
     const distributionsRef = useRef(distributions);
     useEffect(() => { distributionsRef.current = distributions; }, [distributions]);
-    
+
     const fileInputRef = useRef(null);
 
     // Create sorted list of chem compartment (mesh) names
@@ -427,6 +445,14 @@ const ChemMenuBox = ({
         }
     }, [getChemDataForSave]);
 
+    // Auto-refresh after picker adds a proto (runs after prototypesRef effect has updated)
+    useEffect(() => {
+        if (triggerRefresh) {
+            handleRefreshModel();
+            setTriggerRefresh(false);
+        }
+    }, [prototypes, triggerRefresh, handleRefreshModel]);
+
     useEffect(() => {
         return () => {
             handleRefreshModel();
@@ -448,13 +474,22 @@ const ChemMenuBox = ({
 
             <Typography variant="h6" gutterBottom>Chemical Signaling Definitions</Typography>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Prototypes</Typography>
                 <Tooltip title={helpText.headings.prototypes} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
-                <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefreshModel} sx={{ ml: 'auto' }}>
-                    Refresh Model
+                <Button size="small" variant="outlined" startIcon={<LibraryBooksIcon fontSize="small" />} onClick={() => setPickerOpen(true)} sx={{ ml: 'auto' }}>
+                    Browse Library…
                 </Button>
             </Box>
+
+            <ProtoPickerDialog
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={handleProtoPickerSelect}
+                type="chem"
+                title="Select Chemical Signaling Prototype"
+                clientId={clientId}
+            />
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto">
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
@@ -463,15 +498,13 @@ const ChemMenuBox = ({
             </Box>
             {activeProtoData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                             <HelpField id="type" label="Type" value={activeProtoData.type} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.type} select>
-                                {prototypeTypeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-                            </HelpField>
-                        </Grid>
-                         <Grid item xs={12} sm={6}>
+                    <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} sm={8}>
                             <HelpField id="name" label="Prototype Name" value={activeProtoData.name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required/>
-                         </Grid>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                            <Chip label={activeProtoData.type} size="small" variant="outlined" />
+                        </Grid>
                          
                          {['SBML', 'kkit'].includes(activeProtoData.type) && (
                             <Grid item xs={12}>

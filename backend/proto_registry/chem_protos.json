@@ -1,0 +1,233 @@
+{
+  "type": "chem",
+  "items": [
+    {
+      "id": "CaSpineDend",
+      "name": "CaSpineDend",
+      "source": "MOOSE/rdesigneur",
+      "description": "Calcium dynamics in spine head and dendrite",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemCaSpineDend()",
+      "details": {
+        "full_description": "Models calcium signaling across spine head and dendrite compartments, including NMDA-driven calcium entry and downstream CaMKII activation. The standard starting point for spine plasticity models."
+      }
+    },
+    {
+      "id": "CaMKII",
+      "name": "CaMKII",
+      "source": "Bhalla & Iyengar 1999",
+      "description": "CaMKII autophosphorylation pathway",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemCaMKII()",
+      "details": {
+        "full_description": "CaM kinase II autophosphorylation and Ca/CaM activation cascade. Exhibits bistability as a synaptic memory mechanism.",
+        "references": [
+          { "text": "Bhalla US & Iyengar R (1999). Emergent properties of networks of biological signaling pathways. Science 283:381-387.", "url": "https://pubmed.ncbi.nlm.nih.gov/9888852/" }
+        ]
+      }
+    },
+    {
+      "id": "LTP",
+      "name": "LTP",
+      "source": "MOOSE/rdesigneur",
+      "description": "Long-term potentiation signaling network",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemLTP()",
+      "details": {}
+    },
+    {
+      "id": "LTD",
+      "name": "LTD",
+      "source": "MOOSE/rdesigneur",
+      "description": "Long-term depression signaling network",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemLTD()",
+      "details": {}
+    },
+    {
+      "id": "betaAR",
+      "name": "betaAR",
+      "source": "Bhalla & Iyengar 1999",
+      "description": "Beta-adrenergic receptor → PKA signaling",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemBetaAR()",
+      "details": {
+        "references": [
+          { "text": "Bhalla US & Iyengar R (1999). Science 283:381-387.", "url": "https://pubmed.ncbi.nlm.nih.gov/9888852/" }
+        ]
+      }
+    },
+    {
+      "id": "CICR",
+      "name": "CICR",
+      "source": "MOOSE/rdesigneur",
+      "description": "Calcium-induced calcium release from ER",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemCICR()",
+      "details": {
+        "full_description": "Calcium-induced calcium release (CICR) from endoplasmic reticulum via IP3 receptors and ryanodine receptors."
+      }
+    },
+    {
+      "id": "EGFR",
+      "name": "EGFR",
+      "source": "Bhalla & Iyengar 1999",
+      "description": "EGF receptor → Ras → MAPK cascade",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemEGFR()",
+      "details": {
+        "references": [
+          { "text": "Bhalla US & Iyengar R (1999). Science 283:381-387." }
+        ]
+      }
+    },
+    {
+      "id": "mGluR",
+      "name": "mGluR",
+      "source": "MOOSE/rdesigneur",
+      "description": "Metabotropic glutamate receptor → PLC pathway",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChem_mGluR()",
+      "details": {}
+    },
+    {
+      "id": "Oscillator",
+      "name": "Oscillator",
+      "source": "MOOSE/rdesigneur",
+      "description": "Simple three-molecule biochemical oscillator",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemOscillator()",
+      "details": {
+        "full_description": "Minimal three-molecule biochemical oscillator. Useful for testing, demonstrations, and understanding reaction-diffusion dynamics."
+      }
+    },
+    {
+      "id": "Bistable",
+      "name": "Bistable",
+      "source": "MOOSE/rdesigneur",
+      "description": "Bistable biochemical switch via positive feedback",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemBistable()",
+      "details": {
+        "full_description": "Simple bistable switch demonstrating positive feedback and two stable steady states. A minimal model of molecular memory."
+      }
+    },
+    {
+      "id": "BCM",
+      "name": "BCM",
+      "source": "MOOSE/rdesigneur",
+      "description": "BCM synaptic plasticity rule implementation",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemBCM()",
+      "details": {}
+    },
+    {
+      "id": "STF",
+      "name": "STF",
+      "source": "MOOSE/rdesigneur",
+      "description": "Short-term synaptic facilitation model",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemSTF()",
+      "details": {}
+    },
+    {
+      "id": "STD",
+      "name": "STD",
+      "source": "MOOSE/rdesigneur",
+      "description": "Short-term synaptic depression model",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemSTD()",
+      "details": {}
+    },
+    {
+      "id": "CaDend",
+      "name": "CaDend",
+      "source": "MOOSE/rdesigneur",
+      "description": "Calcium dynamics in dendrite only",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemCaDend()",
+      "details": {}
+    },
+    {
+      "id": "chem_Kholodenko",
+      "name": "Kholodenko MAPK",
+      "source": "Kholodenko 2000",
+      "description": "MAPK cascade with sustained oscillations (kkit)",
+      "topTen": false,
+      "source_type": "kkit",
+      "server_file": "CHEM_MODELS/Kholodenko.g",
+      "details": {
+        "full_description": "Kholodenko MAPK cascade model demonstrating that negative feedback with ultrasensitivity can produce sustained oscillations.",
+        "references": [
+          { "text": "Kholodenko BN (2000). Negative feedback and ultrasensitivity can bring about oscillations in the mitogen-activated protein kinase cascades. Eur J Biochem 267:1583-1588.", "url": "https://pubmed.ncbi.nlm.nih.gov/10712587/" }
+        ]
+      }
+    },
+    {
+      "id": "chem_betaAR_file",
+      "name": "betaAR (kkit file)",
+      "source": "Bhalla & Iyengar 1999",
+      "description": "Beta-adrenergic receptor pathway, kkit file version",
+      "topTen": false,
+      "source_type": "kkit",
+      "server_file": "CHEM_MODELS/betaAR.g",
+      "details": {}
+    },
+    {
+      "id": "chem_CICRspineDend",
+      "name": "CICR Spine-Dend",
+      "source": "MOOSE/rdesigneur",
+      "description": "CICR model in spine and dendrite compartments (kkit)",
+      "topTen": false,
+      "source_type": "kkit",
+      "server_file": "CHEM_MODELS/CICRspineDend.g",
+      "details": {}
+    },
+    {
+      "id": "chem_NN_mapk16",
+      "name": "NN MAPK 16-compartment",
+      "source": "MOOSE/rdesigneur",
+      "description": "Neural-network MAPK model, 16-compartment (kkit)",
+      "topTen": false,
+      "source_type": "kkit",
+      "server_file": "CHEM_MODELS/NN_mapk16.g",
+      "details": {}
+    },
+    {
+      "id": "User Func",
+      "name": "User Function",
+      "source": "User-defined",
+      "description": "Call a custom Python function to build the chemical model",
+      "topTen": false,
+      "source_type": "builtin",
+      "details": {
+        "full_description": "Enter the name of a Python function (e.g. myChemModel()) that returns a MOOSE chemical model. The function must be importable from the simulation environment."
+      }
+    },
+    {
+      "id": "In-memory",
+      "name": "In-memory model",
+      "source": "User-defined",
+      "description": "Use a chemical model already loaded in the MOOSE namespace",
+      "topTen": false,
+      "source_type": "builtin",
+      "details": {
+        "full_description": "References a chemical model object already present in the MOOSE object hierarchy by path. Useful when loading models programmatically before launching the simulation."
+      }
+    }
+  ]
+}

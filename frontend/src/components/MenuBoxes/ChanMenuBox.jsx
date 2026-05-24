@@ -19,8 +19,10 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import helpText from './ElecMenuBox.Help.json';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import helpText from './ChanMenuBox.Help.json';
 import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import ProtoPickerDialog from '../ProtoPickerDialog';
 
 // --- Helper Functions ---
 const getChannelSourceString = (componentType) => {
@@ -82,7 +84,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ElecMenuBox = ({ 
+const ChanMenuBox = ({ 
     onConfigurationChange, 
     currentConfig, 
     clientId, 
@@ -103,7 +105,7 @@ const ElecMenuBox = ({
             }
             return { type: componentType, name: p.name, file: file, manualName: p.name !== componentType };
         }) || [];
-        return initialProtos.length > 0 ? initialProtos : [createDefaultPrototype()];
+        return initialProtos;
     });
 
     const [distributions, setDistributions] = useState(() => {
@@ -118,6 +120,7 @@ const ElecMenuBox = ({
 
     const [activePrototype, setActivePrototype] = useState(0);
     const [activeDistribution, setActiveDistribution] = useState(0);
+    const [pickerOpen, setPickerOpen] = useState(false);
 
     // --- State for User Specified Path Dialog ---
     const [customPathDialogOpen, setCustomPathDialogOpen] = useState(false);
@@ -154,6 +157,19 @@ const ElecMenuBox = ({
     const addPrototype = useCallback(() => {
         setPrototypes((prev) => [...prev, createDefaultPrototype()]);
         setActivePrototype(prototypes.length);
+    }, [prototypes]);
+
+    const handleProtoPickerSelect = useCallback((item) => {
+        let newProto;
+        if (item.source_type === 'builtin') {
+            newProto = { type: item.id, name: item.id, file: '', manualName: false };
+        } else if (item.source_type === 'neuroml' || (item.source_type === 'file' && item.staged_filename)) {
+            newProto = { type: 'File', name: item.name, file: item.staged_filename || '', manualName: true };
+        }
+        if (newProto) {
+            setPrototypes(prev => [...prev, newProto]);
+            setActivePrototype(prototypes.length);
+        }
     }, [prototypes]);
 
     const removePrototype = useCallback((indexToRemove) => {
@@ -313,11 +329,20 @@ const ElecMenuBox = ({
 
             <Typography variant="h6" gutterBottom>Channel Definitions</Typography>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Prototypes</Typography>
                 <Tooltip title={helpText.headings.prototypes} placement="right">
                     <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
                 </Tooltip>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<LibraryBooksIcon fontSize="small" />}
+                    onClick={() => setPickerOpen(true)}
+                    sx={{ ml: 'auto' }}
+                >
+                    Browse Library…
+                </Button>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto" aria-label="Channel Prototypes">
@@ -327,13 +352,8 @@ const ElecMenuBox = ({
             </Box>
             {prototypes[activePrototype] && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
-                            <HelpField id="type" label="Type" value={prototypes[activePrototype].type} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.type} select>
-                                {prototypeTypeOptions.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-                            </HelpField>
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
+                    <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12}>
                             <HelpField id="name" label="Prototype Name" value={prototypes[activePrototype].name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required />
                         </Grid>
                         
@@ -427,6 +447,15 @@ const ElecMenuBox = ({
                 </Box>
              )}
 
+            <ProtoPickerDialog
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={handleProtoPickerSelect}
+                type="chan"
+                title="Select Channel Prototype"
+                clientId={clientId}
+            />
+
             {/* Custom Path Dialog */}
             <Dialog open={customPathDialogOpen} onClose={() => setCustomPathDialogOpen(false)}>
                 <DialogTitle>Enter User Specified Path</DialogTitle>
@@ -452,4 +481,4 @@ const ElecMenuBox = ({
     );
 };
 
-export default ElecMenuBox;
+export default ChanMenuBox;
