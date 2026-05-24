@@ -219,7 +219,7 @@ def _load_registry(proto_type):
 
 @app.route('/proto_digest/<proto_type>', methods=['GET'])
 def get_proto_digest(proto_type):
-    if proto_type not in ('morpho', 'elec', 'chem'):
+    if proto_type not in ('morpho', 'chan', 'chem'):
         return jsonify({'error': 'Invalid type'}), 400
     data = _load_registry(proto_type)
     if data is None:
@@ -228,7 +228,7 @@ def get_proto_digest(proto_type):
 
 @app.route('/proto_detail/<proto_id>', methods=['GET'])
 def get_proto_detail(proto_id):
-    for proto_type in ('morpho', 'elec', 'chem'):
+    for proto_type in ('morpho', 'chan', 'chem'):
         data = _load_registry(proto_type)
         if data:
             for item in data.get('items', []):
@@ -238,7 +238,7 @@ def get_proto_detail(proto_id):
 
 @app.route('/proto_search/<proto_type>', methods=['GET'])
 def search_protos(proto_type):
-    if proto_type not in ('morpho', 'elec', 'chem'):
+    if proto_type not in ('morpho', 'chan', 'chem'):
         return jsonify({'error': 'Invalid type'}), 400
     q = request.args.get('q', '').lower().strip()
     data = _load_registry(proto_type)
@@ -259,7 +259,7 @@ def stage_proto_file(proto_id, client_id):
     """Copy a server-side proto file into the user's uploads directory."""
     if not _is_safe_client_id(client_id):
         return jsonify({'error': 'Invalid client_id'}), 400
-    for proto_type in ('morpho', 'elec', 'chem'):
+    for proto_type in ('morpho', 'chan', 'chem'):
         data = _load_registry(proto_type)
         if data:
             for item in data.get('items', []):

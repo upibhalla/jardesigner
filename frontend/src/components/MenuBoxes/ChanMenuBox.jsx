@@ -154,11 +154,6 @@ const ChanMenuBox = ({
         return opts;
     }, [elecPaths, spinePaths, distributions, activeDistribution]);
 
-    const addPrototype = useCallback(() => {
-        setPrototypes((prev) => [...prev, createDefaultPrototype()]);
-        setActivePrototype(prototypes.length);
-    }, [prototypes]);
-
     const handleProtoPickerSelect = useCallback((item) => {
         let newProto;
         if (item.source_type === 'builtin') {
@@ -347,7 +342,6 @@ const ChanMenuBox = ({
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto" aria-label="Channel Prototypes">
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
-                    <IconButton onClick={addPrototype} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
             {prototypes[activePrototype] && (

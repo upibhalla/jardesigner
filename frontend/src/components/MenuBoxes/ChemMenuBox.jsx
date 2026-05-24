@@ -10,7 +10,6 @@ import {
     MenuItem,
     Button,
     Tooltip,
-    Chip,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -236,11 +235,6 @@ const ChemMenuBox = ({
         }
         return opts;
     }, [elecPaths, spinePaths, distributions, activeDistribution]);
-
-    const addPrototype = useCallback(() => {
-        setPrototypes((prev) => [...prev, createDefaultChemPrototype()]);
-        setActivePrototype(prototypes.length);
-    }, [prototypes]);
 
     const removePrototype = useCallback((indexToRemove) => {
         const removedProtoName = prototypesRef.current[indexToRemove]?.name;
@@ -493,17 +487,13 @@ const ChemMenuBox = ({
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto">
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
-                    <IconButton onClick={addPrototype} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
             {activeProtoData && (
                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                     <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={8}>
+                        <Grid item xs={12}>
                             <HelpField id="name" label="Prototype Name" value={activeProtoData.name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required/>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                            <Chip label={activeProtoData.type} size="small" variant="outlined" />
                         </Grid>
                          
                          {['SBML', 'kkit'].includes(activeProtoData.type) && (
