@@ -171,7 +171,7 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-                <Tabs value={activeOutputFileIndex} onChange={(e, nv) => setActiveOutputFileIndex(nv)} variant="scrollable" scrollButtons="auto">
+                <Tabs value={activeOutputFileIndex} onChange={(e, nv) => setActiveOutputFileIndex(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
                     {outputFiles.map((fileEntry, index) => <Tab key={index} label={fileEntry.file || `File ${index + 1}`} />)}
                     <IconButton onClick={addOutputFile} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                  </Tabs>

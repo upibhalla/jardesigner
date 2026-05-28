@@ -345,7 +345,7 @@ const StimMenuBox = ({
                 </Button>
             </Box>
              <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-                 <Tabs value={activeStim} onChange={(e, nv) => setActiveStim(nv)} variant="scrollable" scrollButtons="auto">
+                 <Tabs value={activeStim} onChange={(e, nv) => setActiveStim(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
                      {stims.map((stim, index) => <Tab key={index} label={getTabLabel(stim)} />)}
                       <IconButton onClick={addStim} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                   </Tabs>

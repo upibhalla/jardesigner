@@ -487,7 +487,7 @@ const ChemMenuBox = ({
                 clientId={clientId}
             />
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto">
+                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
                 </Tabs>
             </Box>
@@ -543,7 +543,7 @@ const ChemMenuBox = ({
                 <Tooltip title={helpText.headings.distributions} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                 <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} variant="scrollable" scrollButtons="auto">
+                 <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
                      {distributions.map((d, i) => <Tab key={i} label={`${d.prototype || 'New'} @ ${d.path || '?'}`} />)}
                      <IconButton onClick={addDistribution} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                  </Tabs>

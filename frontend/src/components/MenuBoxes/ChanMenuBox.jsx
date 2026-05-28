@@ -340,7 +340,7 @@ const ChanMenuBox = ({
                 </Button>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto" aria-label="Channel Prototypes">
+                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }} aria-label="Channel Prototypes">
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
                 </Tabs>
             </Box>
@@ -392,7 +392,7 @@ const ChanMenuBox = ({
                  </Tooltip>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                 <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} variant="scrollable" scrollButtons="auto" aria-label="Channel Distributions">
+                 <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }} aria-label="Channel Distributions">
                      {distributions.map((d, i) => <Tab key={i} label={`${d.prototype || 'New'} @ ${d.path || '?'}`} />)}
                      <IconButton onClick={addDistribution} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                  </Tabs>

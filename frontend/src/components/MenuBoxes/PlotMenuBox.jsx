@@ -341,7 +341,7 @@ const PlotMenuBox = ({
             </Box>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-                <Tabs value={activePlot} onChange={(e, nv) => setActivePlot(nv)} variant="scrollable" scrollButtons="auto">
+                <Tabs value={activePlot} onChange={(e, nv) => setActivePlot(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
                     {plots.map((plot, index) => <Tab key={index} label={getTabLabel(plot)} />)}
                     <IconButton onClick={addPlot} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>

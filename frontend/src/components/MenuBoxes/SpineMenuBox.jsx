@@ -302,7 +302,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                 </Tooltip>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto" aria-label="Spine Prototypes">
+                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }} aria-label="Spine Prototypes">
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
                     <Button onClick={addPrototype} startIcon={<AddIcon />} sx={{ minWidth: 'auto', p: '6px 8px', ml: '10px', alignSelf: 'center' }}>Add Proto</Button>
                 </Tabs>
@@ -362,7 +362,7 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                 </Tooltip>
             </Box>
              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} variant="scrollable" scrollButtons="auto" aria-label="Spine Distributions">
+                <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }} aria-label="Spine Distributions">
                     {distributions.map((d, i) => <Tab key={i} label={`${d.prototype || 'New'} @ ${d.path || '?'}`} />)}
                     <Button onClick={addDistribution} startIcon={<AddIcon />} sx={{ minWidth: 'auto', p: '6px 8px', ml: '10px', alignSelf: 'center' }}>Add Dist</Button>
                 </Tabs>
