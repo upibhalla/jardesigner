@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 4 100 72">
+  <defs>
+    <radialGradient id="sg" cx="38%" cy="32%" r="65%">
+      <stop offset="0%"   stop-color="#e8e8e8"/>
+      <stop offset="45%"  stop-color="#909090"/>
+      <stop offset="100%" stop-color="#383838"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Cell body -->
+  <circle cx="50" cy="63" r="10" fill="url(#sg)" stroke="#505050" stroke-width="1.5"/>
+
+  <!-- Dendritic trunk -->
+  <line x1="50" y1="53" x2="50" y2="47" stroke="#606060" stroke-width="2"/>
+
+  <!-- Tier 1 branches -->
+  <line x1="50" y1="47" x2="28" y2="38" stroke="#606060" stroke-width="2"/>
+  <line x1="50" y1="47" x2="72" y2="38" stroke="#606060" stroke-width="2"/>
+
+  <!-- Tier 2 branches -->
+  <line x1="28" y1="38" x2="16" y2="27" stroke="#707070" stroke-width="1.5"/>
+  <line x1="28" y1="38" x2="40" y2="27" stroke="#707070" stroke-width="1.5"/>
+  <line x1="72" y1="38" x2="60" y2="27" stroke="#707070" stroke-width="1.5"/>
+  <line x1="72" y1="38" x2="84" y2="27" stroke="#707070" stroke-width="1.5"/>
+
+  <!-- Tier 3 branches -->
+  <line x1="16" y1="27" x2="8"  y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="16" y1="27" x2="24" y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="40" y1="27" x2="32" y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="40" y1="27" x2="48" y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="60" y1="27" x2="52" y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="60" y1="27" x2="68" y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="84" y1="27" x2="76" y2="16" stroke="#808080" stroke-width="1"/>
+  <line x1="84" y1="27" x2="92" y2="16" stroke="#808080" stroke-width="1"/>
+</svg>

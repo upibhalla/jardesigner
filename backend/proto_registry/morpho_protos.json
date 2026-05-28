@@ -2,42 +2,6 @@
   "type": "morpho",
   "items": [
     {
-      "id": "soma",
-      "name": "Soma",
-      "source": "Parametric",
-      "description": "Single spherical/cylindrical soma compartment",
-      "topTen": true,
-      "source_type": "parametric",
-      "morpho_type": "soma",
-      "details": {
-        "full_description": "A single-compartment soma model. Use when you want the simplest possible neuron geometry with no dendrites. Dimensions are set in the Morphology panel after selection."
-      }
-    },
-    {
-      "id": "ballAndStick",
-      "name": "Ball and Stick",
-      "source": "Parametric",
-      "description": "Soma plus one unbranched dendrite",
-      "topTen": true,
-      "source_type": "parametric",
-      "morpho_type": "ballAndStick",
-      "details": {
-        "full_description": "Classic ball-and-stick neuron: one soma compartment and a single unbranched dendritic cable. Useful for studying dendritic computation, cable properties, and propagation. Dimensions are configured in the Morphology panel."
-      }
-    },
-    {
-      "id": "branchedCell",
-      "name": "Y Branch",
-      "source": "Parametric",
-      "description": "Soma with trunk dendrite and two daughter branches",
-      "topTen": true,
-      "source_type": "parametric",
-      "morpho_type": "branchedCell",
-      "details": {
-        "full_description": "Y-branched morphology with soma, a trunk dendrite, and two symmetric daughter branches. Models a minimal branched dendritic tree. Good for studying branch-point effects and dendritic computation."
-      }
-    },
-    {
       "id": "h10_CA1",
       "name": "h10 CA1 Pyramidal",
       "source": "NeuroMorpho.org",
@@ -67,14 +31,51 @@
       }
     },
     {
-      "id": "SDB_CA1_pyramidal",
-      "name": "SDB CA1 Pyramidal",
-      "source": "NeuroMorpho.org",
-      "description": "Hippocampal CA1 pyramidal cell (SDB140319c4)",
-      "topTen": false,
+      "id": "axon",
+      "name": "Axon",
+      "source": "jardesignerProtos",
+      "description": "Unmyelinated axon, spiral trajectory (200 segments)",
+      "topTen": true,
       "source_type": "file",
       "file_type": "swc",
-      "server_file": "CELL_MODELS/SDB140319c4-hippocampal-CA1-pyramidal-cell.CNG.swc",
+      "server_file": "CELL_MODELS/axon.swc",
+      "details": {
+        "full_description": "Unmyelinated axon with soma and 200 axon compartments following a spiral trajectory. Diameter 2 µm, compartment length 10 µm. Generated from make_axon() in jardesignerProtos.py."
+      }
+    },
+    {
+      "id": "myelinated_axon",
+      "name": "Myelinated Axon",
+      "source": "jardesignerProtos",
+      "description": "Myelinated axon with nodes of Ranvier (405 segments)",
+      "topTen": true,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/myelinated_axon.swc",
+      "details": {
+        "full_description": "Myelinated axon with 405 compartments on a spiral trajectory. Nodes of Ranvier every 100 segments (diameter 1 µm); myelinated internodes diameter 2 µm. Generated from make_myelinated_axon() in jardesignerProtos.py."
+      }
+    },
+    {
+      "id": "SCA6_P13_C7",
+      "name": "SCA6 P13 C7 Purkinje",
+      "source": "NeuroMorpho.org",
+      "description": "Purkinje cell from SCA6 mouse model (P13)",
+      "topTen": true,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/SCA6_P13_C7.CNG.swc",
+      "details": {}
+    },
+    {
+      "id": "PZ_Adult1_2",
+      "name": "PZ Adult Purkinje",
+      "source": "NeuroMorpho.org",
+      "description": "Adult Purkinje cell morphology (PZ_Adult1-2)",
+      "topTen": true,
+      "source_type": "file",
+      "file_type": "swc",
+      "server_file": "CELL_MODELS/PZ_Adult1-2.CNG.swc",
       "details": {}
     },
     {
@@ -89,17 +90,6 @@
       "details": {}
     },
     {
-      "id": "TF29_PV_basket",
-      "name": "TF29 PV Basket Cell",
-      "source": "NeuroMorpho.org",
-      "description": "Parvalbumin+ basket cell interneuron",
-      "topTen": false,
-      "source_type": "file",
-      "file_type": "swc",
-      "server_file": "CELL_MODELS/TF29-PV-basket-cell.CNG.swc",
-      "details": {}
-    },
-    {
       "id": "mouse_CA2",
       "name": "Mouse CA2 Pyramidal",
       "source": "NeuroMorpho.org",
@@ -108,17 +98,6 @@
       "source_type": "file",
       "file_type": "swc",
       "server_file": "CELL_MODELS/Mouse-CA2-Mc-Pyramidal-Cell.CNG.swc",
-      "details": {}
-    },
-    {
-      "id": "mitral_SDB_2013",
-      "name": "Mitral Cell 2013",
-      "source": "NeuroMorpho.org",
-      "description": "Mitral cell reconstruction (SDB20130216)",
-      "topTen": false,
-      "source_type": "file",
-      "file_type": "swc",
-      "server_file": "CELL_MODELS/mitral-cell-08-SDB20130216pair2_0.CNG.swc",
       "details": {}
     }
   ]

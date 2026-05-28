@@ -2,16 +2,48 @@
   "type": "chem",
   "items": [
     {
-      "id": "CaSpineDend",
-      "name": "CaSpineDend",
+      "id": "Oscillator",
+      "name": "Oscillator",
       "source": "MOOSE/rdesigneur",
-      "description": "Calcium dynamics in spine head and dendrite",
+      "description": "Simple three-molecule biochemical oscillator",
       "topTen": true,
       "source_type": "builtin",
-      "builtin_fn": "makeChemCaSpineDend()",
+      "builtin_fn": "makeChemOscillator()",
       "details": {
-        "full_description": "Models calcium signaling across spine head and dendrite compartments, including NMDA-driven calcium entry and downstream CaMKII activation. The standard starting point for spine plasticity models."
+        "full_description": "Minimal three-molecule biochemical oscillator. Useful for testing, demonstrations, and understanding reaction-diffusion dynamics."
       }
+    },
+    {
+      "id": "Bistable",
+      "name": "Bistable",
+      "source": "MOOSE/rdesigneur",
+      "description": "Bistable biochemical switch via positive feedback",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemBistable()",
+      "details": {
+        "full_description": "Simple bistable switch demonstrating positive feedback and two stable steady states. A minimal model of molecular memory."
+      }
+    },
+    {
+      "id": "CaDend",
+      "name": "CaDend",
+      "source": "MOOSE/rdesigneur",
+      "description": "Calcium dynamics in dendrite only",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemCaDend()",
+      "details": {}
+    },
+    {
+      "id": "BCM",
+      "name": "BCM",
+      "source": "MOOSE/rdesigneur",
+      "description": "BCM synaptic plasticity rule implementation",
+      "topTen": true,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemBCM()",
+      "details": {}
     },
     {
       "id": "CaMKII",
@@ -27,26 +59,6 @@
           { "text": "Bhalla US & Iyengar R (1999). Emergent properties of networks of biological signaling pathways. Science 283:381-387.", "url": "https://pubmed.ncbi.nlm.nih.gov/9888852/" }
         ]
       }
-    },
-    {
-      "id": "LTP",
-      "name": "LTP",
-      "source": "MOOSE/rdesigneur",
-      "description": "Long-term potentiation signaling network",
-      "topTen": true,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemLTP()",
-      "details": {}
-    },
-    {
-      "id": "LTD",
-      "name": "LTD",
-      "source": "MOOSE/rdesigneur",
-      "description": "Long-term depression signaling network",
-      "topTen": true,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemLTD()",
-      "details": {}
     },
     {
       "id": "betaAR",
@@ -75,20 +87,6 @@
       }
     },
     {
-      "id": "EGFR",
-      "name": "EGFR",
-      "source": "Bhalla & Iyengar 1999",
-      "description": "EGF receptor → Ras → MAPK cascade",
-      "topTen": true,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemEGFR()",
-      "details": {
-        "references": [
-          { "text": "Bhalla US & Iyengar R (1999). Science 283:381-387." }
-        ]
-      }
-    },
-    {
       "id": "mGluR",
       "name": "mGluR",
       "source": "MOOSE/rdesigneur",
@@ -99,37 +97,13 @@
       "details": {}
     },
     {
-      "id": "Oscillator",
-      "name": "Oscillator",
+      "id": "STD",
+      "name": "STD",
       "source": "MOOSE/rdesigneur",
-      "description": "Simple three-molecule biochemical oscillator",
+      "description": "Short-term synaptic depression model",
       "topTen": true,
       "source_type": "builtin",
-      "builtin_fn": "makeChemOscillator()",
-      "details": {
-        "full_description": "Minimal three-molecule biochemical oscillator. Useful for testing, demonstrations, and understanding reaction-diffusion dynamics."
-      }
-    },
-    {
-      "id": "Bistable",
-      "name": "Bistable",
-      "source": "MOOSE/rdesigneur",
-      "description": "Bistable biochemical switch via positive feedback",
-      "topTen": true,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemBistable()",
-      "details": {
-        "full_description": "Simple bistable switch demonstrating positive feedback and two stable steady states. A minimal model of molecular memory."
-      }
-    },
-    {
-      "id": "BCM",
-      "name": "BCM",
-      "source": "MOOSE/rdesigneur",
-      "description": "BCM synaptic plasticity rule implementation",
-      "topTen": false,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemBCM()",
+      "builtin_fn": "makeChemSTD()",
       "details": {}
     },
     {
@@ -137,29 +111,9 @@
       "name": "STF",
       "source": "MOOSE/rdesigneur",
       "description": "Short-term synaptic facilitation model",
-      "topTen": false,
+      "topTen": true,
       "source_type": "builtin",
       "builtin_fn": "makeChemSTF()",
-      "details": {}
-    },
-    {
-      "id": "STD",
-      "name": "STD",
-      "source": "MOOSE/rdesigneur",
-      "description": "Short-term synaptic depression model",
-      "topTen": false,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemSTD()",
-      "details": {}
-    },
-    {
-      "id": "CaDend",
-      "name": "CaDend",
-      "source": "MOOSE/rdesigneur",
-      "description": "Calcium dynamics in dendrite only",
-      "topTen": false,
-      "source_type": "builtin",
-      "builtin_fn": "makeChemCaDend()",
       "details": {}
     },
     {
@@ -176,6 +130,52 @@
           { "text": "Kholodenko BN (2000). Negative feedback and ultrasensitivity can bring about oscillations in the mitogen-activated protein kinase cascades. Eur J Biochem 267:1583-1588.", "url": "https://pubmed.ncbi.nlm.nih.gov/10712587/" }
         ]
       }
+    },
+    {
+      "id": "EGFR",
+      "name": "EGFR",
+      "source": "Bhalla & Iyengar 1999",
+      "description": "EGF receptor → Ras → MAPK cascade",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemEGFR()",
+      "details": {
+        "references": [
+          { "text": "Bhalla US & Iyengar R (1999). Science 283:381-387." }
+        ]
+      }
+    },
+    {
+      "id": "CaSpineDend",
+      "name": "CaSpineDend",
+      "source": "MOOSE/rdesigneur",
+      "description": "Calcium dynamics in spine head and dendrite",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemCaSpineDend()",
+      "details": {
+        "full_description": "Models calcium signaling across spine head and dendrite compartments, including NMDA-driven calcium entry and downstream CaMKII activation. The standard starting point for spine plasticity models."
+      }
+    },
+    {
+      "id": "LTP",
+      "name": "LTP",
+      "source": "MOOSE/rdesigneur",
+      "description": "Long-term potentiation signaling network",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemLTP()",
+      "details": {}
+    },
+    {
+      "id": "LTD",
+      "name": "LTD",
+      "source": "MOOSE/rdesigneur",
+      "description": "Long-term depression signaling network",
+      "topTen": false,
+      "source_type": "builtin",
+      "builtin_fn": "makeChemLTD()",
+      "details": {}
     },
     {
       "id": "chem_betaAR_file",

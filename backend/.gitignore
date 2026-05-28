@@ -23,7 +23,6 @@ yarn-debug.log*
 yarn-error.log*
 
 **/OLD/
-/CELL_MODELS
 /temp_configs
 /TestModels
 /__pycache__

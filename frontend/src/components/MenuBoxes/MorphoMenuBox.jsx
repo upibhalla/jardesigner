@@ -4,10 +4,10 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './MorphoMenuBox.Help.json';
 import ProtoPickerDialog from '../ProtoPickerDialog';
-import fileIcon from '../../assets/file.svg';
-import somaIcon from '../../assets/soma.png';
-import ballAndStickIcon from '../../assets/ballAndStick.png';
-import yBranchIcon from '../../assets/ybranch.png';
+import fileIcon from '../../assets/uploaded.svg';
+import somaIcon from '../../assets/soma.svg';
+import ballAndStickIcon from '../../assets/ballAndStick.svg';
+import yBranchIcon from '../../assets/ybranch.svg';
 import { formatFloat } from '../../utils/formatters.js';
 
 // --- Unit Conversion Helpers ---
@@ -182,10 +182,10 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
             </Box>
 
             <Tabs value={tabIndex} onChange={handleTabChange} variant="fullWidth" sx={{ '& .MuiTab-root': { minHeight: 72 } }}>
-                <Tooltip title={helpText.tabs.soma} placement="top"><Tab icon={<img src={somaIcon} alt="Soma" style={{ height: 40 }} />} label="Soma" /></Tooltip>
-                <Tooltip title={helpText.tabs.ballAndStick} placement="top"><Tab icon={<img src={ballAndStickIcon} alt="Ball & Stick" style={{ height: 40 }} />} label="Ball & Stick" /></Tooltip>
-                <Tooltip title={helpText.tabs.yBranch} placement="top"><Tab icon={<img src={yBranchIcon} alt="Y Branch" style={{ height: 40 }} />} label="Y Branch" /></Tooltip>
-                <Tooltip title={helpText.tabs.file} placement="top"><Tab icon={<img src={fileIcon} alt="Uploaded" style={{ height: 40 }} />} label="Uploaded" /></Tooltip>
+                <Tooltip title={helpText.tabs.soma} placement="bottom"><Tab icon={<img src={somaIcon} alt="Soma" style={{ height: 40 }} />} label="Soma" /></Tooltip>
+                <Tooltip title={helpText.tabs.ballAndStick} placement="bottom"><Tab icon={<img src={ballAndStickIcon} alt="Ball & Stick" style={{ height: 40 }} />} label="Ball & Stick" /></Tooltip>
+                <Tooltip title={helpText.tabs.yBranch} placement="bottom"><Tab icon={<img src={yBranchIcon} alt="Y Branch" style={{ height: 40 }} />} label="Y Branch" /></Tooltip>
+                <Tooltip title={helpText.tabs.file} placement="bottom"><Tab icon={<img src={fileIcon} alt="Uploaded" style={{ height: 40 }} />} label="Uploaded" /></Tooltip>
             </Tabs>
 
             <Box sx={{ mt: 2, p: 1 }}>
