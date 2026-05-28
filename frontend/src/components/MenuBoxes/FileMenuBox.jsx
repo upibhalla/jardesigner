@@ -23,7 +23,10 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
     const [showAboutJardesigner, setShowAboutJardesigner] = useState(false);
     const [showAboutMoose, setShowAboutMoose] = useState(false);
 
-    const fileInputRef = useRef();
+    const loadInputRef = useRef();
+
+    const [missingFiles, setMissingFiles] = useState([]);
+    const [showMissingFilesDialog, setShowMissingFilesDialog] = useState(false);
 
     // --- Sync State with Config ---
     useEffect(() => {
@@ -53,44 +56,79 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
         }, 500);
     };
 
-    const handleLoadModel = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const nameWithoutExt = file.name.replace(/\.json$/i, "");
-        setModelFileName(nameWithoutExt);
-
+    const handleLoadModelJson = (file) => {
+        setModelFileName(file.name.replace(/\.json$/i, ""));
         const fileSystemTime = new Date(file.lastModified).toLocaleString();
-
         const reader = new FileReader();
         reader.onload = (e) => {
             const fileContent = e.target.result;
             try {
                 const parsed = JSON.parse(fileContent);
                 const info = parsed.fileinfo || {};
-                
-                // --- Update Properties from Loaded File ---
                 setCreator(info.creator || '');
                 setLicense(info.licence || 'CC BY');
                 setModelNotes(info.modelNotes || '');
-
-                const jsonTime = info.dateTime;
-                const displayTime = jsonTime || fileSystemTime || new Date().toLocaleString();
-                
-                setLastModified(displayTime);
-
-                if (setJsonContent) {
-                    setJsonContent(fileContent);
+                setLastModified(info.dateTime || fileSystemTime || new Date().toLocaleString());
+                const refs = getExternalFileRefs(parsed);
+                if (refs.length > 0) {
+                    setMissingFiles(refs);
+                    setShowMissingFilesDialog(true);
                 }
+                if (setJsonContent) setJsonContent(fileContent);
             } catch (err) {
                 console.error("Error parsing JSON:", err);
                 alert("Failed to load model file.");
             }
         };
         reader.readAsText(file);
-        
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
+    };
+
+    const getExternalFileRefs = (parsed) => {
+        const refs = [];
+        if (parsed.cellProto?.type === 'file' && parsed.cellProto?.source)
+            refs.push({ file: parsed.cellProto.source, where: 'Morphology → Browse Library' });
+        for (const cp of parsed.chemProto || [])
+            if ((cp.type === 'sbml' || cp.type === 'kkit') && cp.source)
+                refs.push({ file: cp.source, where: 'Chemistry → Browse Library' });
+        for (const cp of parsed.chanProto || [])
+            if (cp.type === 'neuroml' && cp.source)
+                refs.push({ file: cp.source, where: 'Channels → Browse Library' });
+        return refs;
+    };
+
+    const handleLoadProject = async (file) => {
+        if (!clientId) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const response = await fetch(`${API_BASE_URL}/upload_project/${clientId}`, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+            const parsed = JSON.parse(data.json);
+            const info = parsed.fileinfo || {};
+            setCreator(info.creator || '');
+            setLicense(info.licence || 'CC BY');
+            setModelNotes(info.modelNotes || '');
+            setLastModified(info.dateTime || new Date().toLocaleString());
+            setModelFileName(file.name.replace(/\.jardes$/i, ''));
+            if (setJsonContent) setJsonContent(data.json);
+        } catch (err) {
+            console.error('Error loading project:', err);
+            alert(`Failed to load project: ${err.message}`);
+        }
+    };
+
+    const handleLoadFile = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (loadInputRef.current) loadInputRef.current.value = '';
+        if (file.name.toLowerCase().endsWith('.jardes')) {
+            handleLoadProject(file);
+        } else {
+            handleLoadModelJson(file);
         }
     };
 
@@ -146,46 +184,42 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
         }
     };
 
-    const handleDownloadProject = async () => {
-        if (!clientId) {
-            alert("Client ID is missing. Cannot download project.");
-            return;
-        }
+    const _triggerBlobDownload = (blob, fileName) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    };
 
+    const handleDownloadProject = async () => {
+        if (!clientId) { alert("Client ID is missing."); return; }
+        const base = modelFileName || 'model';
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/download_project_smart/${clientId}?basename=${encodeURIComponent(base)}`
+            );
+            if (!response.ok) throw new Error(await response.text());
+            _triggerBlobDownload(await response.blob(), `${base}.jardes`);
+        } catch (error) {
+            console.error("Error saving project:", error);
+            alert(`Failed to save project: ${error.message}`);
+        }
+    };
+
+    const handleDownloadProjectHistory = async () => {
+        if (!clientId) { alert("Client ID is missing."); return; }
+        const base = modelFileName || 'model';
         try {
             const response = await fetch(`${API_BASE_URL}/download_project/${clientId}`);
-            
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(errText || response.statusText);
-            }
-
-            const blob = await response.blob();
-            
-            // Format: jardes_YYYY-MM-DD_HH-MM-SS.zip
-            const now = new Date();
-            const dateStr = now.getFullYear() + "-" + 
-                            String(now.getMonth() + 1).padStart(2, '0') + "-" + 
-                            String(now.getDate()).padStart(2, '0') + "_" + 
-                            String(now.getHours()).padStart(2, '0') + "-" + 
-                            String(now.getMinutes()).padStart(2, '0') + "-" + 
-                            String(now.getSeconds()).padStart(2, '0');
-            
-            const fileName = `jardes_${dateStr}.zip`;
-
-            // Trigger Download
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-
+            if (!response.ok) throw new Error(await response.text());
+            _triggerBlobDownload(await response.blob(), `${base}_history.jardes`);
         } catch (error) {
-            console.error("Error downloading project:", error);
-            alert(`Failed to download project: ${error.message}`);
+            console.error("Error saving project history:", error);
+            alert(`Failed to save project history: ${error.message}`);
         }
     };
 
@@ -242,22 +276,22 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
             {/* === Section 1: Main Actions === */}
             <Grid container spacing={1}>
                 <MenuButton label="New" onClick={handleNew} />
-                
+
                 <Grid item xs={12}>
                     <Button
                         variant="contained"
                         fullWidth
                         sx={{ bgcolor: '#e0e0e0', color: 'black', justifyContent: 'flex-start', pl: 2, ':hover': { bgcolor: '#bdbdbd' } }}
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => loadInputRef.current?.click()}
                     >
                         Load Model
                     </Button>
-                    <input type="file" accept=".json" style={{ display: 'none' }} ref={fileInputRef} onChange={handleLoadModel} />
+                    <input type="file" accept=".json,.jardes" style={{ display: 'none' }} ref={loadInputRef} onChange={handleLoadFile} />
                 </Grid>
 
-                <MenuButton label="Load Tutorial" onClick={() => {}} /> 
-                <MenuButton label="Save Model" onClick={handleSaveModel} />
-                <MenuButton label="Download Project" onClick={handleDownloadProject} /> 
+                <MenuButton label="Save Model" onClick={handleDownloadProject} />
+                <MenuButton label="Save Model JSON" onClick={handleSaveModel} />
+                <MenuButton label="Save Model History" onClick={handleDownloadProjectHistory} />
             </Grid>
 
             <Divider sx={{ my: 2, borderBottomWidth: 2 }} />
@@ -372,6 +406,29 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                     "MOOSE documentation is at \"https://moose.ncbs.res.in/\""
                 ]}
             />
+
+            <Dialog open={showMissingFilesDialog} onClose={() => setShowMissingFilesDialog(false)} maxWidth="sm" fullWidth>
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    External files required
+                    <IconButton size="small" onClick={() => setShowMissingFilesDialog(false)}><CloseIcon /></IconButton>
+                </DialogTitle>
+                <DialogContent>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        This model references files that are not embedded in the JSON.
+                        Load them from their respective panels:
+                    </Typography>
+                    {missingFiles.map(({ file, where }, i) => (
+                        <Box key={i} sx={{ mb: 1 }}>
+                            <Typography variant="body2">
+                                <strong>{file}</strong> — {where}
+                            </Typography>
+                        </Box>
+                    ))}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setShowMissingFilesDialog(false)}>OK</Button>
+                </DialogActions>
+            </Dialog>
 
         </Box>
     );

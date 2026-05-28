@@ -718,7 +718,7 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     #self.chemid = moose.element( '/library/' + cp['name'] )
                     comptlist = moose.wildcardFind( '/library/##[ISA=ChemCompt]' )
                     if len( comptlist ) == 0:
-                        print("loadChem: No compartment found in file: ", fname)
+                        print("loadChem: No compartment found in file: ", cp['source'])
                         return
                     self.comptDict.update( {cc.name:cc.path for cc in comptlist} )
                 elif ctype in ['kkit', 'sbml']:
@@ -2107,8 +2107,12 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         #comptlist = moose.wildcardFind( chem.path + '/##[ISA=ChemCompt]' )
         comptlist = moose.wildcardFind( '/library/##[ISA=ChemCompt]' )
         if len( comptlist ) == 0:
+            # Insert a compartment here
             print("Error: loadChem: No compartment found in file: ", fname)
             return
+        elif len( comptlist ) == 1 and comptlist[0].name == "cell":
+            comptlist[0].name = chemName
+
         fixXreacs.fixXreacs( chem.path )
         self.comptDict.update( {cc.name:cc.path for cc in comptlist } )
         #print( f"Loaded chem file {fname} to {chemName}, comptDic={self.comptDict}" )

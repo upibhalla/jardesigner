@@ -191,7 +191,9 @@ const ChemMenuBox = ({
         if (item.source_type === 'builtin') {
             newProto = { type: item.id, name: item.id, source: '', manualName: false };
         } else if ((item.source_type === 'kkit' || item.source_type === 'sbml') && item.staged_filename) {
-            newProto = { type: item.source_type, name: item.name, source: item.staged_filename, manualName: true };
+            const displayType = item.source_type === 'sbml' ? 'SBML' : 'kkit';
+            const safeName = item.name.replace(/\.[^.]+$/, '');
+            newProto = { type: displayType, name: safeName, source: item.staged_filename, manualName: true };
         }
         if (newProto) {
             setPrototypes(prev => [...prev, newProto]);

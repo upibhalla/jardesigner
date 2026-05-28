@@ -8,6 +8,7 @@ import uuid
 import time
 import threading
 import shutil
+import zipfile
 import re
 import secrets
 from flask import Flask, request, jsonify, send_from_directory, send_file, after_this_request
@@ -412,7 +413,142 @@ def download_project(client_id):
             print(f"Error removing temp zip: {e}")
         return response
 
-    return send_file(archive_path, as_attachment=True, download_name="project.zip")
+    return send_file(archive_path, as_attachment=True, download_name="project.jardes")
+
+
+def _get_newest_jardesigner_json(session_dir):
+    """Return (path, parsed_dict) of the newest jardesigner JSON, or (None, None).
+    Sorts by trailing numeric index in the filename (highest wins), then mtime as tiebreaker.
+    This is reliable even after ZIP extraction where all mtimes become identical."""
+    candidates = []
+    for fname in os.listdir(session_dir):
+        if not fname.endswith('.json'):
+            continue
+        fpath = os.path.join(session_dir, fname)
+        try:
+            with open(fpath, 'r') as f:
+                parsed = json.load(f)
+            if parsed.get('filetype') == 'jardesigner':
+                m = re.search(r'(\d+)\.json$', fname)
+                index = int(m.group(1)) if m else -1
+                candidates.append((index, os.path.getmtime(fpath), fpath, parsed))
+        except Exception:
+            continue
+    if not candidates:
+        return None, None
+    candidates.sort(reverse=True)
+    return candidates[0][2], candidates[0][3]
+
+
+def _get_referenced_sources(parsed):
+    """Return list of source filenames referenced by a jardesigner model dict."""
+    sources = []
+    cell = parsed.get('cellProto', {})
+    if cell.get('type') == 'file' and cell.get('source'):
+        sources.append(cell['source'])
+    for cp in parsed.get('chemProto', []):
+        if cp.get('source'):
+            sources.append(cp['source'])
+    for cp in parsed.get('chanProto', []):
+        if cp.get('source'):
+            sources.append(cp['source'])
+    return sources
+
+
+@app.route('/download_project_smart/<client_id>', methods=['GET'])
+def download_project_smart(client_id):
+    """Download a minimal .jardes archive: newest JSON (renamed to basename) + referenced files only."""
+    if not _is_safe_client_id(client_id):
+        return jsonify({"status": "error", "message": "Invalid Client ID"}), 400
+
+    basename = request.args.get('basename', 'model')
+    # Sanitise: strip path separators and keep only safe characters
+    basename = re.sub(r'[^\w\-. ]', '_', os.path.basename(basename))
+    if not basename:
+        basename = 'model'
+
+    session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
+    if not os.path.exists(session_dir):
+        return jsonify({"status": "error", "message": "Project directory not found"}), 404
+
+    json_path, parsed = _get_newest_jardesigner_json(session_dir)
+    if json_path is None:
+        return jsonify({"status": "error", "message": "No model JSON found in session"}), 404
+
+    sources = _get_referenced_sources(parsed)
+
+    tmp_zip_path = os.path.join(USER_UPLOADS_DIR, f'_smart_{uuid.uuid4()}.zip')
+    try:
+        with zipfile.ZipFile(tmp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.write(json_path, arcname=f'{basename}.json')
+            for src in sources:
+                src_path = os.path.join(session_dir, os.path.basename(src))
+                if os.path.isfile(src_path):
+                    zf.write(src_path, arcname=os.path.basename(src))
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to build archive: {str(e)}"}), 500
+
+    @after_this_request
+    def remove_file(response):
+        try:
+            if os.path.exists(tmp_zip_path):
+                os.remove(tmp_zip_path)
+        except Exception as ex:
+            print(f"Error removing temp zip: {ex}")
+        return response
+
+    return send_file(tmp_zip_path, as_attachment=True, download_name=f'{basename}.jardes')
+
+
+@app.route('/upload_project/<client_id>', methods=['POST'])
+def upload_project(client_id):
+    if not _is_safe_client_id(client_id):
+        return jsonify({'error': 'Invalid client ID'}), 400
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename.lower().endswith('.jardes'):
+        return jsonify({'error': 'Expected a .jardes file'}), 400
+
+    session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    archive_path = os.path.join(session_dir, '_project_upload' + os.path.splitext(secure_filename(file.filename))[1])
+    file.save(archive_path)
+
+    try:
+        shutil.unpack_archive(archive_path, session_dir, format='zip')
+    except Exception as e:
+        return jsonify({'error': f'Failed to unpack archive: {str(e)}'}), 400
+    finally:
+        os.remove(archive_path)
+
+    # Prefer <basename>.json (matches the .jardes filename), then fall back to newest by mtime
+    upload_basename = os.path.splitext(secure_filename(file.filename))[0]
+    preferred_name = upload_basename + '.json'
+    preferred_path = os.path.join(session_dir, preferred_name)
+
+    json_content = None
+    if os.path.isfile(preferred_path):
+        try:
+            with open(preferred_path, 'r') as f:
+                text = f.read()
+            if json.loads(text).get('filetype') == 'jardesigner':
+                json_content = text
+        except Exception:
+            pass
+
+    if json_content is None:
+        json_path, _ = _get_newest_jardesigner_json(session_dir)
+        if json_path:
+            with open(json_path, 'r') as f:
+                json_content = f.read()
+
+    if json_content is None:
+        return jsonify({'error': 'No jardesigner JSON file found in archive'}), 400
+
+    return jsonify({'status': 'success', 'json': json_content})
 
 @app.route('/internal/push_data', methods=['POST'])
 def push_data():
