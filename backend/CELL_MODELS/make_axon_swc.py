@@ -45,6 +45,7 @@ def _axon_nodes(compt_len, num_segments, axon_dia_fn):
     theta = 0.0
     x = compt_len      # start of first axon segment = end of soma
     y = 0.0
+    parent = 1
 
     for i in range(num_segments):
         dx = compt_len * np.cos(theta)
@@ -55,8 +56,8 @@ def _axon_nodes(compt_len, num_segments, axon_dia_fn):
         x_end = x + dx
         y_end = y + dy
         radius_um = axon_dia_fn(i) / 2 * 1e6   # metres → micrometres
-        parent = len(nodes) + 3   # +3 because soma occupies nodes 1, 2, 3
         nodes.append((3, x_end * 1e6, y_end * 1e6, 0.0, radius_um, parent))
+        parent = len(nodes) + 3   # +3 because soma occupies nodes 1, 2, 3
         x = x_end
         y = y_end
 
@@ -77,7 +78,7 @@ def make_axon_swc(
     nodes = [
         (1,  compt_len*1e6/2,  0.0, 0.0, soma_r, -1),   # soma start (root)
         (1,  0.0,              0.0, 0.0, soma_r,  1),   # soma left
-        (1,  compt_len,        0.0, 0.0, soma_r,  1),   # soma right
+        (1,  compt_len*1e6,    0.0, 0.0, soma_r,  1),   # soma right
     ]
     nodes += _axon_nodes(compt_len, num_segments, lambda i: axon_dia)
     _write_swc(nodes, output_file)
@@ -101,7 +102,7 @@ def make_myelinated_axon_swc(
     nodes = [
         (1,  compt_len*1e6/2,  0.0, 0.0, soma_r, -1),   # soma start (root)
         (1,  0.0,              0.0, 0.0, soma_r,  1),   # soma left
-        (1,  compt_len,        0.0, 0.0, soma_r,  1),   # soma right
+        (1,  compt_len*1e6,    0.0, 0.0, soma_r,  1),   # soma right
     ]
 
     def dia_fn(i):
