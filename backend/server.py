@@ -318,6 +318,27 @@ def launch_simulation():
     session_dir = os.path.join(USER_UPLOADS_DIR, client_id)
     os.makedirs(session_dir, exist_ok=True)
 
+    # Check for missing external files before launching (skip if frontend already warned the user)
+    if not request_data.get('skip_missing_files_check'):
+        missing = []
+        cell = config_data.get('cellProto', {})
+        if isinstance(cell, dict) and cell.get('type') == 'file' and cell.get('source'):
+            if not os.path.isfile(os.path.join(session_dir, os.path.basename(cell['source']))):
+                missing.append(cell['source'])
+        for cp in config_data.get('chemProto', []):
+            if cp.get('type') in ('sbml', 'SBML', 'kkit') and cp.get('source'):
+                if not os.path.isfile(os.path.join(session_dir, os.path.basename(cp['source']))):
+                    missing.append(cp['source'])
+        for cp in config_data.get('chanProto', []):
+            if cp.get('type') == 'neuroml' and cp.get('source'):
+                if not os.path.isfile(os.path.join(session_dir, os.path.basename(cp['source']))):
+                    missing.append(cp['source'])
+        if missing:
+            return jsonify({
+                "status": "error",
+                "message": f"Cannot run: required file(s) not uploaded: {', '.join(missing)}. Load them via Browse Library before running."
+            }), 400
+
     model_filename = get_next_model_filename(session_dir)
     config_file_path = os.path.join(session_dir, model_filename)
 

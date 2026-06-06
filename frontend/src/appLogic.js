@@ -352,10 +352,11 @@ export const useAppLogic = () => {
                 socketRef.current.emit('join_sim_channel', { data_channel_id: newDataChannelId });
             }
 
-            const payload = { 
-                config_data: newJsonData, 
+            const payload = {
+                config_data: newJsonData,
                 client_id: clientId,
-                data_channel_id: newDataChannelId 
+                data_channel_id: newDataChannelId,
+                skip_missing_files_check: warnedAboutMissingRef.current
             };
 
             const response = await fetch(`${API_BASE_URL}/launch_simulation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -389,6 +390,8 @@ export const useAppLogic = () => {
     
     const lastBuiltJsonDataRef = useRef(null);
     const pendingStartRuntimeRef = useRef(null);
+    const warnedAboutMissingRef = useRef(false);
+    const setWarnedAboutMissing = useCallback((val) => { warnedAboutMissingRef.current = val; }, []);
     const updateJsonData = useCallback((newDataPart) => {
         const updatedData = { ...initialJsonData, ...jsonData, ...newDataPart };
         const compactedData = compactJsonData(updatedData, initialJsonData);
@@ -501,7 +504,7 @@ export const useAppLogic = () => {
         plotDataUrl, isPlotReady, plotError, isSimulating, activeSim, clientId,
         updateJsonData, setRunParameters, handleStartRun, handleResetRun,
         handleBuildAndStartRun, handleStopRun, updateJsonString,
-        handleClearModel, getCurrentJsonData, getChemProtos, setActiveMenu, handleMorphologyFileChange,
+        handleClearModel, getCurrentJsonData, getChemProtos, setActiveMenu, handleMorphologyFileChange, setWarnedAboutMissing,
         replayTime, totalRuntime, isReplaying, replayInterval, 
 		setReplayInterval, liveFrameData,
 		onStartReplay: handleStartReplay, onPauseReplay: handlePauseReplay,

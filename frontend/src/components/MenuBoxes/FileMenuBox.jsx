@@ -11,7 +11,7 @@ import mooseLogo from '../../assets/moose_logo.png';
 
 const API_BASE_URL = `http://${window.location.hostname}:5000`;
 
-const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, clientId }) => {
+const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, clientId, onMissingFilesWarned }) => {
     // --- Metadata State ---
     const [creator, setCreator] = useState('');
     const [license, setLicense] = useState('CC BY');
@@ -22,11 +22,11 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
     // --- Dialog State ---
     const [showAboutJardesigner, setShowAboutJardesigner] = useState(false);
     const [showAboutMoose, setShowAboutMoose] = useState(false);
+    const [missingFiles, setMissingFiles] = useState([]);
+    const [showMissingFilesDialog, setShowMissingFilesDialog] = useState(false);
 
     const loadInputRef = useRef();
 
-    const [missingFiles, setMissingFiles] = useState([]);
-    const [showMissingFilesDialog, setShowMissingFilesDialog] = useState(false);
 
     // --- Sync State with Config ---
     useEffect(() => {
@@ -56,6 +56,19 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
         }, 500);
     };
 
+    const getExternalFileRefs = (parsed) => {
+        const refs = [];
+        if (parsed.cellProto?.type === 'file' && parsed.cellProto?.source)
+            refs.push({ file: parsed.cellProto.source, where: 'Morphology → Browse Library → Upload or select from list' });
+        for (const cp of parsed.chemProto || [])
+            if ((cp.type === 'sbml' || cp.type === 'SBML' || cp.type === 'kkit') && cp.source)
+                refs.push({ file: cp.source, where: 'Signaling → Browse Library → Upload or select from list' });
+        for (const cp of parsed.chanProto || [])
+            if (cp.type === 'neuroml' && cp.source)
+                refs.push({ file: cp.source, where: 'Channels → Browse Library → Upload or select from list' });
+        return refs;
+    };
+
     const handleLoadModelJson = (file) => {
         setModelFileName(file.name.replace(/\.json$/i, ""));
         const fileSystemTime = new Date(file.lastModified).toLocaleString();
@@ -69,12 +82,15 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                 setLicense(info.licence || 'CC BY');
                 setModelNotes(info.modelNotes || '');
                 setLastModified(info.dateTime || fileSystemTime || new Date().toLocaleString());
+                if (setJsonContent) setJsonContent(fileContent);
                 const refs = getExternalFileRefs(parsed);
                 if (refs.length > 0) {
                     setMissingFiles(refs);
                     setShowMissingFilesDialog(true);
+                    if (onMissingFilesWarned) onMissingFilesWarned(true);
+                } else {
+                    if (onMissingFilesWarned) onMissingFilesWarned(false);
                 }
-                if (setJsonContent) setJsonContent(fileContent);
             } catch (err) {
                 console.error("Error parsing JSON:", err);
                 alert("Failed to load model file.");
@@ -83,18 +99,6 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
         reader.readAsText(file);
     };
 
-    const getExternalFileRefs = (parsed) => {
-        const refs = [];
-        if (parsed.cellProto?.type === 'file' && parsed.cellProto?.source)
-            refs.push({ file: parsed.cellProto.source, where: 'Morphology → Browse Library' });
-        for (const cp of parsed.chemProto || [])
-            if ((cp.type === 'sbml' || cp.type === 'kkit') && cp.source)
-                refs.push({ file: cp.source, where: 'Chemistry → Browse Library' });
-        for (const cp of parsed.chanProto || [])
-            if (cp.type === 'neuroml' && cp.source)
-                refs.push({ file: cp.source, where: 'Channels → Browse Library' });
-        return refs;
-    };
 
     const handleLoadProject = async (file) => {
         if (!clientId) return;
@@ -407,6 +411,7 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                 ]}
             />
 
+
             <Dialog open={showMissingFilesDialog} onClose={() => setShowMissingFilesDialog(false)} maxWidth="sm" fullWidth>
                 <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     External files required
@@ -420,7 +425,7 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                     {missingFiles.map(({ file, where }, i) => (
                         <Box key={i} sx={{ mb: 1 }}>
                             <Typography variant="body2">
-                                <strong>{file}</strong> — {where}
+                                {file} --- {where}.
                             </Typography>
                         </Box>
                     ))}

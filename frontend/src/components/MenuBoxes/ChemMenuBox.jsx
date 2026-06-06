@@ -196,9 +196,19 @@ const ChemMenuBox = ({
             newProto = { type: displayType, name: safeName, source: item.staged_filename, manualName: true };
         }
         if (newProto) {
-            setPrototypes(prev => [...prev, newProto]);
-            setActivePrototype(prototypes.length);
-            setTriggerRefresh(true);
+            // Check for existing entry with the same source (file-based) or name (builtin)
+            const existingIndex = prototypes.findIndex(p =>
+                newProto.source
+                    ? p.source === newProto.source
+                    : p.name === newProto.name && p.type === newProto.type
+            );
+            if (existingIndex !== -1) {
+                setActivePrototype(existingIndex);
+            } else {
+                setPrototypes(prev => [...prev, newProto]);
+                setActivePrototype(prototypes.length);
+                setTriggerRefresh(true);
+            }
         }
     }, [prototypes]);
 
