@@ -89,6 +89,9 @@ const RunMenuBox = ({
 
     const onConfigurationChangeRef = useRef(onConfigurationChange);
     useEffect(() => { onConfigurationChangeRef.current = onConfigurationChange; }, [onConfigurationChange]);
+
+    // Saves elecPlotDt, funcDt, and per-drawable moogli dt before turnOffElec overrides them
+    const savedDtsRef = useRef(null);
     
     useEffect(() => {
         if (isReplaying) {
@@ -126,7 +129,59 @@ const RunMenuBox = ({
     const handleTurnOffElecChange = () => {
         const isTurningOff = !configSettings.turnOffElec;
         setConfigSettings(prev => ({ ...prev, turnOffElec: isTurningOff }));
-        setRuntime(isTurningOff ? '100' : '0.3');
+
+        if (isTurningOff) {
+            const newRuntime = '100';
+            // Save values that will be overridden, including current runtime
+            savedDtsRef.current = {
+                runtime,
+                elecPlot: clocks.elecPlot,
+                function: clocks.function,
+                moogli: currentConfig.moogli?.map(m => m.dt) ?? [],
+            };
+            setRuntime(newRuntime);
+            const runtimeNum = parseFloat(newRuntime);
+            const newFuncDt = parseFloat(clocks.chem) || parseFloat(defaultRunConfig.chemDt);
+            setClocks(prev => ({ ...prev, elecPlot: newRuntime, function: String(newFuncDt) }));
+            const chemFields = ['conc', 'n', 'concInit', 'nInit', 'volume'];
+            const newMoogli = currentConfig.moogli?.length > 0
+                ? currentConfig.moogli.map(m => chemFields.includes(m.field) ? m : { ...m, dt: runtimeNum })
+                : undefined;
+            onConfigurationChange({
+                turnOffElec: true,
+                runtime: runtimeNum,
+                elecPlotDt: runtimeNum,
+                funcDt: newFuncDt,
+                ...(newMoogli ? { moogli: newMoogli } : {}),
+            });
+        } else {
+            const saved = savedDtsRef.current;
+            const restoredRuntime = saved?.runtime ?? '0.3';
+            setRuntime(restoredRuntime);
+            if (saved) {
+                setClocks(prev => ({
+                    ...prev,
+                    elecPlot: saved.elecPlot,
+                    function: saved.function,
+                }));
+                const restoredMoogli = (currentConfig.moogli?.length > 0 && saved.moogli.length > 0)
+                    ? currentConfig.moogli.map((m, i) => ({
+                        ...m,
+                        dt: saved.moogli[i] !== undefined ? saved.moogli[i] : m.dt,
+                      }))
+                    : undefined;
+                onConfigurationChange({
+                    turnOffElec: false,
+                    runtime: parseFloat(restoredRuntime),
+                    elecPlotDt: parseFloat(saved.elecPlot) || parseFloat(defaultRunConfig.elecPlotDt),
+                    funcDt: parseFloat(saved.function) || parseFloat(defaultRunConfig.funcDt),
+                    ...(restoredMoogli ? { moogli: restoredMoogli } : {}),
+                });
+                savedDtsRef.current = null;
+            } else {
+                onConfigurationChange({ turnOffElec: false });
+            }
+        }
     };
 
     const buildConfigPayload = useCallback(() => {
@@ -233,12 +288,12 @@ const RunMenuBox = ({
 
             <Grid container spacing={1.5} sx={{mb: 2}}>
                 <Grid item xs={12} sm={6} container spacing={1.5}>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} disabled={configSettings.turnOffElec} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
                     <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} /><InfoTooltip title={helpText.clocks.chemDt} /></Box></Grid>
                     <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} /><InfoTooltip title={helpText.clocks.diffusionDt} /></Box></Grid>
                 </Grid>
                 <Grid item xs={12} sm={6} container spacing={1.5}>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} disabled={configSettings.turnOffElec} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
                     <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} /><InfoTooltip title={helpText.clocks.chemPlotDt} /></Box></Grid>
                     <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} /><InfoTooltip title={helpText.clocks.functionDt} /></Box></Grid>
                     <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} /><InfoTooltip title={helpText.clocks.statusDt} /></Box></Grid>
@@ -254,9 +309,9 @@ const RunMenuBox = ({
             <Typography variant="body2" gutterBottom sx={{ mt: 1, fontWeight: 'medium' }}>Flags</Typography>
             <Grid container spacing={1} rowSpacing={0}>
                 <Grid item xs={6}><Tooltip title={helpText.flags.turnOffElec}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.combineSegments}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => updateConfigSetting('combineSegments', !configSettings.combineSegments)} /> } label="Combine Segments" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.useGssa}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => updateConfigSetting('useGssa', !configSettings.useGssa)} /> } label="Use GSSA" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.reuseLibraryCell}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => updateConfigSetting('reuseLibraryCell', !configSettings.reuseLibraryCell)} /> } label="Reuse Library Cell" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.combineSegments}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => { const v = !configSettings.combineSegments; updateConfigSetting('combineSegments', v); onConfigurationChange({ combineSegments: v }); }} /> } label="Combine Segments" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.useGssa}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => { const v = !configSettings.useGssa; updateConfigSetting('useGssa', v); onConfigurationChange({ useGssa: v }); }} /> } label="Use GSSA" /></Tooltip></Grid>
+                <Grid item xs={6}><Tooltip title={helpText.flags.reuseLibraryCell}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => { const v = !configSettings.reuseLibraryCell; updateConfigSetting('reuseLibraryCell', v); onConfigurationChange({ stealCellFromLibrary: v }); }} /> } label="Reuse Library Cell" /></Tooltip></Grid>
             </Grid>
 
             <Typography variant="body2" gutterBottom sx={{ mt: 2, fontWeight: 'medium' }}>Other Settings</Typography>
