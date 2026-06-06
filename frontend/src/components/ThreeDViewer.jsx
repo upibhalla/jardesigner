@@ -139,10 +139,11 @@ const ThreeDViewer = (props) => {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [activeDrawableId, setActiveDrawableId] = useState(null);
   
-  const [rotationSpeedState, setRotationSpeedState] = useState(0); 
+  const [rotationSpeedState, setRotationSpeedState] = useState(0);
   const [isReflective, setIsReflective] = useState(false);
   const [verticalAxis, setVerticalAxis] = useState('y'); // 'y', 'z', or 'x'
   const [isWorldFlipped, setIsWorldFlipped] = useState(false);
+  const [showAllMoogliIcons, setShowAllMoogliIcons] = useState(false);
   
   // --- NEW: Ref to track previous simulation state ---
   const prevIsSimulatingRef = useRef();
@@ -191,6 +192,7 @@ const ThreeDViewer = (props) => {
       setVerticalAxis('y');
       setIsReflective(false);
       setRotationSpeedState(0);
+      setShowAllMoogliIcons(false);
     }
   }, [threeDConfig, setDrawableVisibility, onSceneBuilt]);
 
@@ -210,7 +212,13 @@ const ThreeDViewer = (props) => {
           managerRef.current.setActiveGroupId(activeDrawableId);
       }
   }, [drawableVisibility, activeDrawableId]);
-  
+
+  useEffect(() => {
+      if (managerRef.current) {
+          managerRef.current.setShowAllMoogliIcons(showAllMoogliIcons);
+      }
+  }, [showAllMoogliIcons]);
+
   // --- NEW: Auto-autoscale on sim complete ---
   useEffect(() => {
     const prevIsSimulating = prevIsSimulatingRef.current;
@@ -426,6 +434,10 @@ Aa: Auto-position`;
                                 label={<Typography variant="body2">{d.title || d.groupId}</Typography>}
                             />
                         ))}
+                        <FormControlLabel
+                            control={<Checkbox checked={showAllMoogliIcons} onChange={(e) => setShowAllMoogliIcons(e.target.checked)} size="small" />}
+                            label={<Typography variant="body2">Show 3D indicators on all compartments</Typography>}
+                        />
                     </Box>
                 )}
                 <Divider />

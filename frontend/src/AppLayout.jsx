@@ -169,11 +169,12 @@ export const AppLayout = (props) => {
       liveFrameData={liveFrameData}
       isReplaying={isReplaying}
     />,
-    Morphology: <MorphoMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={jsonData.cellProto} 
-        onFileChange={handleMorphologyFileChange} 
-        clientId={clientId} 
+    Morphology: <MorphoMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={jsonData.cellProto}
+        onFileChange={handleMorphologyFileChange}
+        clientId={clientId}
+        setupThreeDConfig={threeDConfigs?.setup}
     />,
     Spines: <SpineMenuBox 
         onConfigurationChange={updateJsonData} 

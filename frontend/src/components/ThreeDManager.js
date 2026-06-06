@@ -196,13 +196,18 @@ export default class ThreeDManager {
         const shapeObject = createShape(primitive, material);
 
         if (shapeObject) {
-            shapeObject.userData = { 
-                entityName: entity.groupId, 
-				shapeIndex: i, 
+            const isMoogli = primitive.type === 'moogli';
+            const isNonSomaMoogli = isMoogli && primitive.simPath !== 'soma';
+            shapeObject.userData = {
+                entityName: entity.groupId,
+				shapeIndex: i,
 				originalValue: primitive.value,
                 originalPosition: shapeObject.position.clone(),
                 simPath: primitive.simPath,
+                isMoogli,
+                isNonSomaMoogli,
             };
+            if (isNonSomaMoogli) shapeObject.visible = false;
 
             if (shapeObject.type === 'Mesh') {
                 if (shapeObject.geometry.type === 'SphereGeometry') {
@@ -245,7 +250,21 @@ export default class ThreeDManager {
       this.sceneObjects.forEach(obj => {
           const groupId = obj.userData.entityName;
           if (visibilityMap.hasOwnProperty(groupId)) {
-              obj.visible = visibilityMap[groupId];
+              // Non-soma moogli icons stay hidden unless showAllMoogliIcons is on
+              if (obj.userData.isNonSomaMoogli && !this._showAllMoogliIcons) {
+                  obj.visible = false;
+              } else {
+                  obj.visible = visibilityMap[groupId];
+              }
+          }
+      });
+  }
+
+  setShowAllMoogliIcons(showAll) {
+      this._showAllMoogliIcons = showAll;
+      this.sceneObjects.forEach(obj => {
+          if (obj.userData.isNonSomaMoogli) {
+              obj.visible = showAll;
           }
       });
   }

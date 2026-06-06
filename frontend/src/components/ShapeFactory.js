@@ -42,7 +42,8 @@ export function createShape(primitive, material) {
         }
 
         case 'moogli': { // Square Plane
-            geometry = new THREE.PlaneGeometry(primitive.diameter, primitive.diameter);
+            const side = primitive.diameter * 0.5;
+            geometry = new THREE.PlaneGeometry(side, side);
             shapeObject = new THREE.Mesh(geometry, material);
             shapeObject.material.side = THREE.DoubleSide; 
             shapeObject.position.set(...primitive.C);

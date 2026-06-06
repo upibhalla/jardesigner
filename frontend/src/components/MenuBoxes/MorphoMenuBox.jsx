@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Tabs, Tab, Typography, TextField, Grid, Tooltip, IconButton, Button, Chip } from '@mui/material';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Box, Tabs, Tab, Typography, TextField, Grid, Tooltip, IconButton, Button } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './MorphoMenuBox.Help.json';
@@ -50,8 +50,28 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
     );
 });
 
+function countSwcCompartments(setupConfig) {
+    if (!setupConfig?.drawables) return null;
+    const seen = new Set();
+    let soma = 0, axon = 0, apical = 0, basal = 0, others = 0;
+    setupConfig.drawables.forEach(drawable => {
+        (drawable.shape || []).forEach(s => {
+            if (s.type !== 'sphere' && s.type !== 'cylinder') return;
+            if (seen.has(s.simPath)) return;
+            seen.add(s.simPath);
+            const name = (s.simPath || '').toLowerCase();
+            if (s.type === 'sphere' || name === 'soma') soma++;
+            else if (name.startsWith('axon')) axon++;
+            else if (name.startsWith('apical')) apical++;
+            else if (name.startsWith('dend') || name.startsWith('basal')) basal++;
+            else others++;
+        });
+    });
+    return { soma, axon, apical, basal, others };
+}
+
 // --- The Main Component ---
-const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, clientId }) => {
+const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, clientId, setupThreeDConfig }) => {
     const [tabIndex, setTabIndex] = useState(() => typeToIndexMap[currentConfig?.type] ?? 0);
 
     const [somaValues, setSomaValues] = useState(() =>
@@ -81,6 +101,8 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
             branchNumSeg: safeToString(currentConfig.branchNumSeg, initialYBranchState.branchNumSeg),
         } : initialYBranchState
     );
+
+    const comptCounts = useMemo(() => countSwcCompartments(setupThreeDConfig), [setupThreeDConfig]);
 
     const [pickerOpen, setPickerOpen] = useState(false);
     const [uploadedItem, setUploadedItem] = useState(() =>
@@ -247,9 +269,21 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
                                 {uploadedItem.description && (
                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>{uploadedItem.description}</Typography>
                                 )}
-                                <Box sx={{ mt: 0.5 }}>
-                                    <Chip label={uploadedItem.source_type || 'file'} size="small" variant="outlined" />
-                                </Box>
+                                {comptCounts && (
+                                    <Box sx={{ mt: 1 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>Compartments:</Typography>
+                                        <Box component="table" sx={{ borderCollapse: 'collapse', '& td': { pr: 2, py: 0.25 } }}>
+                                            <tbody>
+                                                {[['Soma', comptCounts.soma], ['Axon', comptCounts.axon], ['Apical', comptCounts.apical], ['Dendrite', comptCounts.basal], ['Others', comptCounts.others]].map(([label, count]) => (
+                                                    <tr key={label}>
+                                                        <td><Typography variant="body2">{label}</Typography></td>
+                                                        <td><Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{count}</Typography></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </Box>
+                                    </Box>
+                                )}
                             </Box>
                         ) : (
                             <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
