@@ -157,6 +157,7 @@ export default class ThreeDManager {
     if (!config || !config.drawables) {
         return;
     }
+    const _bst = performance.now();
 
     // --- NEW: Reset rotation states on build ---
     this.baseWorldRotation.set(0, 0, 0);
@@ -229,6 +230,9 @@ export default class ThreeDManager {
     });
     this.focusCamera();
     setTimeout(() => this.onWindowResize(), 0);
+    const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
+    console.log(`[DIAG] ${elapsed}  buildScene done: ${this.sceneObjects.length} objects in ${(performance.now()-_bst).toFixed(0)}ms`);
+    this._frameCount = 0;
   }
 
   applyExplodeView(isExploded, offset, drawableOrder) {
@@ -270,6 +274,7 @@ export default class ThreeDManager {
   }
 
   redrawColors() {
+    const t0 = performance.now();
     this.sceneObjects.forEach(obj => {
         const config = this.entityConfigs.get(obj.userData.entityName);
         if (config) {
@@ -281,25 +286,36 @@ export default class ThreeDManager {
             }
         }
     });
+    const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
+    console.log(`[DIAG] ${elapsed}  redrawColors: ${this.sceneObjects.length} objects in ${(performance.now()-t0).toFixed(1)}ms`);
   }
 
   updateSceneData(frameData) {
-    const { groupId, data } = frameData;
+    const t0 = performance.now();
+    const { groupId, data_u16, count } = frameData;
     const entityConfig = this.entityConfigs.get(groupId);
     if (!entityConfig) { return; }
-    const { vmin, vmax, colormap } = entityConfig;
+    const { colormap } = entityConfig;
     const relevantObjects = this.sceneObjects.filter(obj => obj.userData.entityName === groupId);
-    data.forEach((value, index) => {
-        if (index < relevantObjects.length) {
-            const obj = relevantObjects[index];
-            const normalizedValue = (value - vmin) / (vmax - vmin);
-            const newColor = getColor(normalizedValue, colormap, true);
-            if (obj.material) {
-                obj.material.color.set(newColor);
-                obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);
-            }
+    const binary = atob(data_u16);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const u16 = new Uint16Array(bytes.buffer);
+    const n = Math.min(count ?? u16.length, relevantObjects.length);
+    for (let i = 0; i < n; i++) {
+        const normalizedValue = u16[i] / 65535;
+        const newColor = getColor(normalizedValue, colormap, true);
+        const obj = relevantObjects[i];
+        if (obj.material) {
+            obj.material.color.set(newColor);
+            obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);
         }
-    });
+    }
+    const ms = performance.now() - t0;
+    if (ms > 2) {
+        const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
+        console.log(`[DIAG] ${elapsed}  updateSceneData: ${n} objs, ${ms.toFixed(1)}ms`);
+    }
   }
 
   // --- MODIFIED handleClick (FIX for Request 3) ---
@@ -468,8 +484,17 @@ export default class ThreeDManager {
   }
 
   animate = () => {
+    const _now = performance.now();
+    if (this._lastAnimateAt && (_now - this._lastAnimateAt) > 200) {
+        const elapsed = window.__diagT0 ? `+${(_now - window.__diagT0).toFixed(0)}ms` : '?';
+        console.log(`[DIAG] ${elapsed}  RAF stall: ${(_now - this._lastAnimateAt).toFixed(0)}ms gap (${this.sceneObjects.length} objs)`);
+    }
+    this._lastAnimateAt = _now;
     requestAnimationFrame(this.animate);
-    
+
+    // Skip rendering when inside a display:none tab — avoids starving other views
+    if (!this.container.offsetParent) return;
+
     const delta = this.clock.getDelta();
 
     // --- MANUAL AUTO-ROTATE ---
@@ -494,7 +519,14 @@ export default class ThreeDManager {
     }
     
     this.controls.update(delta); // Pass delta to controls
+    const _rt = performance.now();
     this.renderer.render(this.scene, this.camera);
+    const _renderMs = performance.now() - _rt;
+    if (this._frameCount !== undefined && this._frameCount < 5) {
+        const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
+        console.log(`[DIAG] ${elapsed}  render frame ${this._frameCount}: ${_renderMs.toFixed(1)}ms (${this.sceneObjects.length} objs)`);
+        this._frameCount++;
+    }
   }
 
   dispose() {

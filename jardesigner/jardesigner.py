@@ -2254,6 +2254,9 @@ def serverCommandLoop( rdes ):
             command = command_data.get("command")
 
             if command == "start":
+                import time as _ttime
+                _t0 = _ttime.perf_counter()
+                def _dt(): return f"{(_ttime.perf_counter()-_t0)*1000:.0f}ms"
                 runtime = command_data.get("params", {}).get("runtime", rdes.runtime)
                 _sim_flags['stop'] = False
                 _sim_flags['reset_pending'] = False
@@ -2262,14 +2265,18 @@ def serverCommandLoop( rdes ):
                 if moose.element( "/clock" ).currentTime == 0:
                     if hasattr( rdes, 'moogli' ) and len(rdes.moogli) > 0:
                         rdes.runMooView.sendSceneGraph( "run" )
+                        print(f"[DIAG] sendSceneGraph: {_dt()}", flush=True)
                 moose.start(runtime)
+                print(f"[DIAG] moose.start: {_dt()}", flush=True)
                 stopped = _sim_flags['stop']
                 reset_pending = _sim_flags['reset_pending']
                 _sim_flags['stop'] = False
                 _sim_flags['reset_pending'] = False
                 rdes.display()
+                print(f"[DIAG] rdes.display: {_dt()}", flush=True)
                 time.sleep(0.1)
                 rdes.runMooView.notifySimulationEnd( rdes.dataChannelId )
+                print(f"[DIAG] notifySimulationEnd: {_dt()}", flush=True)
                 if reset_pending:
                     moose.reinit()
 

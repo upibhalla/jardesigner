@@ -3,6 +3,7 @@
 # This program is licensed under the GNU Public License version 3.
 
 from pathlib import Path
+import base64
 import numpy as np
 import moose
 import re
@@ -458,14 +459,20 @@ class MooseNeuronDataWrapper( DataWrapper ):
 
     def getDataFrame( self, timestamp ):
         fs = self.fieldScale_
-        values = [fs*float(moose.getField(i, self.field)) for i in self.objList_]
+        values = np.array([fs*float(moose.getField(i, self.field)) for i in self.objList_], dtype=np.float32)
+        vrange = self.vmax - self.vmin if self.vmax != self.vmin else 1.0
+        quantized = np.clip((values - self.vmin) / vrange, 0.0, 1.0)
+        u16 = (quantized * 65535).astype(np.uint16)
         return {
             "filetype": "jardesignerDataFrame",
             "version": "1.0",
             "viewId": "run",
             "timestamp": float(timestamp),
             "groupId": self.groupId,
-            "data": values
+            "data_u16": base64.b64encode(u16.tobytes()).decode('ascii'),
+            "count": len(u16),
+            "u16_min": int(u16.min()) if len(u16) else 0,
+            "u16_max": int(u16.max()) if len(u16) else 0,
         }
 
 class MooseChemDataWrapper( DataWrapper ):
@@ -489,14 +496,20 @@ class MooseChemDataWrapper( DataWrapper ):
             self.segmentList = [ Segment.endoChemCompt( cc, idx ) for idx, cc in enumerate( objList ) ]
 
     def getDataFrame( self, timestamp ):
-        values = [float(moose.getField(i, self.field)) for i in self.objList_]
+        values = np.array([float(moose.getField(i, self.field)) for i in self.objList_], dtype=np.float32)
+        vrange = self.vmax - self.vmin if self.vmax != self.vmin else 1.0
+        quantized = np.clip((values - self.vmin) / vrange, 0.0, 1.0)
+        u16 = (quantized * 65535).astype(np.uint16)
         return {
             "filetype": "jardesignerDataFrame",
             "version": "1.0",
             "viewId": "run",
             "timestamp": float(timestamp),
             "groupId": self.groupId,
-            "data": values
+            "data_u16": base64.b64encode(u16.tobytes()).decode('ascii'),
+            "count": len(u16),
+            "u16_min": int(u16.min()) if len(u16) else 0,
+            "u16_max": int(u16.max()) if len(u16) else 0,
         }
 
 class MooseTrodeDataWrapper( DataWrapper ):
@@ -538,12 +551,14 @@ class MooseTrodeDataWrapper( DataWrapper ):
         '''
 
     def getDataFrame( self, timestamp ): # Dummy function, returns zeros.
+        n = len(self.objList_)
         return {
             "filetype": "jardesignerDataFrame",
             "version": "1.0",
             "timestamp": float(timestamp),
             "groupId": self.groupId,
-            "data": [0]* len( self.objList_ )
+            "data_u16": base64.b64encode(np.zeros(n, dtype=np.uint16).tobytes()).decode('ascii'),
+            "count": n,
         }
 
 class MooView:
@@ -640,6 +655,11 @@ class MooView:
             self.generateStandaloneHtml()
             return
         if self._pendingFrames:
+            import time as _time
+            n_frames = len(self._pendingFrames)
+            n_values = sum(f.get('count', 0) for f in self._pendingFrames)
+            print(f"[3D] Sending batch: {n_frames} frames, {n_values} total values", flush=True)
+            t0 = _time.perf_counter()
             try:
                 requests.post(FLASK_SERVER_URL,
                               json={"data_channel_id": dataChannelId,
@@ -647,6 +667,7 @@ class MooView:
                                                 "frames": self._pendingFrames}},
                               headers={'X-Internal-Token': _INTERNAL_TOKEN},
                               timeout=30.0)
+                print(f"[3D] Batch POST completed in {((_time.perf_counter()-t0)*1000):.0f}ms", flush=True)
             except Exception as e:
                 print(f"Warning: Could not send simulation frame batch. {e}")
             self._pendingFrames = []

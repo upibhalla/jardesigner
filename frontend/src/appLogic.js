@@ -104,6 +104,7 @@ export const useAppLogic = () => {
     const socketRef = useRef(null);
     const frameQueueRef = useRef([]);
     const animationFrameId = useRef();
+    const diagRef = useRef({ batchReceivedAt: null, drainStartAt: null, framesProcessed: 0, tickCount: 0 });
     const [replayInterval, setReplayInterval] = useState(10);
     
     const [threeDConfigs, setThreeDConfigs] = useState(() => isStandalone ? { [VIEW_IDS.SETUP]: window.__JARDESIGNER_SCENE_CONFIG__, [VIEW_IDS.RUN]: null } : { [VIEW_IDS.SETUP]: null, [VIEW_IDS.RUN]: null });
@@ -211,9 +212,34 @@ export const useAppLogic = () => {
 
     useEffect(() => {
         const processQueue = () => {
-            if (frameQueueRef.current.length > 0 && threeDManagerRefs.current[VIEW_IDS.RUN]) {
-                const frame = frameQueueRef.current.shift();
-                threeDManagerRefs.current[VIEW_IDS.RUN].updateSceneData(frame);
+            const manager = threeDManagerRefs.current[VIEW_IDS.RUN];
+            if (manager && frameQueueRef.current.length > 0) {
+                const d = diagRef.current;
+                if (!d.drainStartAt) {
+                    d.drainStartAt = performance.now();
+                    d.framesProcessed = 0;
+                    d.tickCount = 0;
+                    const lag = d.batchReceivedAt ? (d.drainStartAt - d.batchReceivedAt).toFixed(0) : '?';
+                    console.log(`[3D] Drain start — queue: ${frameQueueRef.current.length} frames, lag since batch received: ${lag}ms`);
+                }
+                const tickStart = performance.now();
+                const deadline = tickStart + 8;
+                let tickFrames = 0;
+                while (frameQueueRef.current.length > 0 && performance.now() < deadline) {
+                    manager.updateSceneData(frameQueueRef.current.shift());
+                    tickFrames++;
+                }
+                d.framesProcessed += tickFrames;
+                d.tickCount++;
+                const tickMs = (performance.now() - tickStart).toFixed(1);
+                if (d.tickCount <= 3 || d.tickCount % 10 === 0) {
+                    console.log(`[3D] Tick ${d.tickCount}: ${tickFrames} frames in ${tickMs}ms — ${frameQueueRef.current.length} remaining`);
+                }
+                if (frameQueueRef.current.length === 0) {
+                    const totalMs = (performance.now() - d.drainStartAt).toFixed(0);
+                    console.log(`[3D] Done — ${d.framesProcessed} frames in ${totalMs}ms over ${d.tickCount} RAF ticks (avg ${(d.framesProcessed / d.tickCount).toFixed(1)} frames/tick)`);
+                    d.drainStartAt = null;
+                }
             }
             animationFrameId.current = requestAnimationFrame(processQueue);
         };
@@ -235,8 +261,11 @@ export const useAppLogic = () => {
         socketRef.current = socket;
 
         const onSimulationEnded = () => {
+            const dt = () => window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
+            console.log(`[DIAG] ${dt()}  sim_end received`);
             setIsSimulating(false);
             frameQueueRef.current = [];
+            console.log(`[DIAG] ${dt()}  after setIsSimulating(false)`);
             const currentFilename = activeSimRef.current.plot_filename;
             if (currentFilename) {
                 const plotUrl = `${API_BASE_URL}/session_file/${clientId}/${currentFilename}`;
@@ -269,12 +298,23 @@ export const useAppLogic = () => {
 
             if (data?.type === 'sim_batch') {
                 const frames = data.frames || [];
+                window.__diagT0 = performance.now();
+                diagRef.current.batchReceivedAt = window.__diagT0;
+                diagRef.current.drainStartAt = null;
+                const roughBytes = frames.length > 0
+                    ? frames.length * (frames[0].data_u16?.length ?? 0)
+                    : 0;
+                const dt = () => `+${(performance.now() - window.__diagT0).toFixed(0)}ms`;
+                const sinceRun = window.__runT0 ? `${(window.__diagT0 - window.__runT0).toFixed(0)}ms since Run click` : '';
+                console.log(`[DIAG] ${dt()}  sim_batch received: ${frames.length} frames, ~${(roughBytes / 1024).toFixed(0)} KB  [${sinceRun}]`);
                 if (frames.length > 0) {
                     setSimulationFrames(prev => ({ ...prev, [VIEW_IDS.RUN]: frames }));
                     const lastFrame = frames[frames.length - 1];
                     setLiveFrameData(prev => ({ ...prev, [VIEW_IDS.RUN]: lastFrame }));
                     frameQueueRef.current = [...frames];
                 }
+                console.log(`[DIAG] ${dt()}  after setSimulationFrames`);
+                setTimeout(() => console.log(`[DIAG] ${dt()}  setTimeout fired (main thread free)`), 0);
                 return;
             }
 
@@ -413,6 +453,9 @@ export const useAppLogic = () => {
 
     const handleStartRun = useCallback((runtimeOverride) => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
+        window.__diagT0 = null;
+        window.__runT0 = performance.now();
+        console.log(`[DIAG] Run clicked`);
         setPlotDataUrl(null); setIsPlotReady(false); setPlotError('');
         setSimError(null);
         if (simulationFrames[VIEW_IDS.RUN].length === 0) {

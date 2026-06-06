@@ -214,27 +214,35 @@ const ThreeDViewer = (props) => {
   // --- NEW: Auto-autoscale on sim complete ---
   useEffect(() => {
     const prevIsSimulating = prevIsSimulatingRef.current;
-  
+
     // Check for simulation run completion (true -> false)
     if (prevIsSimulating && !isSimulating && simulationFrames.length > 0) {
-      
+      const dt = () => window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
+      console.log(`[DIAG] ${dt()}  autoscale effect start: ${simulationFrames.length} frames`);
       const newRangesMap = new Map();
       const visibleDrawables = drawables.filter(d => drawableVisibility[d.groupId]);
-  
+
       visibleDrawables.forEach(drawable => {
         const targetGroupId = drawable.groupId;
         let globalMin = Infinity;
         let globalMax = -Infinity;
-  
+
         simulationFrames.forEach(frame => {
-          if (frame.groupId === targetGroupId) {
+          if (frame.groupId !== targetGroupId) return;
+          if (frame.data) {
             frame.data.forEach(value => {
               if (value < globalMin) globalMin = value;
               if (value > globalMax) globalMax = value;
             });
+          } else if (frame.u16_min !== undefined) {
+            const vrange = (drawable.vmax - drawable.vmin) || 1;
+            const fmin = (frame.u16_min / 65535) * vrange + drawable.vmin;
+            const fmax = (frame.u16_max / 65535) * vrange + drawable.vmin;
+            if (fmin < globalMin) globalMin = fmin;
+            if (fmax > globalMax) globalMax = fmax;
           }
         });
-  
+
         if (isFinite(globalMin) && isFinite(globalMax)) {
           newRangesMap.set(targetGroupId, {
             vmin: globalMin.toExponential(2),
@@ -242,6 +250,7 @@ const ThreeDViewer = (props) => {
           });
         }
       });
+      console.log(`[DIAG] ${dt()}  autoscale scan done, calling setColorRanges`);
 
       setColorRanges(prevColorRanges => {
         const updatedRanges = { ...prevColorRanges };
@@ -250,8 +259,9 @@ const ThreeDViewer = (props) => {
         });
         return updatedRanges;
       });
+      console.log(`[DIAG] ${dt()}  autoscale effect done`);
     }
-  
+
     // Store the current value for the next render
     prevIsSimulatingRef.current = isSimulating;
   }, [isSimulating, simulationFrames, drawables, drawableVisibility, setColorRanges]);
@@ -263,10 +273,19 @@ const ThreeDViewer = (props) => {
       const targetGroupId = activeDrawable.groupId;
       let globalMin = Infinity; let globalMax = -Infinity;
       simulationFrames.forEach(frame => {
-          if (frame.groupId === targetGroupId) frame.data.forEach(value => {
-              if (value < globalMin) globalMin = value;
-              if (value > globalMax) globalMax = value;
-          });
+          if (frame.groupId !== targetGroupId) return;
+          if (frame.data) {
+              frame.data.forEach(value => {
+                  if (value < globalMin) globalMin = value;
+                  if (value > globalMax) globalMax = value;
+              });
+          } else if (frame.u16_min !== undefined) {
+              const vrange = (activeDrawable.vmax - activeDrawable.vmin) || 1;
+              const fmin = (frame.u16_min / 65535) * vrange + activeDrawable.vmin;
+              const fmax = (frame.u16_max / 65535) * vrange + activeDrawable.vmin;
+              if (fmin < globalMin) globalMin = fmin;
+              if (fmax > globalMax) globalMax = fmax;
+          }
       });
       if (isFinite(globalMin) && isFinite(globalMax)) {
            setColorRanges(prev => ({ ...prev, [targetGroupId]: { vmin: globalMin.toExponential(2), vmax: globalMax.toExponential(2) } }));
