@@ -655,11 +655,6 @@ class MooView:
             self.generateStandaloneHtml()
             return
         if self._pendingFrames:
-            import time as _time
-            n_frames = len(self._pendingFrames)
-            n_values = sum(f.get('count', 0) for f in self._pendingFrames)
-            print(f"[3D] Sending batch: {n_frames} frames, {n_values} total values", flush=True)
-            t0 = _time.perf_counter()
             try:
                 requests.post(FLASK_SERVER_URL,
                               json={"data_channel_id": dataChannelId,
@@ -667,7 +662,6 @@ class MooView:
                                                 "frames": self._pendingFrames}},
                               headers={'X-Internal-Token': _INTERNAL_TOKEN},
                               timeout=30.0)
-                print(f"[3D] Batch POST completed in {((_time.perf_counter()-t0)*1000):.0f}ms", flush=True)
             except Exception as e:
                 print(f"Warning: Could not send simulation frame batch. {e}")
             self._pendingFrames = []
@@ -678,7 +672,6 @@ class MooView:
                                             "message": "Simulation has finished."}},
                           headers={'X-Internal-Token': _INTERNAL_TOKEN},
                           timeout=2.0)
-            print("Sent simulation end notification.")
         except Exception as e:
             print(f"Warning: Could not send simulation end notification. {e}")
 

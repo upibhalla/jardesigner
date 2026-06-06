@@ -40,7 +40,6 @@ export const useReplayLogic = ({
   // It works whether paused or replaying.
   const updateSceneToTime = useCallback((time) => {
     if (!threeDManagerRef.current) return;
-    const t0 = performance.now();
     const visibleGroupIds = new Set(visibleFrames.map(f => f.groupId));
 
     // For each visible drawable, find the latest frame at or before the given time and display it.
@@ -57,11 +56,6 @@ export const useReplayLogic = ({
             threeDManagerRef.current.updateSceneData(frameToDisplay);
         }
     });
-    const ms = performance.now() - t0;
-    if (ms > 1) {
-        const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-        console.log(`[DIAG] ${elapsed}  updateSceneToTime(t=${time.toFixed(4)}): ${ms.toFixed(1)}ms, ${visibleGroupIds.size} groups`);
-    }
   }, [threeDManagerRef, simulationFrames, visibleFrames]);
 
   // Effect for seeking or pausing: updates the scene when replayTime changes while paused.

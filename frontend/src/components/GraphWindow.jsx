@@ -195,8 +195,6 @@ const GraphWindow = memo(({ plotDataUrl, isPlotReady, plotError }) => {
 
   useEffect(() => {
     if (isPlotReady && plotDataUrl) {
-        const dt = () => window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-        console.log(`[DIAG] ${dt()}  GraphWindow: fetch start`);
         setLoading(true);
         setFetchError(null);
         fetch(plotDataUrl)
@@ -205,10 +203,8 @@ const GraphWindow = memo(({ plotDataUrl, isPlotReady, plotError }) => {
                 return res.json();
             })
             .then(jsonData => {
-                console.log(`[DIAG] ${dt()}  GraphWindow: fetch done, ${jsonData?.plots?.length ?? '?'} plots, calling setData`);
                 setData(jsonData);
                 setLoading(false);
-                setTimeout(() => console.log(`[DIAG] ${dt()}  GraphWindow: after setData render`), 0);
             })
             .catch(err => {
                 console.error("Error loading plot json:", err);

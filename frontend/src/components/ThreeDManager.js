@@ -100,17 +100,10 @@ export default class ThreeDManager {
   }
 
   setReflectivity(isEnabled) {
-    // --- UPDATED REFLECTIVITY ---
-    // Instead of metalness (which makes things dark without an environment map),
-    // we use low roughness to create a "shiny plastic" look, similar to VPython's default shininess.
-    const metalness = 0.0; 
-    const roughness = isEnabled ? 0.2 : 0.8; // 0.2 = shiny/glossy, 0.8 = matte
-    
+    const shininess = isEnabled ? 100 : 30;
     this.sceneObjects.forEach(obj => {
         if (obj.material) {
-            obj.material.metalness = metalness;
-            obj.material.roughness = roughness;
-            obj.material.needsUpdate = true;
+            obj.material.shininess = shininess;
         }
     });
   }
@@ -157,7 +150,6 @@ export default class ThreeDManager {
     if (!config || !config.drawables) {
         return;
     }
-    const _bst = performance.now();
 
     // --- NEW: Reset rotation states on build ---
     this.baseWorldRotation.set(0, 0, 0);
@@ -192,15 +184,13 @@ export default class ThreeDManager {
         const normalizedValue = (primitive.value - entity.vmin) / (entity.vmax - entity.vmin);
         const materialColor = getColor(normalizedValue, config.colormap, true);
         
-        // Default to Matte (roughness 0.8) initially
         const emissiveColor = new THREE.Color(materialColor).multiplyScalar(EMISSIVE_FACTOR);
-        const material = new THREE.MeshStandardMaterial({
+        const material = new THREE.MeshPhongMaterial({
             color: materialColor,
             emissive: emissiveColor,
             transparent: true,
             opacity: entity.transparency || 1.0,
-            metalness: 0.0,
-            roughness: 0.8,
+            shininess: 30,
         });
 
         const shapeObject = createShape(primitive, material);
@@ -230,9 +220,6 @@ export default class ThreeDManager {
     });
     this.focusCamera();
     setTimeout(() => this.onWindowResize(), 0);
-    const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-    console.log(`[DIAG] ${elapsed}  buildScene done: ${this.sceneObjects.length} objects in ${(performance.now()-_bst).toFixed(0)}ms`);
-    this._frameCount = 0;
   }
 
   applyExplodeView(isExploded, offset, drawableOrder) {
@@ -274,7 +261,6 @@ export default class ThreeDManager {
   }
 
   redrawColors() {
-    const t0 = performance.now();
     this.sceneObjects.forEach(obj => {
         const config = this.entityConfigs.get(obj.userData.entityName);
         if (config) {
@@ -286,12 +272,9 @@ export default class ThreeDManager {
             }
         }
     });
-    const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-    console.log(`[DIAG] ${elapsed}  redrawColors: ${this.sceneObjects.length} objects in ${(performance.now()-t0).toFixed(1)}ms`);
   }
 
   updateSceneData(frameData) {
-    const t0 = performance.now();
     const { groupId, data_u16, count } = frameData;
     const entityConfig = this.entityConfigs.get(groupId);
     if (!entityConfig) { return; }
@@ -310,11 +293,6 @@ export default class ThreeDManager {
             obj.material.color.set(newColor);
             obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);
         }
-    }
-    const ms = performance.now() - t0;
-    if (ms > 2) {
-        const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-        console.log(`[DIAG] ${elapsed}  updateSceneData: ${n} objs, ${ms.toFixed(1)}ms`);
     }
   }
 
@@ -484,12 +462,6 @@ export default class ThreeDManager {
   }
 
   animate = () => {
-    const _now = performance.now();
-    if (this._lastAnimateAt && (_now - this._lastAnimateAt) > 200) {
-        const elapsed = window.__diagT0 ? `+${(_now - window.__diagT0).toFixed(0)}ms` : '?';
-        console.log(`[DIAG] ${elapsed}  RAF stall: ${(_now - this._lastAnimateAt).toFixed(0)}ms gap (${this.sceneObjects.length} objs)`);
-    }
-    this._lastAnimateAt = _now;
     requestAnimationFrame(this.animate);
 
     // Skip rendering when inside a display:none tab — avoids starving other views
@@ -519,14 +491,7 @@ export default class ThreeDManager {
     }
     
     this.controls.update(delta); // Pass delta to controls
-    const _rt = performance.now();
     this.renderer.render(this.scene, this.camera);
-    const _renderMs = performance.now() - _rt;
-    if (this._frameCount !== undefined && this._frameCount < 5) {
-        const elapsed = window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-        console.log(`[DIAG] ${elapsed}  render frame ${this._frameCount}: ${_renderMs.toFixed(1)}ms (${this.sceneObjects.length} objs)`);
-        this._frameCount++;
-    }
   }
 
   dispose() {

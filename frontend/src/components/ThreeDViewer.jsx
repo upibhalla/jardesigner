@@ -217,8 +217,6 @@ const ThreeDViewer = (props) => {
 
     // Check for simulation run completion (true -> false)
     if (prevIsSimulating && !isSimulating && simulationFrames.length > 0) {
-      const dt = () => window.__diagT0 ? `+${(performance.now()-window.__diagT0).toFixed(0)}ms` : '?';
-      console.log(`[DIAG] ${dt()}  autoscale effect start: ${simulationFrames.length} frames`);
       const newRangesMap = new Map();
       const visibleDrawables = drawables.filter(d => drawableVisibility[d.groupId]);
 
@@ -250,8 +248,6 @@ const ThreeDViewer = (props) => {
           });
         }
       });
-      console.log(`[DIAG] ${dt()}  autoscale scan done, calling setColorRanges`);
-
       setColorRanges(prevColorRanges => {
         const updatedRanges = { ...prevColorRanges };
         newRangesMap.forEach((range, groupId) => {
@@ -259,7 +255,6 @@ const ThreeDViewer = (props) => {
         });
         return updatedRanges;
       });
-      console.log(`[DIAG] ${dt()}  autoscale effect done`);
     }
 
     // Store the current value for the next render
