@@ -1119,16 +1119,22 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
     ################################################################
     # Here we set up the plots. Dummy for cases that don't match conditions
     ################################################################
-    def _collapseElistToPathAndClass( self, comptList, path, className ):
+    def _collapseElistToPathAndClass( self, comptList, relpath, className ):
+        """Return the child objects found at relpath inside each compartment,
+        filtered to those that are instances of className.  Compartments that
+        lack the child, and root '/' dummy placeholders returned by
+        compartmentsFromExpression for non-matching compartments, are silently
+        skipped."""
         dummy = moose.element( '/' )
-        ret = [ dummy ] * len( comptList )
-        j = 0
-        for i in comptList:
-            if moose.exists( i.path + '/' + path ):
-                obj = moose.element( i.path + '/' + path )
+        ret = []
+        for compt in comptList:
+            if compt == dummy:
+                continue
+            child_path = compt.path + '/' + relpath
+            if moose.exists( child_path ):
+                obj = moose.element( child_path )
                 if obj.isA[ className ]:
-                    ret[j] = obj
-            j += 1
+                    ret.append( obj )
         return ret
 
     # Utility function for doing lookups for objects.
@@ -1286,6 +1292,8 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
             dendCompts = self.elecid.compartmentsFromExpression[ pair ]
             #spineCompts = self.elecid.spinesFromExpression[ pair ]
             dendObj, mooField = self._parseComptField( dendCompts, i, knownFields )
+            dummy = moose.element( '/' )
+            dendObj = [ obj for obj in dendObj if obj != dummy ]
             numMoogli = len( dendObj )
             iObj = DictToClass( i ) # Used as 'args' in makeMoogli
             pr = moose.PyRun( '/model/moogli_' + groupId )

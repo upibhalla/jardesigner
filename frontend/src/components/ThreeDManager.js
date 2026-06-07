@@ -283,7 +283,11 @@ export default class ThreeDManager {
     this.sceneObjects.forEach(obj => {
         const config = this.entityConfigs.get(obj.userData.entityName);
         if (config) {
-            const normalizedValue = (obj.userData.originalValue - config.vmin) / (config.vmax - config.vmin);
+            const physValue = obj.userData.lastPhysicalValue !== undefined
+                ? obj.userData.lastPhysicalValue
+                : obj.userData.originalValue;
+            const currentRange = (config.vmax - config.vmin) || 1;
+            const normalizedValue = Math.max(0, Math.min(1, (physValue - config.vmin) / currentRange));
             const newColor = getColor(normalizedValue, config.colormap, true);
             if (obj.material) {
                 obj.material.color.set(newColor);
@@ -294,20 +298,22 @@ export default class ThreeDManager {
   }
 
   updateSceneData(frameData) {
-    const { groupId, data_u16, count } = frameData;
+    const { groupId, data_f32, count } = frameData;
     const entityConfig = this.entityConfigs.get(groupId);
     if (!entityConfig) { return; }
-    const { colormap } = entityConfig;
+    const { colormap, vmin, vmax } = entityConfig;
+    const currentRange = (vmax - vmin) || 1;
     const relevantObjects = this.sceneObjects.filter(obj => obj.userData.entityName === groupId);
-    const binary = atob(data_u16);
+    const binary = atob(data_f32);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const u16 = new Uint16Array(bytes.buffer);
-    const n = Math.min(count ?? u16.length, relevantObjects.length);
+    const f32 = new Float32Array(bytes.buffer);
+    const n = Math.min(count ?? f32.length, relevantObjects.length);
     for (let i = 0; i < n; i++) {
-        const normalizedValue = u16[i] / 65535;
+        const normalizedValue = Math.max(0, Math.min(1, (f32[i] - vmin) / currentRange));
         const newColor = getColor(normalizedValue, colormap, true);
         const obj = relevantObjects[i];
+        obj.userData.lastPhysicalValue = f32[i];
         if (obj.material) {
             obj.material.color.set(newColor);
             obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);

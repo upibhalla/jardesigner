@@ -235,17 +235,9 @@ const ThreeDViewer = (props) => {
 
         simulationFrames.forEach(frame => {
           if (frame.groupId !== targetGroupId) return;
-          if (frame.data) {
-            frame.data.forEach(value => {
-              if (value < globalMin) globalMin = value;
-              if (value > globalMax) globalMax = value;
-            });
-          } else if (frame.u16_min !== undefined) {
-            const vrange = (drawable.vmax - drawable.vmin) || 1;
-            const fmin = (frame.u16_min / 65535) * vrange + drawable.vmin;
-            const fmax = (frame.u16_max / 65535) * vrange + drawable.vmin;
-            if (fmin < globalMin) globalMin = fmin;
-            if (fmax > globalMax) globalMax = fmax;
+          if (frame.f32_min !== undefined) {
+            if (frame.f32_min < globalMin) globalMin = frame.f32_min;
+            if (frame.f32_max > globalMax) globalMax = frame.f32_max;
           }
         });
 
@@ -277,17 +269,9 @@ const ThreeDViewer = (props) => {
       let globalMin = Infinity; let globalMax = -Infinity;
       simulationFrames.forEach(frame => {
           if (frame.groupId !== targetGroupId) return;
-          if (frame.data) {
-              frame.data.forEach(value => {
-                  if (value < globalMin) globalMin = value;
-                  if (value > globalMax) globalMax = value;
-              });
-          } else if (frame.u16_min !== undefined) {
-              const vrange = (activeDrawable.vmax - activeDrawable.vmin) || 1;
-              const fmin = (frame.u16_min / 65535) * vrange + activeDrawable.vmin;
-              const fmax = (frame.u16_max / 65535) * vrange + activeDrawable.vmin;
-              if (fmin < globalMin) globalMin = fmin;
-              if (fmax > globalMax) globalMax = fmax;
+          if (frame.f32_min !== undefined) {
+              if (frame.f32_min < globalMin) globalMin = frame.f32_min;
+              if (frame.f32_max > globalMax) globalMax = frame.f32_max;
           }
       });
       if (isFinite(globalMin) && isFinite(globalMax)) {
@@ -458,8 +442,8 @@ Aa: Auto-position`;
                         </RadioGroup>
                     </FormControl>
                     <Button variant="outlined" size="small" onClick={handleAutoscale} disabled={!activeDrawable}>Autoscale</Button>
-                    <TextField label="Vmin" size="small" variant="outlined" value={activeColorRange.vmin} onChange={(e) => handleColorRangeChange('vmin', e.target.value)} disabled={!activeDrawable} />
-                    <TextField label="Vmax" size="small" variant="outlined" value={activeColorRange.vmax} onChange={(e) => handleColorRangeChange('vmax', e.target.value)} disabled={!activeDrawable} />
+                    <TextField label="Minimum Value" size="small" variant="outlined" value={activeColorRange.vmin} onChange={(e) => handleColorRangeChange('vmin', e.target.value)} disabled={!activeDrawable} />
+                    <TextField label="Maximum Value" size="small" variant="outlined" value={activeColorRange.vmax} onChange={(e) => handleColorRangeChange('vmax', e.target.value)} disabled={!activeDrawable} />
                 </Box>
                 <Divider />
 
