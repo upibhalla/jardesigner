@@ -53,9 +53,9 @@
 	"tags": ["chemical", "Calcium waves"], 
 	"description": "Multi-compartment model of CICR."
   },
-  { "name": "Tut4_synaptic_input", 
-	"title": "Tutorial 4: Synaptic input", 
-	"difficulty": "beginner", 
+  { "name": "Tut4_synapse_sum", 
+	"title": "Tutorial 4: Synaptic input and summation", 
+	"difficulty": "advanced", 
 	"tags": ["electrical", "synapse"], 
 	"description": "Synaptic input, spread, and summation in time."
   },
@@ -65,11 +65,11 @@
 	"tags": ["electrical", "synapse", "action-potential"], 
 	"description": "Computations through synaptic input timing and thresholding."
   },
-  { "name": "Tut6_summation_space", 
-	"title": "Tutorial 6: spatiotemporal summation", 
+  { "name": "Tut7_Ca_influx", 
+	"title": "Tutorial 7: Calcium influx into spines and dendrites", 
 	"difficulty": "intermediate", 
-	"tags": ["electrical", "synapse", "space"], 
-	"description": "Spatiotemporal summation of synaptic input, seq detection."
+	"tags": ["electrical", "synapse", "Calcium"], 
+	"description": "Synaptically driven Calcium dynamics and diffusion."
   },
   { "name": "squid2", 
 	"title": "Squid Axon", 
