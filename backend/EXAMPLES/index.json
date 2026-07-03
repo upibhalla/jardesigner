@@ -17,6 +17,24 @@
 	"tags": ["electrical", "action-potential"], 
 	"description": "Classic Hodgkin-Huxley squid axon model."
   },
+  { "name": "cTut1_oscillator", 
+	"title": "Chemical Tutorial 1: Oscillator", 
+	"difficulty": "beginner", 
+	"tags": ["chemical", "oscillations"], 
+	"description": "Chemical oscillator."
+  },
+  { "name": "cTut2_spatial_oscillator", 
+	"title": "Chemical Tutorial 2: Spatial oscillator", 
+	"difficulty": "intermediate", 
+	"tags": ["chemical", "oscillations", "wave propagation"], 
+	"description": "Chemical spatial oscillator."
+  },
+  { "name": "cTut3_BCM_curve", 
+	"title": "Chemical Tutorial 3: BCM curve", 
+	"difficulty": "intermediate", 
+	"tags": ["chemical", "synaptic plasticity"], 
+	"description": "BCM Curve model for bidirectional plasticity"
+  },
   { "name": "Tut4_synaptic_input", 
 	"title": "Tutorial 4: Synaptic input", 
 	"difficulty": "beginner", 
