@@ -35,6 +35,24 @@
 	"tags": ["chemical", "synaptic plasticity"], 
 	"description": "BCM Curve model for bidirectional plasticity"
   },
+  { "name": "cTut4_BCM_multiscale", 
+	"title": "Chemical Tutorial 4: Synaptically coupled BCM curve", 
+	"difficulty": "intermediate", 
+	"tags": ["chemical", "multiscale", "synaptic plasticity"], 
+	"description": "Synaptic input and Ca influx as trigger for BCM Curve model"
+  },
+  { "name": "cTut5_bistable", 
+	"title": "Chemical Tutorial 5: Bistable memory switch", 
+	"difficulty": "beginner", 
+	"tags": ["chemical", "synaptic plasticity"], 
+	"description": "A bistable chemical switch tutorial, including stochasticity"
+  },
+  { "name": "cTut6_CICR", 
+	"title": "Chemical Tutorial 6: CICR: Calcium-induced calcium release", 
+	"difficulty": "advanced", 
+	"tags": ["chemical", "Calcium waves"], 
+	"description": "Multi-compartment model of CICR."
+  },
   { "name": "Tut4_synaptic_input", 
 	"title": "Tutorial 4: Synaptic input", 
 	"difficulty": "beginner", 
