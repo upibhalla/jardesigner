@@ -17,6 +17,24 @@
 	"tags": ["electrical", "action-potential"], 
 	"description": "Classic Hodgkin-Huxley squid axon model."
   },
+  { "name": "Tut4_synapse_sum", 
+	"title": "Tutorial 4: Synaptic input and summation", 
+	"difficulty": "advanced", 
+	"tags": ["electrical", "synapse"], 
+	"description": "Synaptic input, spread, and summation in time."
+  },
+  { "name": "Tut5_summation_thresh", 
+	"title": "Tutorial 5: Thresholding of summed input", 
+	"difficulty": "advanced", 
+	"tags": ["electrical", "synapse", "action-potential"], 
+	"description": "Computations through synaptic input timing and thresholding."
+  },
+  { "name": "Tut7_Ca_influx", 
+	"title": "Tutorial 7: Calcium influx into spines and dendrites", 
+	"difficulty": "advanced", 
+	"tags": ["electrical", "synapse", "Calcium", "Diffusion"], 
+	"description": "Synaptically driven Calcium dynamics and diffusion."
+  },
   { "name": "cTut1_oscillator", 
 	"title": "Chemical Tutorial 1: Oscillator", 
 	"difficulty": "beginner", 
@@ -43,7 +61,7 @@
   },
   { "name": "cTut5_bistable", 
 	"title": "Chemical Tutorial 5: Bistable memory switch", 
-	"difficulty": "beginner", 
+	"difficulty": "intermediate", 
 	"tags": ["chemical", "synaptic plasticity"], 
 	"description": "A bistable chemical switch tutorial, including stochasticity"
   },
@@ -52,33 +70,5 @@
 	"difficulty": "advanced", 
 	"tags": ["chemical", "Calcium waves"], 
 	"description": "Multi-compartment model of CICR."
-  },
-  { "name": "Tut4_synapse_sum", 
-	"title": "Tutorial 4: Synaptic input and summation", 
-	"difficulty": "advanced", 
-	"tags": ["electrical", "synapse"], 
-	"description": "Synaptic input, spread, and summation in time."
-  },
-  { "name": "Tut5_summation_thresh", 
-	"title": "Tutorial 5: Thresholding of summed input", 
-	"difficulty": "intermediate", 
-	"tags": ["electrical", "synapse", "action-potential"], 
-	"description": "Computations through synaptic input timing and thresholding."
-  },
-  { "name": "Tut7_Ca_influx", 
-	"title": "Tutorial 7: Calcium influx into spines and dendrites", 
-	"difficulty": "intermediate", 
-	"tags": ["electrical", "synapse", "Calcium"], 
-	"description": "Synaptically driven Calcium dynamics and diffusion."
-  },
-  { "name": "squid2", 
-	"title": "Squid Axon", 
-	"difficulty": "beginner", 
-	"tags": ["electrical", "action-potential"], 
-	"description": "Classic Hodgkin-Huxley squid axon model." },
-  { "name": "asym_passive", "title": "Asymmetric Passive Neuron", "difficulty": "beginner", "tags": ["electrical", "passive"], "description": "Passive membrane properties in an asymmetric dendritic tree." },
-  { "name": "chem_spatial_osc", "title": "Chemical Spatial Oscillator", "difficulty": "intermediate", "tags": ["chemical", "oscillation"], "description": "Spatial chemical oscillations in a single compartment." },
-  { "name": "chem_spatial_osc_3d", "title": "Chemical Spatial Oscillator (3D)", "difficulty": "intermediate", "tags": ["chemical", "oscillation", "3d"], "description": "Spatial chemical oscillations with 3D visualisation." },
-  { "name": "ex8.0_multiscale_KA_bistable", "title": "Multiscale KA Bistable", "difficulty": "advanced", "tags": ["multiscale", "electrical", "chemical"], "description": "Multiscale model with KA channel and bistable chemical switch." },
-  { "name": "bcm4", "title": "BCM Synaptic Plasticity", "difficulty": "advanced", "tags": ["plasticity", "chemical", "electrical"], "description": "BCM rule for synaptic plasticity." }
+  }
 ]
