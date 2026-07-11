@@ -21,6 +21,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './SpineMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
 import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Helper Functions ---
 const getNameFromType = (type) => {
@@ -52,6 +53,14 @@ const toMicrons = (meters) => {
 
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Return number (optionally scaled) if parseable, otherwise return expression string as-is.
+const numOrExpr = (str, defaultVal, scaleFn) => {
+    if (!str || String(str).trim() === '') return defaultVal;
+    const n = Number(str); // Number() is strict: Number("100*p") === NaN, parseFloat would give 100
+    if (isNaN(n)) return str;
+    return scaleFn ? scaleFn(n) : n;
 };
 
 // --- Default State Definitions ---
@@ -269,13 +278,13 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                  return {
                      proto: distState.prototype,
                      path: distState.path,
-                     spacing: (toMeters(distState.spacing) || 0),
-                     minSpacing: (toMeters(distState.minSpacing) || 0),
-                     sizeScale: parseFloat(distState.sizeScale) || 1,
-                     sizeSdev: parseFloat(distState.sizeStdDev) || 0.5,
-                     angle: parseFloat(distState.angle) || 0,
-                     angleSdev: parseFloat(distState.angleStdDev) || 6.2831853,
-                     randSeed: parseInt(distState.randSeed, 10) || 1234, 
+                     spacing: numOrExpr(distState.spacing, 0, x => x * 1e-6),
+                     minSpacing: numOrExpr(distState.minSpacing, 0, x => x * 1e-6),
+                     sizeScale: numOrExpr(distState.sizeScale, 1),
+                     sizeSdev: numOrExpr(distState.sizeStdDev, 0.5),
+                     angle: numOrExpr(distState.angle, 0),
+                     angleSdev: numOrExpr(distState.angleStdDev, 6.2831853),
+                     randSeed: parseInt(distState.randSeed, 10) || 1234,
                  };
              }).filter(d => d !== null);
 
@@ -394,22 +403,22 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                         </Grid>
                         {/* 'path' was here previously */}
                         <Grid item xs={6}>
-                             <HelpField id="spacing" label="Spacing (μm)" type="number" value={distributions[activeDistribution].spacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing}/>
+                             <ExprHelpField id="spacing" label="Spacing (μm)" value={distributions[activeDistribution].spacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing}/>
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="minSpacing" label="Min Spacing (μm)" type="number" value={distributions[activeDistribution].minSpacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.minSpacing}/>
+                             <ExprHelpField id="minSpacing" label="Min Spacing (μm)" value={distributions[activeDistribution].minSpacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.minSpacing}/>
                         </Grid>
                          <Grid item xs={6}>
-                            <HelpField id="sizeScale" label="Size Scale" type="number" value={distributions[activeDistribution].sizeScale} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeScale}/>
+                            <ExprHelpField id="sizeScale" label="Size Scale" value={distributions[activeDistribution].sizeScale} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeScale}/>
                         </Grid>
                         <Grid item xs={6}>
-                            <HelpField id="sizeStdDev" label="Size Std Dev" type="number" value={distributions[activeDistribution].sizeStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeStdDev}/>
+                            <ExprHelpField id="sizeStdDev" label="Size Std Dev" value={distributions[activeDistribution].sizeStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeStdDev}/>
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="angle" label="Angle (rad)" type="number" value={distributions[activeDistribution].angle} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angle}/>
+                             <ExprHelpField id="angle" label="Angle (rad)" value={distributions[activeDistribution].angle} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angle}/>
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="angleStdDev" label="Angle Std Dev (rad)" type="number" value={distributions[activeDistribution].angleStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angleStdDev}/>
+                             <ExprHelpField id="angleStdDev" label="Angle Std Dev (rad)" value={distributions[activeDistribution].angleStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angleStdDev}/>
                         </Grid>
                         <Grid item xs={6}>
                              <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>

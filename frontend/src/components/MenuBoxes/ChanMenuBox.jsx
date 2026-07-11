@@ -23,6 +23,7 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './ChanMenuBox.Help.json';
 import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
 import ProtoPickerDialog from '../ProtoPickerDialog';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Helper Functions ---
 const getChannelSourceString = (componentType) => {
@@ -52,6 +53,13 @@ const prototypeTypeOptions = [
 
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Return number if parseable, otherwise return expression string as-is.
+const numOrExpr = (str, defaultVal) => {
+    if (!str || String(str).trim() === '') return defaultVal;
+    const n = Number(str); // Number() is strict: Number("100*p") === NaN, parseFloat would give 100
+    return isNaN(n) ? str : n;
 };
 
 // --- Default State Definitions ---
@@ -291,9 +299,9 @@ const ChanMenuBox = ({
                 const selectedPrototype = currentPrototypes.find(p => p.name === distState.prototype);
 
                 if (selectedPrototype && selectedPrototype.type === 'Ca_conc') {
-                     distribSchemaItem.tau = parseFloat(distState.caTau) || 0.013;
+                     distribSchemaItem.tau = numOrExpr(distState.caTau, 0.013);
                 } else {
-                     distribSchemaItem.Gbar = parseFloat(distState.maxConductance) || 0;
+                     distribSchemaItem.Gbar = numOrExpr(distState.maxConductance, 0);
                 }
                 if (!distribSchemaItem.proto || !distribSchemaItem.path || (distribSchemaItem.Gbar === undefined && distribSchemaItem.tau === undefined)) {
                      return null;
@@ -429,9 +437,9 @@ const ChanMenuBox = ({
                          </Grid>
                          <Grid item xs={12} sm={6}>
                              {prototypes.find(p => p.name === distributions[activeDistribution].prototype)?.type === 'Ca_conc' ? (
-                                 <HelpField id="caTau" label="Ca Tau (s)" type="number" required value={distributions[activeDistribution].caTau} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.caTau} />
+                                 <ExprHelpField id="caTau" label="Ca Tau (s)" required value={distributions[activeDistribution].caTau} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.caTau} />
                              ) : (
-                                 <HelpField id="maxConductance" label="Gbar (Max Conductance)" type="number" required value={distributions[activeDistribution].maxConductance} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.maxConductance} />
+                                 <ExprHelpField id="maxConductance" label="Gbar (Max Conductance)" required value={distributions[activeDistribution].maxConductance} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.maxConductance} />
                              )}
                         </Grid>
                     </Grid>

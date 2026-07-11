@@ -24,6 +24,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import helpText from './StimMenuBox.Help.json';
 import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import StimExprHelpField from '../StimExprHelpField';
 
 // --- Define fieldOptions and typeOptions outside ---
 const nonChemFieldOptions = ['inject', 'vclamp', 'activation', 'modulation'];
@@ -495,14 +496,14 @@ const StimMenuBox = ({
 
                           {/* Stimulus Expression - Full Width, Last Row */}
                           <Grid item xs={12}>
-                              <HelpField 
-                                id="stimulusExpression" 
-                                label="Stimulus Expression" 
-                                required 
-                                value={activeStimData.stimulusExpression} 
-                                onChange={(id, v) => updateStim(activeStim, id, v)} 
+                              <StimExprHelpField
+                                id="stimulusExpression"
+                                label="Stimulus Expression"
+                                required
+                                value={activeStimData.stimulusExpression}
+                                onChange={(id, v) => updateStim(activeStim, id, v)}
                                 helptext={helpText.fields.stimulusExpression}
-                            />
+                              />
                           </Grid>
                       </Grid>
 
