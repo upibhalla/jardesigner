@@ -848,7 +848,10 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         for i in self.passiveDistrib:
             assert( "path" in i )
             temp.append( "." )
-            temp.append( i["path"] )
+            path = i["path"]
+            if path == "#":
+                path = "#[ISA=CompartmentBase]"
+            temp.append( path )
             for key, val in i.items():
                 if key != "path":
                     temp.append( key )

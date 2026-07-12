@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Box, Tabs, Tab, Typography, TextField, Grid, Tooltip, IconButton, Button } from '@mui/material';
+import { Box, Tabs, Tab, Typography, TextField, Grid, Tooltip, IconButton, Button, Alert } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './MorphoMenuBox.Help.json';
@@ -20,6 +20,28 @@ const toMicrons = (meters) => {
     return formatFloat(micronValue);
 };
 const safeToString = (value, defaultValue = '') => (value != null ? String(value) : defaultValue);
+
+// --- Validation helpers — return error string or null ---
+const validatePositiveNum = (str) => {
+    if (!str || str.trim() === '') return 'Required';
+    const n = Number(str);
+    if (isNaN(n) || n <= 0) return 'Must be > 0';
+    return null;
+};
+const validatePositiveInt = (str) => {
+    if (!str || str.trim() === '') return 'Required';
+    const n = parseInt(str, 10);
+    if (isNaN(n) || n < 1 || String(n) !== str.trim()) return 'Must be a whole number ≥ 1';
+    return null;
+};
+// Combine warning strings; errors always take priority over warnings.
+const warnOnly = (errMsg, ...warnings) =>
+    errMsg ? null : warnings.filter(Boolean).join('; ') || null;
+const fieldProps = (errMsg, warnMsg) => ({
+    error: !!errMsg,
+    helperText: errMsg || warnMsg || undefined,
+    ...((!errMsg && warnMsg) && { FormHelperTextProps: { sx: { color: 'warning.main' } } }),
+});
 
 // --- Default state values (in MICRONS) ---
 const initialSomaState = { somaDia: '10', somaLen: '10' };
@@ -218,47 +240,110 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
             </Tabs>
 
             <Box sx={{ mt: 2, p: 1 }}>
-                {tabIndex === 0 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>Soma</Typography>
-                        <Grid container spacing={2}>
-                            <Grid item xs={6}><HelpField id="somaDia" label="Diameter (μm)" value={somaValues.somaDia} onChange={handleSomaChange} helptext={helpText.fields.soma.somaDia} /></Grid>
-                            <Grid item xs={6}><HelpField id="somaLen" label="Length (μm)" value={somaValues.somaLen} onChange={handleSomaChange} helptext={helpText.fields.soma.somaLen} /></Grid>
-                        </Grid>
-                    </Box>
-                )}
-                {tabIndex === 1 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>Ball and Stick</Typography>
-                        <Grid container spacing={2} rowSpacing={1.5}>
-                            <Grid item xs={12}><Typography variant="subtitle2" color="text.secondary">Soma</Typography></Grid>
-                            <Grid item xs={6}><HelpField id="somaDia" label="Diameter (μm)" value={ballAndStickValues.somaDia} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.somaDia} /></Grid>
-                            <Grid item xs={6}><HelpField id="somaLen" label="Length (μm)" value={ballAndStickValues.somaLen} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.somaLen} /></Grid>
-                            <Grid item xs={12} sx={{ mt: 1 }}><Typography variant="subtitle2" color="text.secondary">Dendrite</Typography></Grid>
-                            <Grid item xs={6}><HelpField id="dendDia" label="Diameter (μm)" value={ballAndStickValues.dendDia} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.dendDia} /></Grid>
-                            <Grid item xs={6}><HelpField id="dendLen" label="Length (μm)" value={ballAndStickValues.dendLen} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.dendLen} /></Grid>
-                            <Grid item xs={12}><HelpField id="dendNumSeg" label="Segments (#)" value={ballAndStickValues.dendNumSeg} onChange={handleBallAndStickChange} type="number" helptext={helpText.fields.ballAndStick.dendNumSeg} InputProps={{ inputProps: { min: 1, step: 2 } }} /></Grid>
-                        </Grid>
-                    </Box>
-                )}
-                {tabIndex === 2 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>Y Branch</Typography>
-                        <Grid container spacing={2} rowSpacing={1.5}>
-                            <Grid item xs={12}><Typography variant="subtitle2" color="text.secondary">Soma</Typography></Grid>
-                            <Grid item xs={6}><HelpField id="somaDia" label="Diameter (μm)" value={yBranchValues.somaDia} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.somaDia} /></Grid>
-                            <Grid item xs={6}><HelpField id="somaLen" label="Length (μm)" value={yBranchValues.somaLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.somaLen} /></Grid>
-                            <Grid item xs={12} sx={{ mt: 1 }}><Typography variant="subtitle2" color="text.secondary">Dendrite Trunk</Typography></Grid>
-                            <Grid item xs={6}><HelpField id="dendDia" label="Diameter (μm)" value={yBranchValues.dendDia} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.dendDia} /></Grid>
-                            <Grid item xs={6}><HelpField id="dendLen" label="Length (μm)" value={yBranchValues.dendLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.dendLen} /></Grid>
-                            <Grid item xs={12}><HelpField id="dendNumSeg" label="Segments (#)" value={yBranchValues.dendNumSeg} onChange={handleYBranchChange} type="number" helptext={helpText.fields.yBranch.dendNumSeg} InputProps={{ inputProps: { min: 1, step: 1 } }} /></Grid>
-                            <Grid item xs={12} sx={{ mt: 1 }}><Typography variant="subtitle2" color="text.secondary">Daughter Branches</Typography></Grid>
-                            <Grid item xs={6}><HelpField id="branchDia" label="Diameter (μm)" value={yBranchValues.branchDia} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.branchDia} /></Grid>
-                            <Grid item xs={6}><HelpField id="branchLen" label="Length (μm)" value={yBranchValues.branchLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.branchLen} /></Grid>
-                            <Grid item xs={12}><HelpField id="branchNumSeg" label="Segments (#)" value={yBranchValues.branchNumSeg} onChange={handleYBranchChange} type="number" helptext={helpText.fields.yBranch.branchNumSeg} InputProps={{ inputProps: { min: 1, step: 1 } }} /></Grid>
-                        </Grid>
-                    </Box>
-                )}
+                {tabIndex === 0 && (() => {
+                    const eDia = validatePositiveNum(somaValues.somaDia);
+                    const wDia = warnOnly(eDia, Number(somaValues.somaDia) > 500 ? 'Unusually large soma diameter (> 500 µm)' : null);
+                    const eLen = validatePositiveNum(somaValues.somaLen);
+                    const wLen = warnOnly(eLen, Number(somaValues.somaLen) > 2000 ? 'Unusually long (> 2000 µm)' : null);
+                    return (
+                        <Box>
+                            <Typography variant="h6" gutterBottom>Soma</Typography>
+                            <Grid container spacing={2}>
+                                <Grid item xs={6}><HelpField id="somaDia" label="Diameter (μm)" value={somaValues.somaDia} onChange={handleSomaChange} helptext={helpText.fields.soma.somaDia} {...fieldProps(eDia, wDia)} /></Grid>
+                                <Grid item xs={6}><HelpField id="somaLen" label="Length (μm)" value={somaValues.somaLen} onChange={handleSomaChange} helptext={helpText.fields.soma.somaLen} {...fieldProps(eLen, wLen)} /></Grid>
+                            </Grid>
+                        </Box>
+                    );
+                })()}
+                {tabIndex === 1 && (() => {
+                    const somaDiaNum = Number(ballAndStickValues.somaDia);
+                    const eSomaDia = validatePositiveNum(ballAndStickValues.somaDia);
+                    const wSomaDia = warnOnly(eSomaDia, somaDiaNum > 500 ? 'Unusually large soma diameter (> 500 µm)' : null);
+                    const eSomaLen = validatePositiveNum(ballAndStickValues.somaLen);
+                    const wSomaLen = warnOnly(eSomaLen, Number(ballAndStickValues.somaLen) > 2000 ? 'Unusually long (> 2000 µm)' : null);
+
+                    const dendDiaNum = Number(ballAndStickValues.dendDia);
+                    const eDendDia = validatePositiveNum(ballAndStickValues.dendDia);
+                    const wDendDia = warnOnly(eDendDia,
+                        dendDiaNum > 20 ? 'Large dendrite diameter (> 20 µm)' : null,
+                        !eSomaDia && dendDiaNum > somaDiaNum ? 'Exceeds soma diameter' : null);
+                    const eDendLen = validatePositiveNum(ballAndStickValues.dendLen);
+                    const wDendLen = warnOnly(eDendLen, Number(ballAndStickValues.dendLen) > 2000 ? 'Unusually long (> 2000 µm)' : null);
+
+                    const dendSegNum = parseInt(ballAndStickValues.dendNumSeg, 10);
+                    const eDendSeg = validatePositiveInt(ballAndStickValues.dendNumSeg);
+                    const segLen = !eDendSeg && dendSegNum > 0 ? Number(ballAndStickValues.dendLen) / dendSegNum : null;
+                    const wDendSeg = warnOnly(eDendSeg,
+                        dendSegNum > 500 ? 'Segment count > 500 will slow simulation' : null,
+                        segLen !== null && segLen < 10 ? `Segment length ${segLen.toFixed(1)} µm is very short` : null);
+                    return (
+                        <Box>
+                            <Typography variant="h6" gutterBottom>Ball and Stick</Typography>
+                            <Grid container spacing={2} rowSpacing={1.5}>
+                                <Grid item xs={12}><Typography variant="subtitle2" color="text.secondary">Soma</Typography></Grid>
+                                <Grid item xs={6}><HelpField id="somaDia" label="Diameter (μm)" value={ballAndStickValues.somaDia} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.somaDia} {...fieldProps(eSomaDia, wSomaDia)} /></Grid>
+                                <Grid item xs={6}><HelpField id="somaLen" label="Length (μm)" value={ballAndStickValues.somaLen} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.somaLen} {...fieldProps(eSomaLen, wSomaLen)} /></Grid>
+                                <Grid item xs={12} sx={{ mt: 1 }}><Typography variant="subtitle2" color="text.secondary">Dendrite</Typography></Grid>
+                                <Grid item xs={6}><HelpField id="dendDia" label="Diameter (μm)" value={ballAndStickValues.dendDia} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.dendDia} {...fieldProps(eDendDia, wDendDia)} /></Grid>
+                                <Grid item xs={6}><HelpField id="dendLen" label="Length (μm)" value={ballAndStickValues.dendLen} onChange={handleBallAndStickChange} helptext={helpText.fields.ballAndStick.dendLen} {...fieldProps(eDendLen, wDendLen)} /></Grid>
+                                <Grid item xs={12}><HelpField id="dendNumSeg" label="Segments (#)" value={ballAndStickValues.dendNumSeg} onChange={handleBallAndStickChange} type="number" helptext={helpText.fields.ballAndStick.dendNumSeg} InputProps={{ inputProps: { min: 1, step: 2 } }} {...fieldProps(eDendSeg, wDendSeg)} /></Grid>
+                            </Grid>
+                        </Box>
+                    );
+                })()}
+                {tabIndex === 2 && (() => {
+                    const somaDiaNum = Number(yBranchValues.somaDia);
+                    const eSomaDia = validatePositiveNum(yBranchValues.somaDia);
+                    const wSomaDia = warnOnly(eSomaDia, somaDiaNum > 500 ? 'Unusually large soma diameter (> 500 µm)' : null);
+                    const eSomaLen = validatePositiveNum(yBranchValues.somaLen);
+                    const wSomaLen = warnOnly(eSomaLen, Number(yBranchValues.somaLen) > 2000 ? 'Unusually long (> 2000 µm)' : null);
+
+                    const dendDiaNum = Number(yBranchValues.dendDia);
+                    const eDendDia = validatePositiveNum(yBranchValues.dendDia);
+                    const wDendDia = warnOnly(eDendDia,
+                        dendDiaNum > 20 ? 'Large dendrite diameter (> 20 µm)' : null,
+                        !eSomaDia && dendDiaNum > somaDiaNum ? 'Exceeds soma diameter' : null);
+                    const eDendLen = validatePositiveNum(yBranchValues.dendLen);
+                    const wDendLen = warnOnly(eDendLen, Number(yBranchValues.dendLen) > 2000 ? 'Unusually long (> 2000 µm)' : null);
+                    const dendSegNum = parseInt(yBranchValues.dendNumSeg, 10);
+                    const eDendSeg = validatePositiveInt(yBranchValues.dendNumSeg);
+                    const dendSegLen = !eDendSeg && dendSegNum > 0 ? Number(yBranchValues.dendLen) / dendSegNum : null;
+                    const wDendSeg = warnOnly(eDendSeg,
+                        dendSegNum > 500 ? 'Segment count > 500 will slow simulation' : null,
+                        dendSegLen !== null && dendSegLen < 10 ? `Segment length ${dendSegLen.toFixed(1)} µm is very short` : null);
+
+                    const branchDiaNum = Number(yBranchValues.branchDia);
+                    const eBranchDia = validatePositiveNum(yBranchValues.branchDia);
+                    const wBranchDia = warnOnly(eBranchDia,
+                        branchDiaNum > 20 ? 'Large branch diameter (> 20 µm)' : null,
+                        !eSomaDia && branchDiaNum > somaDiaNum ? 'Exceeds soma diameter' : null);
+                    const eBranchLen = validatePositiveNum(yBranchValues.branchLen);
+                    const wBranchLen = warnOnly(eBranchLen, Number(yBranchValues.branchLen) > 2000 ? 'Unusually long (> 2000 µm)' : null);
+                    const branchSegNum = parseInt(yBranchValues.branchNumSeg, 10);
+                    const eBranchSeg = validatePositiveInt(yBranchValues.branchNumSeg);
+                    const branchSegLen = !eBranchSeg && branchSegNum > 0 ? Number(yBranchValues.branchLen) / branchSegNum : null;
+                    const wBranchSeg = warnOnly(eBranchSeg,
+                        branchSegNum > 500 ? 'Segment count > 500 will slow simulation' : null,
+                        branchSegLen !== null && branchSegLen < 10 ? `Segment length ${branchSegLen.toFixed(1)} µm is very short` : null);
+                    return (
+                        <Box>
+                            <Typography variant="h6" gutterBottom>Y Branch</Typography>
+                            <Grid container spacing={2} rowSpacing={1.5}>
+                                <Grid item xs={12}><Typography variant="subtitle2" color="text.secondary">Soma</Typography></Grid>
+                                <Grid item xs={6}><HelpField id="somaDia" label="Diameter (μm)" value={yBranchValues.somaDia} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.somaDia} {...fieldProps(eSomaDia, wSomaDia)} /></Grid>
+                                <Grid item xs={6}><HelpField id="somaLen" label="Length (μm)" value={yBranchValues.somaLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.somaLen} {...fieldProps(eSomaLen, wSomaLen)} /></Grid>
+                                <Grid item xs={12} sx={{ mt: 1 }}><Typography variant="subtitle2" color="text.secondary">Dendrite Trunk</Typography></Grid>
+                                <Grid item xs={6}><HelpField id="dendDia" label="Diameter (μm)" value={yBranchValues.dendDia} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.dendDia} {...fieldProps(eDendDia, wDendDia)} /></Grid>
+                                <Grid item xs={6}><HelpField id="dendLen" label="Length (μm)" value={yBranchValues.dendLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.dendLen} {...fieldProps(eDendLen, wDendLen)} /></Grid>
+                                <Grid item xs={12}><HelpField id="dendNumSeg" label="Segments (#)" value={yBranchValues.dendNumSeg} onChange={handleYBranchChange} type="number" helptext={helpText.fields.yBranch.dendNumSeg} InputProps={{ inputProps: { min: 1, step: 1 } }} {...fieldProps(eDendSeg, wDendSeg)} /></Grid>
+                                <Grid item xs={12} sx={{ mt: 1 }}><Typography variant="subtitle2" color="text.secondary">Daughter Branches</Typography></Grid>
+                                <Grid item xs={6}><HelpField id="branchDia" label="Diameter (μm)" value={yBranchValues.branchDia} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.branchDia} {...fieldProps(eBranchDia, wBranchDia)} /></Grid>
+                                <Grid item xs={6}><HelpField id="branchLen" label="Length (μm)" value={yBranchValues.branchLen} onChange={handleYBranchChange} helptext={helpText.fields.yBranch.branchLen} {...fieldProps(eBranchLen, wBranchLen)} /></Grid>
+                                <Grid item xs={12}><HelpField id="branchNumSeg" label="Segments (#)" value={yBranchValues.branchNumSeg} onChange={handleYBranchChange} type="number" helptext={helpText.fields.yBranch.branchNumSeg} InputProps={{ inputProps: { min: 1, step: 1 } }} {...fieldProps(eBranchSeg, wBranchSeg)} /></Grid>
+                            </Grid>
+                        </Box>
+                    );
+                })()}
                 {tabIndex === 3 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>Uploaded Morphology</Typography>
@@ -293,9 +378,9 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
                                 )}
                             </Box>
                         ) : (
-                            <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-                                No file loaded. Use "Browse Library…" to upload or select a morphology file.
-                            </Typography>
+                            <Alert severity="warning" sx={{ mt: 1 }}>
+                                No morphology file loaded. Use "Browse Library…" to upload or select a file.
+                            </Alert>
                         )}
                     </Box>
                 )}
