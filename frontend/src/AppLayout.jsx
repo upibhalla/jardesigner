@@ -177,24 +177,27 @@ export const AppLayout = (props) => {
         clientId={clientId}
         setupThreeDConfig={threeDConfigs?.setup}
     />,
-    Spines: <SpineMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }} 
-        elecPaths={elecPaths} 
-        spinePaths={spinePaths} 
+    Spines: <SpineMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={{ spineProto: jsonData.spineProto, spineDistrib: jsonData.spineDistrib }}
+        elecPaths={elecPaths}
+        spinePaths={spinePaths}
+        cellProto={jsonData.cellProto}
     />,
     Channels: <ChanMenuBox
-        onConfigurationChange={updateJsonData} 
-        currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }} 
+        onConfigurationChange={updateJsonData}
+        currentConfig={{ chanProto: jsonData.chanProto, chanDistrib: jsonData.chanDistrib }}
         clientId={clientId}
-        elecPaths={elecPaths} 
-        spinePaths={spinePaths} 
+        elecPaths={elecPaths}
+        spinePaths={spinePaths}
+        cellProto={jsonData.cellProto}
     />,
-    Passive: <PassiveMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={jsonData.passiveDistrib} 
-        elecPaths={elecPaths} 
-        spinePaths={spinePaths} 
+    Passive: <PassiveMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={jsonData.passiveDistrib}
+        elecPaths={elecPaths}
+        spinePaths={spinePaths}
+        cellProto={jsonData.cellProto}
     />,
     Signaling: <ChemMenuBox 
         onConfigurationChange={updateJsonData} 

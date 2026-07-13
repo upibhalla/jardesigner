@@ -20,7 +20,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './SpineMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
 import ExprHelpField from '../ExprHelpField';
 
 // --- Helper Functions ---
@@ -63,6 +63,17 @@ const numOrExpr = (str, defaultVal, scaleFn) => {
     return scaleFn ? scaleFn(n) : n;
 };
 
+// Warn if numeric spacing (µm) exceeds the dendrite length for parametric morphologies.
+const spacingDendWarn = (spacingMicrons, cellProto) => {
+    const n = Number(spacingMicrons);
+    if (isNaN(n)) return null; // expression — skip
+    if (!cellProto || (cellProto.type !== 'ballAndStick' && cellProto.type !== 'branchedCell')) return null;
+    if (!cellProto.dendLen) return null;
+    if (n * 1e-6 > cellProto.dendLen)
+        return `Spacing (${n} µm) exceeds dendrite length (${(cellProto.dendLen * 1e6).toFixed(0)} µm) — no spines will be placed`;
+    return null;
+};
+
 // --- Default State Definitions ---
 const createDefaultPrototype = () => ({
     type: 'Excitatory', name: 'exc', source: 'makeExcSpine()',
@@ -92,7 +103,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) => {
+const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], cellProto }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.spineProto?.map(p => {
             const componentType = getComponentTypeFromSchema(p.type, p.source);
@@ -396,29 +407,64 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                         </Grid>
 
                         <Grid item xs={6}>
-                             <HelpField id="prototype" label="Prototype" select value={distributions[activeDistribution].prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
+                             <HelpField id="prototype" label="Prototype" select
+                                 error={!distributions[activeDistribution].prototype}
+                                 helperText={!distributions[activeDistribution].prototype ? 'Select a prototype' : undefined}
+                                 value={distributions[activeDistribution].prototype}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.prototype}
+                             >
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </HelpField>
                         </Grid>
-                        {/* 'path' was here previously */}
                         <Grid item xs={6}>
-                             <ExprHelpField id="spacing" label="Spacing (μm)" value={distributions[activeDistribution].spacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing}/>
+                             <ExprHelpField id="spacing" label="Spacing (μm)"
+                                 value={distributions[activeDistribution].spacing}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.spacing}
+                                 warning={spacingDendWarn(distributions[activeDistribution].spacing, cellProto) || warnSingleSegExpr(distributions[activeDistribution].spacing, cellProto)}
+                             />
                         </Grid>
                         <Grid item xs={6}>
-                             <ExprHelpField id="minSpacing" label="Min Spacing (μm)" value={distributions[activeDistribution].minSpacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.minSpacing}/>
+                             <ExprHelpField id="minSpacing" label="Min Spacing (μm)"
+                                 value={distributions[activeDistribution].minSpacing}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.minSpacing}
+                                 warning={warnSingleSegExpr(distributions[activeDistribution].minSpacing, cellProto)}
+                             />
                         </Grid>
                          <Grid item xs={6}>
-                            <ExprHelpField id="sizeScale" label="Size Scale" value={distributions[activeDistribution].sizeScale} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeScale}/>
+                            <ExprHelpField id="sizeScale" label="Size Scale"
+                                value={distributions[activeDistribution].sizeScale}
+                                onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                helptext={helpText.distributions.sizeScale}
+                                warning={warnSingleSegExpr(distributions[activeDistribution].sizeScale, cellProto)}
+                            />
                         </Grid>
                         <Grid item xs={6}>
-                            <ExprHelpField id="sizeStdDev" label="Size Std Dev" value={distributions[activeDistribution].sizeStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeStdDev}/>
+                            <ExprHelpField id="sizeStdDev" label="Size Std Dev"
+                                value={distributions[activeDistribution].sizeStdDev}
+                                onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                helptext={helpText.distributions.sizeStdDev}
+                                warning={warnSingleSegExpr(distributions[activeDistribution].sizeStdDev, cellProto)}
+                            />
                         </Grid>
                         <Grid item xs={6}>
-                             <ExprHelpField id="angle" label="Angle (rad)" value={distributions[activeDistribution].angle} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angle}/>
+                             <ExprHelpField id="angle" label="Angle (rad)"
+                                 value={distributions[activeDistribution].angle}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.angle}
+                                 warning={warnSingleSegExpr(distributions[activeDistribution].angle, cellProto)}
+                             />
                         </Grid>
                         <Grid item xs={6}>
-                             <ExprHelpField id="angleStdDev" label="Angle Std Dev (rad)" value={distributions[activeDistribution].angleStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angleStdDev}/>
+                             <ExprHelpField id="angleStdDev" label="Angle Std Dev (rad)"
+                                 value={distributions[activeDistribution].angleStdDev}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.angleStdDev}
+                                 warning={warnSingleSegExpr(distributions[activeDistribution].angleStdDev, cellProto)}
+                             />
                         </Grid>
                         <Grid item xs={6}>
                              <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>

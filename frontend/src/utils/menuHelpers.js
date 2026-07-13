@@ -51,6 +51,26 @@ export const validateExpr = (expr) => _runExpr(expr, DISTRIB_EXPR_SCOPE);
  */
 export const validateStimExpr = (expr) => _runExpr(expr, STIM_EXPR_SCOPE);
 
+const GEOM_VARS_REGEX = /\b(p|g|L|len|dia|maxP|maxG|maxL)\b/;
+
+/**
+ * Warn when a geometry expression is used but the morphology has only 1 segment per branch.
+ * With a single segment, all geometry variables (p, g, L, len, dia…) have the same value in
+ * every compartment, so the expression provides no spatial variation — equivalent to a constant.
+ * Only fires for parametric morphologies (ballAndStick / branchedCell) with dendNumSeg === 1.
+ * Returns null if no warning is needed, or a warning string.
+ */
+export const warnSingleSegExpr = (expr, cellProto) => {
+    if (!expr || !isNaN(Number(expr))) return null; // plain number — skip
+    if (!cellProto) return null;
+    const { type, dendNumSeg } = cellProto;
+    if (type !== 'ballAndStick' && type !== 'branchedCell') return null;
+    if (!dendNumSeg || dendNumSeg > 1) return null;
+    if (GEOM_VARS_REGEX.test(expr))
+        return 'Geometry expression with 1 segment per branch — all compartments share the same value; increase segments in Morphology';
+    return null;
+};
+
 /**
  * Generates a list of menu options for compartments based on available simulation paths.
  *

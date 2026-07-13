@@ -10,6 +10,7 @@ import {
     MenuItem,
     Button,
     Tooltip,
+    Alert,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -21,7 +22,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './ChanMenuBox.Help.json';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
 import ProtoPickerDialog from '../ProtoPickerDialog';
 import ExprHelpField from '../ExprHelpField';
 
@@ -62,6 +63,24 @@ const numOrExpr = (str, defaultVal) => {
     return isNaN(n) ? str : n;
 };
 
+const gbarWarn = (str) => {
+    const n = Number(str);
+    if (isNaN(n)) return null; // expression — skip
+    if (n < 0) return 'Gbar must be positive';
+    if (n === 0) return 'Gbar=0 is valid: channel will not be built for this distribution';
+    if (n > 10000) return 'Unusually high conductance (> 10,000 S/m²)';
+    return null;
+};
+
+const caTauWarn = (str) => {
+    const n = Number(str);
+    if (isNaN(n)) return null; // expression — skip
+    if (n <= 0) return 'Ca Tau must be positive';
+    if (n < 0.001) return 'Very short time constant (< 1 ms)';
+    if (n > 10) return 'Very long time constant (> 10 s)';
+    return null;
+};
+
 // --- Default State Definitions ---
 const createDefaultPrototype = () => ({
     type: prototypeTypeOptions[0],
@@ -92,12 +111,13 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ChanMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    clientId, 
-    elecPaths = [], 
-    spinePaths = [] 
+const ChanMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    clientId,
+    elecPaths = [],
+    spinePaths = [],
+    cellProto,
 }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chanProto?.map(p => {
@@ -362,14 +382,15 @@ const ChanMenuBox = ({
                         {prototypes[activePrototype].type === 'File' && (
                            <Grid item xs={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                                    <TextField 
-                                        fullWidth 
-                                        size="small" 
-                                        label="Source File (NeuroML)" 
+                                    <TextField
+                                        fullWidth
+                                        size="small"
+                                        label="Source File (NeuroML)"
                                         variant="outlined"
-                                        value={prototypes[activePrototype].file} 
+                                        value={prototypes[activePrototype].file}
                                         InputProps={{ readOnly: true }}
-                                        helperText="Click button to select file"
+                                        error={!prototypes[activePrototype].file}
+                                        helperText={prototypes[activePrototype].file ? undefined : 'No file selected — click Select to upload a NeuroML file'}
                                     />
                                     <Button 
                                         variant="outlined" 
@@ -399,6 +420,11 @@ const ChanMenuBox = ({
                     <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
                  </Tooltip>
             </Box>
+            {prototypes.length === 0 && (
+                <Alert severity="info" sx={{ mb: 1 }}>
+                    Define at least one prototype above before adding distributions.
+                </Alert>
+            )}
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                  <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }} aria-label="Channel Distributions">
                      {distributions.map((d, i) => <Tab key={i} label={`${d.prototype || 'New'} @ ${d.path || '?'}`} />)}
@@ -430,16 +456,32 @@ const ChanMenuBox = ({
                         </Grid>
 
                         <Grid item xs={12} sm={6}>
-                             <HelpField id="prototype" label="Prototype" select required value={distributions[activeDistribution].prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
+                             <HelpField id="prototype" label="Prototype" select required
+                                 error={!distributions[activeDistribution].prototype}
+                                 helperText={!distributions[activeDistribution].prototype ? 'Select a prototype' : undefined}
+                                 value={distributions[activeDistribution].prototype}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.prototype}
+                             >
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </HelpField>
                          </Grid>
                          <Grid item xs={12} sm={6}>
                              {prototypes.find(p => p.name === distributions[activeDistribution].prototype)?.type === 'Ca_conc' ? (
-                                 <ExprHelpField id="caTau" label="Ca Tau (s)" required value={distributions[activeDistribution].caTau} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.caTau} />
+                                 <ExprHelpField id="caTau" label="Ca Tau (s)" required
+                                     value={distributions[activeDistribution].caTau}
+                                     onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                     helptext={helpText.distributions.caTau}
+                                     warning={caTauWarn(distributions[activeDistribution].caTau) || warnSingleSegExpr(distributions[activeDistribution].caTau, cellProto)}
+                                 />
                              ) : (
-                                 <ExprHelpField id="maxConductance" label="Gbar (Max Conductance)" required value={distributions[activeDistribution].maxConductance} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.maxConductance} />
+                                 <ExprHelpField id="maxConductance" label="Gbar (Max Conductance)" required
+                                     value={distributions[activeDistribution].maxConductance}
+                                     onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                     helptext={helpText.distributions.maxConductance}
+                                     warning={gbarWarn(distributions[activeDistribution].maxConductance) || warnSingleSegExpr(distributions[activeDistribution].maxConductance, cellProto)}
+                                 />
                              )}
                         </Grid>
                     </Grid>

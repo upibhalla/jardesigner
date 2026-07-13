@@ -21,7 +21,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './PassiveMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
 import ExprHelpField from '../ExprHelpField';
 
 // --- Helper to safely convert value to string ---
@@ -71,11 +71,12 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const PassiveMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    elecPaths = [], 
-    spinePaths = [] 
+const PassiveMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    elecPaths = [],
+    spinePaths = [],
+    cellProto,
 }) => {
     const [tabs, setTabs] = useState(() => {
         const initialTabs = currentConfig?.map(p => ({
@@ -221,23 +222,23 @@ const PassiveMenuBox = ({
 
                         <Grid item xs={6}>
                             <ExprHelpField id="leakReversalPotential" label="Em (mV, or expr in V)" required value={activeTabData.leakReversalPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.leakReversalPotential}
-                                warning={rangeWarn(activeTabData.leakReversalPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)')} />
+                                warning={rangeWarn(activeTabData.leakReversalPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.leakReversalPotential, cellProto)} />
                         </Grid>
                         <Grid item xs={6}>
                              <ExprHelpField id="initialPotential" label="initVm (mV, or expr in V)" required value={activeTabData.initialPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.initialPotential}
-                                warning={rangeWarn(activeTabData.initialPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)')} />
+                                warning={rangeWarn(activeTabData.initialPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.initialPotential, cellProto)} />
                         </Grid>
                         <Grid item xs={4}>
                             <ExprHelpField id="membraneCapacitance" label="CM (F/m^2)" required value={activeTabData.membraneCapacitance} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneCapacitance}
-                                warning={rangeWarn(activeTabData.membraneCapacitance, 1e-4, 1.0, 'Unusual value (typical range: 1e-4 to 1.0 F/m²)')} />
+                                warning={rangeWarn(activeTabData.membraneCapacitance, 1e-4, 1.0, 'Unusual value (typical range: 1e-4 to 1.0 F/m²)') || warnSingleSegExpr(activeTabData.membraneCapacitance, cellProto)} />
                         </Grid>
                         <Grid item xs={4}>
                             <ExprHelpField id="membraneResistivity" label="RM (Ohm.m^2)" required value={activeTabData.membraneResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneResistivity}
-                                warning={rangeWarn(activeTabData.membraneResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m²)')} />
+                                warning={rangeWarn(activeTabData.membraneResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m²)') || warnSingleSegExpr(activeTabData.membraneResistivity, cellProto)} />
                         </Grid>
                         <Grid item xs={4}>
                             <ExprHelpField id="axialResistivity" label="RA (Ohm.m)" required value={activeTabData.axialResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.axialResistivity}
-                                warning={rangeWarn(activeTabData.axialResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m)')} />
+                                warning={rangeWarn(activeTabData.axialResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m)') || warnSingleSegExpr(activeTabData.axialResistivity, cellProto)} />
                         </Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>
