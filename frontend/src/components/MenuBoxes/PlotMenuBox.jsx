@@ -417,7 +417,13 @@ const PlotMenuBox = ({
                         </Grid>
 
                         <Grid item xs={12} sm={6}>
-                            <HelpField id="field" label="Field" select required value={activePlotData.field} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.field}>
+                            <HelpField id="field" label="Field" select required
+                                error={!activePlotData.field}
+                                helperText={!activePlotData.field ? 'Select a field to plot' : undefined}
+                                value={activePlotData.field}
+                                onChange={(id, v) => updatePlot(activePlot, id, v)}
+                                helptext={helpText.fields.field}
+                            >
                                 <MenuItem value=""><em>Select Field...</em></MenuItem>
                                 <ListSubheader>Electrical/Other</ListSubheader>
                                 {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{getFieldLabel(opt)}</MenuItem>)}
@@ -523,17 +529,43 @@ const PlotMenuBox = ({
                          
                          <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activePlotData.title} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.title} /></Grid>
                          <Grid item xs={12} sm={6}><HelpField id="yMin" label="Y Min (Optional, 0=auto)" type="number" value={activePlotData.yMin} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMin} /></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="yMax" label="Y Max (Optional, 0=auto)" type="number" value={activePlotData.yMax} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMax} /></Grid>
-                        
+                         <Grid item xs={12} sm={6}>{(() => {
+                             const yMinN = parseFloat(activePlotData.yMin);
+                             const yMaxN = parseFloat(activePlotData.yMax);
+                             const yRangeWarn = (!isNaN(yMinN) && yMinN !== 0 && !isNaN(yMaxN) && yMaxN !== 0 && yMaxN < yMinN)
+                                 ? 'Y max is less than Y min — axis range will be invalid' : undefined;
+                             return (
+                                 <HelpField id="yMax" label="Y Max (Optional, 0=auto)" type="number"
+                                     value={activePlotData.yMax}
+                                     onChange={(id, v) => updatePlot(activePlot, id, v)}
+                                     helptext={helpText.fields.yMax}
+                                     helperText={yRangeWarn}
+                                     {...(yRangeWarn && { FormHelperTextProps: { sx: { color: 'warning.main' } } })}
+                                 />
+                             );
+                         })()}</Grid>
+
                         {/* Mode moved to bottom next to Wave Frames */}
                         <Grid item xs={12} sm={6}>
                             <HelpField id="mode" label="Mode (Optional)" select value={activePlotData.mode} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.mode}>
                                 {modeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                              </HelpField>
                          </Grid>
-                        <Grid item xs={12} sm={6}>
-                             <HelpField id="waveFrames" label="# Wave Frames (if Mode='wave')" type="number" value={activePlotData.waveFrames} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.waveFrames} InputProps={{ inputProps: { min: 0, step: 1 } }} disabled={activePlotData.mode !== 'wave'}/>
-                         </Grid>
+                        <Grid item xs={12} sm={6}>{(() => {
+                            const wfN = parseInt(activePlotData.waveFrames, 10);
+                            const wfError = activePlotData.mode === 'wave' && (!isNaN(wfN) && wfN <= 0);
+                            return (
+                                <HelpField id="waveFrames" label="# Wave Frames (if Mode='wave')" type="number"
+                                    value={activePlotData.waveFrames}
+                                    onChange={(id, v) => updatePlot(activePlot, id, v)}
+                                    helptext={helpText.fields.waveFrames}
+                                    InputProps={{ inputProps: { min: 0, step: 1 } }}
+                                    disabled={activePlotData.mode !== 'wave'}
+                                    error={wfError}
+                                    helperText={wfError ? 'Wave frames must be a positive integer' : undefined}
+                                />
+                            );
+                        })()}</Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removePlot(activePlot)} sx={{ mt: 2 }}>
                         Remove Plot

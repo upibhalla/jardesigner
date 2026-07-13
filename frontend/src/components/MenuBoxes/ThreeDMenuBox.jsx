@@ -345,6 +345,30 @@ const ThreeDMenuBox = ({
     
     const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
 
+    const dtNum = Number(activeTabData?.dt);
+    const dtError = activeTabData && (isNaN(dtNum) || dtNum <= 0) ? 'Must be a positive number' : null;
+
+    const minNum = Number(activeTabData?.min);
+    const maxNum = Number(activeTabData?.max);
+    const minMaxWarn = activeTabData && !isNaN(minNum) && !isNaN(maxNum) &&
+        (minNum !== 0 || maxNum !== 0) && minNum >= maxNum
+        ? 'Max should be greater than Min for meaningful color scaling'
+        : null;
+
+    const diaNum = Number(activeTabData?.diameterScale);
+    const diaWarn = activeTabData && !isNaN(diaNum) && diaNum <= 0
+        ? 'Diameter scale ≤ 0 — compartments will be invisible'
+        : null;
+
+    let centerWarn = null;
+    try {
+        const parsed = JSON.parse(globalSettings.center);
+        if (!Array.isArray(parsed) || parsed.length !== 3 || !parsed.every(n => typeof n === 'number'))
+            centerWarn = 'Must be a JSON array of 3 numbers, e.g. [0,0,0]';
+    } catch {
+        centerWarn = 'Must be a JSON array of 3 numbers, e.g. [0,0,0]';
+    }
+
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -457,10 +481,10 @@ const ThreeDMenuBox = ({
                              </>
                          )}
                         <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} helperText={diaWarn || undefined} FormHelperTextProps={diaWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
                         <Grid item xs={12} sm={6}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} helperText={minMaxWarn || undefined} FormHelperTextProps={minMaxWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} error={!!dtError} helperText={dtError || undefined} /></Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>Remove Data Source</Button>
                 </Box>
@@ -478,7 +502,7 @@ const ThreeDMenuBox = ({
                     <Grid item xs={12} sm={6}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
                     <Grid item xs={12} sm={6}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
                     <Grid item xs={12} sm={6}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} /></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} helperText={centerWarn || undefined} FormHelperTextProps={centerWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
                     <Grid item xs={12} container spacing={1} sx={{ mt: 1 }}>
                         <Grid item xs="auto"><Tooltip title={helpText.globalSettings.mergeDisplays}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" /></Tooltip></Grid>
                         <Grid item xs="auto"><Tooltip title={helpText.globalSettings.fullScreen}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" /></Tooltip></Grid>

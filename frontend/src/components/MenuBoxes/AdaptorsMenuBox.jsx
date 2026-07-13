@@ -271,12 +271,14 @@ const AdaptorsMenuBox = ({
     const renderChemicalSection = () => (
         <Grid container spacing={2}>
             <Grid item xs={12}>
-                <HelpField 
-                    id="chemMesh" 
-                    label="Chem Compartment" 
-                    select 
-                    value={activeAdaptorData.chemMesh} 
-                    onChange={(id, v) => updateAdaptor(activeAdaptor, id, v)} 
+                <HelpField
+                    id="chemMesh"
+                    label="Chem Compartment"
+                    select
+                    error={!activeAdaptorData.chemMesh}
+                    helperText={!activeAdaptorData.chemMesh ? 'Select a compartment' : undefined}
+                    value={activeAdaptorData.chemMesh}
+                    onChange={(id, v) => updateAdaptor(activeAdaptor, id, v)}
                     helptext="Select the chemical compartment mesh."
                 >
                     <MenuItem value=""><em>Select...</em></MenuItem>
@@ -284,12 +286,14 @@ const AdaptorsMenuBox = ({
                 </HelpField>
             </Grid>
             <Grid item xs={12}>
-                <HelpField 
-                    id="chemMol" 
-                    label="Molecule Name" 
-                    select 
-                    value={activeAdaptorData.chemMol} 
-                    onChange={(id, v) => updateAdaptor(activeAdaptor, id, v)} 
+                <HelpField
+                    id="chemMol"
+                    label="Molecule Name"
+                    select
+                    error={!!activeAdaptorData.chemMesh && !activeAdaptorData.chemMol}
+                    helperText={!!activeAdaptorData.chemMesh && !activeAdaptorData.chemMol ? 'Select a molecule' : undefined}
+                    value={activeAdaptorData.chemMol}
+                    onChange={(id, v) => updateAdaptor(activeAdaptor, id, v)}
                     helptext="Select the molecule."
                     disabled={!activeAdaptorData.chemMesh}
                 >
@@ -430,16 +434,23 @@ const AdaptorsMenuBox = ({
                                 />
                             </Grid>
                             <Grid item xs={12} sm={6}>
-                                <HelpField 
-                                    id="slope" 
-                                    label="Slope" 
-                                    required 
-                                    type="number" 
-                                    value={activeAdaptorData.slope} 
-                                    onChange={(id,v) => updateAdaptor(activeAdaptor, id, v)} 
-                                    helptext={helpText.fields.slope} 
-                                    InputProps={{ inputProps: { step: 0.1 } }}
-                                />
+                                {(() => {
+                                    const slopeZero = Number(activeAdaptorData.slope) === 0;
+                                    return (
+                                        <HelpField
+                                            id="slope"
+                                            label="Slope"
+                                            required
+                                            type="number"
+                                            value={activeAdaptorData.slope}
+                                            onChange={(id,v) => updateAdaptor(activeAdaptor, id, v)}
+                                            helptext={helpText.fields.slope}
+                                            InputProps={{ inputProps: { step: 0.1 } }}
+                                            helperText={slopeZero ? 'Slope of 0: destination will always equal the baseline; no coupling' : undefined}
+                                            {...(slopeZero && { FormHelperTextProps: { sx: { color: 'warning.main' } } })}
+                                        />
+                                    );
+                                })()}
                             </Grid>
                          </Grid>
                      </Grid>

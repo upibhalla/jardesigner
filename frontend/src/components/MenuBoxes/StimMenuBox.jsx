@@ -23,8 +23,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import helpText from './StimMenuBox.Help.json';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
 import StimExprHelpField from '../StimExprHelpField';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Define fieldOptions and typeOptions outside ---
 const nonChemFieldOptions = ['inject', 'vclamp', 'activation', 'modulation'];
@@ -82,13 +83,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 });
 
 // --- Main Component ---
-const StimMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    meshMols, 
-    elecPaths = [], // Injected: List of electrical paths
-    spinePaths = [], // Injected: List of spine paths
-    channelPrototypes = [] // Injected: List of channels
+const StimMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    meshMols,
+    elecPaths = [],
+    spinePaths = [],
+    channelPrototypes = [],
+    cellProto,
 }) => {
     const [stims, setStims] = useState(() => {
         const initialStims = currentConfig?.map(s => {
@@ -398,7 +400,13 @@ const StimMenuBox = ({
                           
                           {isFieldType && (
                             <Grid item xs={12} sm={6}>
-                                <HelpField id="field" label="Field" select required value={activeStimData.field} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.field}>
+                                <HelpField id="field" label="Field" select required
+                                    error={!activeStimData.field}
+                                    helperText={!activeStimData.field ? 'Select a field' : undefined}
+                                    value={activeStimData.field}
+                                    onChange={(id, v) => updateStim(activeStim, id, v)}
+                                    helptext={helpText.fields.field}
+                                >
                                     <MenuItem value=""><em>Select Field...</em></MenuItem>
                                     <ListSubheader>Electrical/Other</ListSubheader>
                                     {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
@@ -407,12 +415,23 @@ const StimMenuBox = ({
                                 </HelpField>
                             </Grid>
                           )}
-                          
-                          {!isFieldType && (
-                              <Grid item xs={12} sm={6}>
-                                  <HelpField id="weight" label="Weight" type="number" required value={activeStimData.weight} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.weight} InputProps={{ inputProps: { step: 0.1 } }} />
-                              </Grid>
-                          )}
+
+                          {!isFieldType && (() => {
+                              const weightN = Number(activeStimData.weight);
+                              const weightWarn = !isNaN(weightN) && weightN <= 0 ? 'Weight should be positive' : undefined;
+                              return (
+                                  <Grid item xs={12} sm={6}>
+                                      <HelpField id="weight" label="Weight" type="number" required
+                                          value={activeStimData.weight}
+                                          onChange={(id, v) => updateStim(activeStim, id, v)}
+                                          helptext={helpText.fields.weight}
+                                          InputProps={{ inputProps: { step: 0.1 } }}
+                                          helperText={weightWarn}
+                                          {...(weightWarn && { FormHelperTextProps: { sx: { color: 'warning.main' } } })}
+                                      />
+                                  </Grid>
+                              );
+                          })()}
 
                           {/* Conditional Rendering based on Field Type */}
                           {isChemField ? (
@@ -485,13 +504,14 @@ const StimMenuBox = ({
                          )}
 
                           <Grid item xs={12} sm={6}>
-                              <HelpField 
-                                id="geometryExpression" 
-                                label="Geometry Expr" 
-                                value={activeStimData.geometryExpression} 
-                                onChange={(id, v) => updateStim(activeStim, id, v)} 
+                              <ExprHelpField
+                                id="geometryExpression"
+                                label="Geometry Expr"
+                                value={activeStimData.geometryExpression}
+                                onChange={(id, v) => updateStim(activeStim, id, v)}
                                 helptext={helpText.fields.geometryExpression}
-                            />
+                                warning={warnSingleSegExpr(activeStimData.geometryExpression, cellProto)}
+                              />
                           </Grid>
 
                           {/* Stimulus Expression - Full Width, Last Row */}

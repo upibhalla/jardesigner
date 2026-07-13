@@ -215,14 +215,14 @@ export const AppLayout = (props) => {
         // --- Added channelPrototypes ---
         channelPrototypes={channelPrototypes}
     />,
-    Stimuli: <StimMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={jsonData.stims} 
-        meshMols={meshMolsData?.setup} 
-        elecPaths={elecPaths} 
+    Stimuli: <StimMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={jsonData.stims}
+        meshMols={meshMolsData?.setup}
+        elecPaths={elecPaths}
         spinePaths={spinePaths}
-        // --- Added channelPrototypes ---
         channelPrototypes={channelPrototypes}
+        cellProto={jsonData.cellProto}
     />,
     Plots: <PlotMenuBox
         onConfigurationChange={updateJsonData}
