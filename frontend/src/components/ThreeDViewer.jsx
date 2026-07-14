@@ -127,7 +127,9 @@ const ThreeDViewer = (props) => {
     isReplaying, onStartReplay, onPauseReplay, onSeekReplay, replayInterval, setReplayInterval, totalRuntime,
     explodeAxis, onExplodeAxisToggle, onSceneBuilt,
     defaultDiaScale,
-    clickSelected
+    clickSelected,
+    modelDirty,
+    handleRebuildModel,
   } = props;
 
   const { replayTime } = useContext(ReplayContext);
@@ -366,10 +368,18 @@ Aa: Auto-position`;
                 </>
             )}
             {showSetupControls && (
-                <TextField
-                    label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
-                    InputProps={{ readOnly: true }} sx={{ minWidth: '30ch' }}
-                />
+                <>
+                    <TextField
+                        label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
+                        InputProps={{ readOnly: true }} sx={{ minWidth: '30ch' }}
+                    />
+                    {handleRebuildModel && (
+                        <Button size="small" variant="contained" disabled={!modelDirty} onClick={handleRebuildModel}
+                            sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
+                            Rebuild
+                        </Button>
+                    )}
+                </>
             )}
 
             {/* Spacer and Settings Icon */}

@@ -121,12 +121,6 @@ const DisplayWindow = (props) => {
       </Box>
       
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
-         <Box sx={{ p: 0.5, flexShrink: 0 }}>
-           <Button size="small" variant="contained" disabled={!modelDirty} onClick={handleRebuildModel}
-             sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
-             Rebuild
-           </Button>
-         </Box>
          {threeDConfigs?.setup && (
             <ThreeDViewer
               {...props}

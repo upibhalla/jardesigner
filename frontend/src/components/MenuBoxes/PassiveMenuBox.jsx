@@ -228,15 +228,15 @@ const PassiveMenuBox = ({
                              <ExprHelpField id="initialPotential" label="initVm (mV, or expr in V)" required value={activeTabData.initialPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.initialPotential}
                                 warning={rangeWarn(activeTabData.initialPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.initialPotential, cellProto)} />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs={12}>
                             <ExprHelpField id="membraneCapacitance" label="CM (F/m^2)" required value={activeTabData.membraneCapacitance} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneCapacitance}
                                 warning={rangeWarn(activeTabData.membraneCapacitance, 1e-4, 1.0, 'Unusual value (typical range: 1e-4 to 1.0 F/m²)') || warnSingleSegExpr(activeTabData.membraneCapacitance, cellProto)} />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs={12}>
                             <ExprHelpField id="membraneResistivity" label="RM (Ohm.m^2)" required value={activeTabData.membraneResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneResistivity}
                                 warning={rangeWarn(activeTabData.membraneResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m²)') || warnSingleSegExpr(activeTabData.membraneResistivity, cellProto)} />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs={12}>
                             <ExprHelpField id="axialResistivity" label="RA (Ohm.m)" required value={activeTabData.axialResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.axialResistivity}
                                 warning={rangeWarn(activeTabData.axialResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m)') || warnSingleSegExpr(activeTabData.axialResistivity, cellProto)} />
                         </Grid>
