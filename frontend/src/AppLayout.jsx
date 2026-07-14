@@ -130,6 +130,8 @@ export const AppLayout = (props) => {
     spinePaths,
     setWarnedAboutMissing,
     handleLoadTutorial,
+    modelDirty,
+    handleRebuildModel,
   } = props;
 
   // Extract channel names for use in Plots, Stimuli, and Adaptors.
@@ -169,6 +171,7 @@ export const AppLayout = (props) => {
       activeSimPid={activeSim.pid}
       liveFrameData={liveFrameData}
       isReplaying={isReplaying}
+      modelDirty={modelDirty}
     />,
     Morphology: <MorphoMenuBox
         onConfigurationChange={updateJsonData}
@@ -251,7 +254,8 @@ export const AppLayout = (props) => {
     meshMolsData,
     elecPaths, 
     spinePaths,
-    channelPrototypes // Added to dependency array
+    channelPrototypes,
+    modelDirty,
   ]);
 
   const errorAnalysis = useMemo(() => analyzeError(simError), [simError]);

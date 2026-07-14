@@ -1,5 +1,5 @@
 import React, { useState, memo, useCallback, useEffect, useRef } from 'react'; 
-import { Box, Tabs, Tab } from '@mui/material';
+import { Box, Tabs, Tab, Button } from '@mui/material';
 import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
 import MarkdownText from './MarkdownText';
@@ -36,6 +36,8 @@ const DisplayWindow = (props) => {
     reactionGraphs,
     docFile,
     onLoadTutorial,
+    modelDirty,
+    handleRebuildModel,
   } = props;
 
   // ... (Keep all existing hooks/logic exactly as is) ...
@@ -119,6 +121,12 @@ const DisplayWindow = (props) => {
       </Box>
       
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
+         <Box sx={{ p: 0.5, flexShrink: 0 }}>
+           <Button size="small" variant="contained" disabled={!modelDirty} onClick={handleRebuildModel}
+             sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
+             Rebuild
+           </Button>
+         </Box>
          {threeDConfigs?.setup && (
             <ThreeDViewer
               {...props}
@@ -163,11 +171,16 @@ const DisplayWindow = (props) => {
       </Box>
 
       {/* 2. REACTION GRAPH PANEL (Tab Index 5) */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 5 ? 'flex' : 'none', position: 'relative' }}>
-         <MemoizedReactionGraph 
-             // Pass the Setup graph data specifically
-             graphData={reactionGraphs?.setup} 
-         />
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 5 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
+         <Box sx={{ p: 0.5, flexShrink: 0 }}>
+           <Button size="small" variant="contained" disabled={!modelDirty} onClick={handleRebuildModel}
+             sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
+             Rebuild
+           </Button>
+         </Box>
+         <Box sx={{ flexGrow: 1, overflow: 'hidden', position: 'relative' }}>
+           <MemoizedReactionGraph graphData={reactionGraphs?.setup} />
+         </Box>
       </Box>
     </Box>
   );

@@ -60,6 +60,7 @@ const RunMenuBox = ({
     activeSimPid,
     liveFrameData,
     isReplaying,
+    modelDirty,
 }) => {
 
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
@@ -304,6 +305,11 @@ const RunMenuBox = ({
             </Grid>
 
             {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
+            {modelDirty && !isSimulating && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    Model has changed — Start will rebuild before running.
+                </Alert>
+            )}
             {hasNoOutputs && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
                     No plots, 3D displays, or file saves are configured — the simulation will run but produce no visible output.

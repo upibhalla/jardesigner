@@ -102,6 +102,7 @@ export const useAppLogic = () => {
     const sessionTokenRef = useRef('');
 
     const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null, plot_filename: null });
+    const [modelDirty, setModelDirty] = useState(false);
     const socketRef = useRef(null);
     const frameQueueRef = useRef([]);
     const animationFrameId = useRef();
@@ -401,7 +402,28 @@ export const useAppLogic = () => {
         const compactedData = compactJsonData(updatedData, initialJsonData);
         setJsonData(updatedData);
         setJsonContent(JSON.stringify(compactedData, null, 2));
-        if (!isEqual(compactedData, lastBuiltJsonDataRef.current)) { buildModelOnServer(compactedData); }
+        if (!isEqual(compactedData, lastBuiltJsonDataRef.current)) {
+            const prev = lastBuiltJsonDataRef.current;
+            const isFileSourceChange =
+                (newDataPart.cellProto?.type === 'file' &&
+                 newDataPart.cellProto.source !== prev?.cellProto?.source) ||
+                (Array.isArray(newDataPart.chemProto) && newDataPart.chemProto.some((p, i) =>
+                    p.source && p.source !== prev?.chemProto?.[i]?.source)) ||
+                (Array.isArray(newDataPart.chanProto) && newDataPart.chanProto.some((p, i) =>
+                    p.type === 'neuroml' && p.source !== prev?.chanProto?.[i]?.source));
+            if (isFileSourceChange) {
+                setModelDirty(false);
+                buildModelOnServer(compactedData);
+            } else {
+                setModelDirty(true);
+            }
+        }
+    }, [jsonData, buildModelOnServer]);
+
+    const handleRebuildModel = useCallback(() => {
+        const compactedData = compactJsonData(jsonData, initialJsonData);
+        setModelDirty(false);
+        buildModelOnServer(compactedData);
     }, [jsonData, buildModelOnServer]);
     
     const setRunParameters = useCallback((runParams) => {
@@ -448,21 +470,17 @@ export const useAppLogic = () => {
     const handleBuildAndStartRun = useCallback((runConfig) => {
         const latestData = { ...initialJsonData, ...jsonData, ...runConfig };
         const compactedData = compactJsonData(latestData, initialJsonData);
-        // Exclude runtime from rebuild decision: it is passed at run time to moose.start()
-        // and does not affect the MOOSE model structure.
-        const withoutRuntime = ({ runtime: _r, ...rest }) => rest;
-        const structurallyUnchanged = activeSim.pid &&
-            isEqual(withoutRuntime(compactedData), withoutRuntime(lastBuiltJsonDataRef.current ?? {}));
-        if (structurallyUnchanged) {
+        if (!modelDirty && activeSim.pid) {
             setRunParameters(runConfig);
             handleStartRun(runConfig.runtime);
         } else {
             pendingStartRuntimeRef.current = runConfig.runtime;
             setJsonData(latestData);
             setJsonContent(JSON.stringify(compactedData, null, 2));
+            setModelDirty(false);
             buildModelOnServer(compactedData);
         }
-    }, [jsonData, activeSim.pid, handleStartRun, setRunParameters, buildModelOnServer]);
+    }, [jsonData, modelDirty, activeSim.pid, handleStartRun, setRunParameters, buildModelOnServer]);
 
     const handleStopRun = useCallback(() => {
         if (!activeSim.pid || !socketRef.current?.connected) return;
@@ -484,18 +502,22 @@ export const useAppLogic = () => {
     }, []);
     
     const updateJsonString = useCallback((newJsonString) => {
-        setJsonContent(newJsonString);
         try {
             const parsedData = JSON.parse(newJsonString);
             const mergedData = { ...initialJsonData, ...parsedData };
-            updateJsonData(mergedData);
+            const compactedData = compactJsonData(mergedData, initialJsonData);
+            setJsonData(mergedData);
+            setJsonContent(JSON.stringify(compactedData, null, 2));
+            setModelDirty(false);
+            buildModelOnServer(compactedData);
         } catch (e) { alert(`Failed to load model: ${e.message}`); }
-    }, [updateJsonData]);
+    }, [buildModelOnServer]);
 
     const handleClearModel = useCallback(() => {
         const compacted = compactJsonData(initialJsonData, initialJsonData);
         setJsonData(initialJsonData);
         setJsonContent(JSON.stringify(compacted, null, 2));
+        setModelDirty(false);
         buildModelOnServer(compacted);
     }, [buildModelOnServer]);
 
@@ -530,7 +552,8 @@ export const useAppLogic = () => {
         handleStartReplay, handlePauseReplay, handleRewindReplay, handleSeekReplay,
         simError, setSimError,
         elecPaths, spinePaths,
-        handleLoadTutorial
+        handleLoadTutorial,
+        modelDirty, handleRebuildModel
     };
 
     if (isStandalone) {

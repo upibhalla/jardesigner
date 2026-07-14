@@ -164,6 +164,16 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
     const isChemField = activeFileData && chemFields.includes(activeFileData.field);
     const showChemProtoWarning = isChemField && !availableChemProtos.length;
 
+    const fileError = activeFileData && !activeFileData.file ? 'Required' : null;
+    const pathError = activeFileData && !activeFileData.path ? 'Required' : null;
+    const dtNum = parseFloat(activeFileData?.dt);
+    const dtError = activeFileData && (isNaN(dtNum) || dtNum <= 0) ? 'Must be a positive number' : null;
+    const flushVal = String(activeFileData?.flushSteps ?? '').trim();
+    const flushInt = parseInt(flushVal, 10);
+    const flushError = activeFileData && flushVal !== '' && (isNaN(flushInt) || flushInt < 1)
+        ? 'Must be a whole number ≥ 1'
+        : null;
+
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -179,9 +189,9 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
              {activeFileData && (
                  <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={2}>
-                         <Grid item xs={12} sm={7}><HelpField id="file" label="Output Filename" required value={activeFileData.file} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.file} /></Grid>
+                         <Grid item xs={12} sm={7}><HelpField id="file" label="Output Filename" required value={activeFileData.file} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.file} error={!!fileError} helperText={fileError || undefined} /></Grid>
                          <Grid item xs={12} sm={5}><HelpField id="type" label="File Type" required select value={activeFileData.type} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.type}>{outputTypeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="path" label="Data Source Path" required value={activeFileData.path} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.path} /></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="path" label="Data Source Path" required value={activeFileData.path} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.path} error={!!pathError} helperText={pathError || undefined} /></Grid>
                          <Grid item xs={12} sm={6}>
                              <HelpField id="field" label="Data Source Field" required select value={activeFileData.field} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.field}>
                                  <MenuItem value=""><em>Select...</em></MenuItem>
@@ -205,8 +215,8 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
                                   <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeFileData.childPath} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.childPath}/></Grid>
                               </>
                           )}
-                         <Grid item xs={12} sm={6}><HelpField id="dt" label="Sampling Interval dt (s)" required type="number" value={activeFileData.dt} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.dt} InputProps={{ inputProps: { min: 1e-7, step: 0.01 } }}/></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="flushSteps" label="Flush Steps (Optional, >=1)" type="number" value={activeFileData.flushSteps} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.flushSteps} InputProps={{ inputProps: { min: 1, step: 1 } }}/></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="dt" label="Sampling Interval dt (s)" required type="number" value={activeFileData.dt} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.dt} InputProps={{ inputProps: { min: 1e-7, step: 0.01 } }} error={!!dtError} helperText={dtError || undefined} /></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="flushSteps" label="Flush Steps (Optional, >=1)" type="number" value={activeFileData.flushSteps} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.flushSteps} InputProps={{ inputProps: { min: 1, step: 1 } }} error={!!flushError} helperText={flushError || undefined} /></Grid>
                      </Grid>
                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeOutputFile(activeOutputFileIndex)} sx={{ mt: 2 }}>
                          Remove Output File

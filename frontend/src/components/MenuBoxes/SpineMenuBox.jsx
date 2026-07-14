@@ -310,6 +310,46 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
         };
     }, []);
 
+    const activeProto = prototypes[activePrototype];
+    const isExcOrExcCa = activeProto?.source === 'makeActiveSpine()' || activeProto?.source === 'makeExcSpine()';
+    const isExcCa = activeProto?.source === 'makeActiveSpine()';
+
+    const shaftDiaNum = Number(activeProto?.shaftDiameter);
+    const shaftDiaError = activeProto && (isNaN(shaftDiaNum) || shaftDiaNum <= 0) ? 'Must be > 0' : null;
+    const shaftDiaWarn = !shaftDiaError && activeProto && (shaftDiaNum < 0.05 || shaftDiaNum > 1.0) ? 'Typical range 0.05–1.0 µm' : null;
+
+    const shaftLenNum = Number(activeProto?.shaftLength);
+    const shaftLenError = activeProto && (isNaN(shaftLenNum) || shaftLenNum <= 0) ? 'Must be > 0' : null;
+    const shaftLenWarn = !shaftLenError && activeProto && (shaftLenNum < 0.1 || shaftLenNum > 5.0) ? 'Typical range 0.1–5.0 µm' : null;
+
+    const headDiaNum = Number(activeProto?.headDiameter);
+    const headDiaError = activeProto && (isNaN(headDiaNum) || headDiaNum <= 0) ? 'Must be > 0' : null;
+    const headDiaWarn = !headDiaError && activeProto && (headDiaNum < 0.1 || headDiaNum > 5.0) ? 'Typical range 0.1–5.0 µm' : null;
+
+    const headLenNum = Number(activeProto?.headLength);
+    const headLenError = activeProto && (isNaN(headLenNum) || headLenNum <= 0) ? 'Must be > 0' : null;
+    const headLenWarn = !headLenError && activeProto && (headLenNum < 0.1 || headLenNum > 5.0) ? 'Typical range 0.1–5.0 µm' : null;
+
+    const amparGbarNum = Number(activeProto?.amparGbar);
+    const amparGbarError = isExcOrExcCa && (isNaN(amparGbarNum) || amparGbarNum < 0) ? 'Must be ≥ 0' : null;
+    const amparGbarWarn = !amparGbarError && isExcOrExcCa
+        ? (amparGbarNum === 0 ? 'Gbar = 0 — AMPAR will not fire'
+            : amparGbarNum > 10000 ? 'AMPAR Gbar > 10000 S/m² is unusually high'
+            : null)
+        : null;
+
+    const nmdarGbarNum = Number(activeProto?.nmdarGbar);
+    const nmdarGbarError = isExcOrExcCa && (isNaN(nmdarGbarNum) || nmdarGbarNum < 0) ? 'Must be ≥ 0' : null;
+    const nmdarGbarWarn = !nmdarGbarError && isExcOrExcCa
+        ? (nmdarGbarNum === 0 ? 'Gbar = 0 — NMDAR will not fire'
+            : nmdarGbarNum > 10000 ? 'NMDAR Gbar > 10000 S/m² is unusually high'
+            : null)
+        : null;
+
+    const caTauNum = Number(activeProto?.CaTau);
+    const caTauError = isExcCa && (isNaN(caTauNum) || caTauNum <= 0) ? 'Must be > 0' : null;
+    const caTauWarn = !caTauError && isExcCa && (caTauNum < 0.001 || caTauNum > 1.0) ? 'Typical Ca decay time is 0.001–1.0 s' : null;
+
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom>Spine Definitions</Typography>
@@ -342,27 +382,27 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
                              <HelpField id="source" label="Source (auto)" value={prototypes[activePrototype].source} onChange={() => {}} helptext={helpText.prototypes.source} InputProps={{ readOnly: true }} variant="filled" />
                         </Grid>
                          <Grid item xs={6}>
-                            <HelpField id="shaftDiameter" label="Shaft Diameter (μm)" type="number" value={prototypes[activePrototype].shaftDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftDiameter} />
+                            <HelpField id="shaftDiameter" label="Shaft Diameter (μm)" type="number" value={prototypes[activePrototype].shaftDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftDiameter} error={!!shaftDiaError} helperText={shaftDiaError || shaftDiaWarn || undefined} FormHelperTextProps={!shaftDiaError && shaftDiaWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="shaftLength" label="Shaft Length (μm)" type="number" value={prototypes[activePrototype].shaftLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftLength} />
+                             <HelpField id="shaftLength" label="Shaft Length (μm)" type="number" value={prototypes[activePrototype].shaftLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftLength} error={!!shaftLenError} helperText={shaftLenError || shaftLenWarn || undefined} FormHelperTextProps={!shaftLenError && shaftLenWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="headDiameter" label="Head Diameter (μm)" type="number" value={prototypes[activePrototype].headDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headDiameter} />
+                             <HelpField id="headDiameter" label="Head Diameter (μm)" type="number" value={prototypes[activePrototype].headDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headDiameter} error={!!headDiaError} helperText={headDiaError || headDiaWarn || undefined} FormHelperTextProps={!headDiaError && headDiaWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="headLength" label="Head Length (μm)" type="number" value={prototypes[activePrototype].headLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headLength} />
+                             <HelpField id="headLength" label="Head Length (μm)" type="number" value={prototypes[activePrototype].headLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headLength} error={!!headLenError} helperText={headLenError || headLenWarn || undefined} FormHelperTextProps={!headLenError && headLenWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         
                         {(prototypes[activePrototype].source === 'makeActiveSpine()' || prototypes[activePrototype].source === 'makeExcSpine()') && (
                             <>
                                 <Grid item xs={12}><Typography variant="caption" display="block">Receptor Params</Typography></Grid>
-                                <Grid item xs={6}><HelpField id="amparGbar" label="AMPAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].amparGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.amparGbar} /></Grid>
-                                <Grid item xs={6}><HelpField id="nmdarGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdarGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdarGbar} /></Grid>
-                                
+                                <Grid item xs={6}><HelpField id="amparGbar" label="AMPAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].amparGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.amparGbar} error={!!amparGbarError} helperText={amparGbarError || amparGbarWarn || undefined} FormHelperTextProps={!amparGbarError && amparGbarWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                                <Grid item xs={6}><HelpField id="nmdarGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdarGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdarGbar} error={!!nmdarGbarError} helperText={nmdarGbarError || nmdarGbarWarn || undefined} FormHelperTextProps={!nmdarGbarError && nmdarGbarWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+
                                 {(prototypes[activePrototype].source === 'makeActiveSpine()') && (
                                     <Grid item xs={6}>
-                                        <HelpField id="CaTau" label="Ca decay time (s)" type="number" value={prototypes[activePrototype].CaTau} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.CaTau} />
+                                        <HelpField id="CaTau" label="Ca decay time (s)" type="number" value={prototypes[activePrototype].CaTau} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.CaTau} error={!!caTauError} helperText={caTauError || caTauWarn || undefined} FormHelperTextProps={!caTauError && caTauWarn ? { sx: { color: 'warning.main' } } : undefined} />
                                     </Grid>
                                 )}
                              </>
