@@ -531,13 +531,22 @@ export const useAppLogic = () => {
             if (!response.ok) throw new Error(await response.text());
             const data = await response.json();
             if (data.json) {
-                const parsed = JSON.parse(data.json);
-                updateJsonData(parsed);
+                updateJsonString(data.json);
             }
         } catch (err) {
             console.error('Error loading tutorial:', err);
         }
-    }, [clientId, updateJsonData]);
+    }, [clientId, updateJsonString]);
+
+    // Auto-load tutorial specified in URL query param (?tutorial=name).
+    // Fires once on mount; cleans the URL so the browser back button doesn't re-trigger it.
+    useEffect(() => {
+        const tutorialName = new URLSearchParams(window.location.search).get('tutorial');
+        if (tutorialName) {
+            window.history.replaceState({}, '', window.location.pathname);
+            handleLoadTutorial(tutorialName);
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const baseProps = {
         activeMenu, toggleMenu, jsonData, jsonContent,
