@@ -49,10 +49,11 @@ const DisplayWindow = (props) => {
   useEffect(() => {
     const hasNewSetupConfig = threeDConfigs?.setup && !prevThreeDConfigSetup.current;
     if (hasNewSetupConfig && tabIndex !== 2) {
-      setTabIndex(3);
+      const hasPlots = jsonData?.plots?.length > 0;
+      setTabIndex(hasPlots ? 0 : 3);
     }
     prevThreeDConfigSetup.current = threeDConfigs?.setup;
-  }, [threeDConfigs?.setup, tabIndex]);
+  }, [threeDConfigs?.setup, tabIndex, jsonData?.plots?.length]);
 
   // Switch to Documentation tab when a docFile first appears (tutorial loaded or doc uploaded).
   useEffect(() => {
@@ -62,14 +63,15 @@ const DisplayWindow = (props) => {
     prevDocFile.current = docFile;
   }, [docFile]);
 
-  // When a run starts, switch to Graph if plots are defined, else Run 3D.
+  // When a run starts: Graph → Run 3D → Setup 3D.
   useEffect(() => {
     if (!prevIsSimulating.current && isSimulating) {
       const hasPlots = jsonData?.plots?.length > 0;
-      setTabIndex(hasPlots ? 0 : 4);
+      const hasRunThreeD = jsonData?.moogli?.length > 0;
+      setTabIndex(hasPlots ? 0 : hasRunThreeD ? 4 : 3);
     }
     prevIsSimulating.current = isSimulating;
-  }, [isSimulating, jsonData?.plots?.length]);
+  }, [isSimulating, jsonData?.plots?.length, jsonData?.moogli?.length]);
 
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
