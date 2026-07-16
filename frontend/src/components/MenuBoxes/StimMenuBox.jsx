@@ -33,9 +33,54 @@ const chemFieldOptions = ['conc', 'concInit', 'n', 'nInit'];
 const RELPATH_REQUIRED_FIELDS = new Set(['activation', 'modulation']);
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
 
-const defaultStimExpressions = {
+// SI defaults (for recognising old-format expressions on load)
+const defaultStimExpressionsSI = {
     'inject': '1e-11*(t>0.1)*(t<0.2)',
     'vclamp': '-0.065+0.065*(t>0.1)*(t<0.2)',
+};
+// Display defaults for new stimuli (in friendly units)
+const defaultStimExpressionsDisplay = {
+    'inject': '10*(t>0.1)*(t<0.2)',      // pA
+    'vclamp': '-65+65*(t>0.1)*(t<0.2)', // mV
+};
+
+// Inverse scale factors written into JSON to mark friendly-unit expressions
+const FIELD_INV_SCALE = { 'inject': '1e-12', 'vclamp': '1e-3' };
+
+// Friendly unit labels (when scale is recognised) and SI fallbacks
+const FIELD_UNIT_FRIENDLY = { 'inject': 'pA', 'vclamp': 'mV' };
+const FIELD_UNIT_SI       = { 'inject': 'A (SI)', 'vclamp': 'V (SI)' };
+const FIELD_UNIT_FIXED    = { 'conc': 'mM', 'concInit': 'mM', 'n': 'number', 'nInit': 'number' };
+
+// Decode a stored expression into { displayExpr, exprInSI }
+const decodeExprForField = (field, schemaType, storedExpr) => {
+    const invScale = FIELD_INV_SCALE[field];
+    if (invScale && schemaType === 'field') {
+        const suffix = `*${invScale}`;
+        const trimmed = (storedExpr || '').trim();
+        if (trimmed.endsWith(suffix)) {
+            let inner = trimmed.slice(0, -suffix.length).trim();
+            if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1);
+            return { displayExpr: inner, exprInSI: false };
+        }
+        return { displayExpr: storedExpr || '', exprInSI: true };
+    }
+    return { displayExpr: storedExpr || '', exprInSI: false };
+};
+
+// Encode display expression back to SI for JSON storage
+const encodeExprForField = (field, displayExpr, exprInSI) => {
+    if (!displayExpr) return '';
+    const invScale = FIELD_INV_SCALE[field];
+    if (invScale && !exprInSI) return `(${displayExpr})*${invScale}`;
+    return displayExpr;
+};
+
+// Compute the unit label for the stimulus expression field
+const getStimExprUnit = (field, type, exprInSI) => {
+    if (type === 'Periodic Synapse' || type === 'Random Synapse') return 'Hz';
+    if (FIELD_UNIT_FRIENDLY[field]) return exprInSI ? FIELD_UNIT_SI[field] : FIELD_UNIT_FRIENDLY[field];
+    return FIELD_UNIT_FIXED[field] || null;
 };
 
 // --- Regex to parse chem paths like "DEND/Ca[0]" ---
@@ -56,7 +101,8 @@ const createDefaultStim = () => {
         childPath: '',
         molIndex: '',
         geometryExpression: '1',
-        stimulusExpression: defaultStimExpressions[field] || '',
+        stimulusExpression: defaultStimExpressionsDisplay[field] || '',
+        exprInSI: false,
         type: typeOptions[0],
         weight: '1.0',
     };
@@ -127,15 +173,18 @@ const StimMenuBox = ({
             } else {
                 initialChildPath = s.relpath || '';
             }
+            const componentType = mapSchemaTypeToComponent(s.type);
+            const { displayExpr, exprInSI } = decodeExprForField(field, s.type, s.expr || defaultStimExpressionsSI[field] || '');
             return {
-                path: s.path || 'soma', // Obtain ParentElecCompartment from 'path'
+                path: s.path || 'soma',
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
                 molIndex: initialMolIndex,
                 geometryExpression: s.geomExpr || '1',
-                stimulusExpression: s.expr || defaultStimExpressions[field] || '',
-                type: mapSchemaTypeToComponent(s.type),
+                stimulusExpression: displayExpr,
+                exprInSI,
+                type: componentType,
                 weight: safeToString(s.weight, '1.0'),
             };
         }) || [];
@@ -186,11 +235,17 @@ const StimMenuBox = ({
                     }
 
                     if (key === 'field') {
-                        const oldDefault = defaultStimExpressions[stim.field] || '';
-                        const newDefault = defaultStimExpressions[value] || '';
-                        if (stim.stimulusExpression === '' || stim.stimulusExpression === oldDefault) {
-                            updatedStim.stimulusExpression = newDefault;
-                        }
+                        const oldDisplayDefault = defaultStimExpressionsDisplay[stim.field] || '';
+                        const oldSIDefault = defaultStimExpressionsSI[stim.field] || '';
+                        const newDisplayDefault = defaultStimExpressionsDisplay[value] || '';
+                        const isDefault = stim.stimulusExpression === '' ||
+                                          stim.stimulusExpression === oldDisplayDefault ||
+                                          stim.stimulusExpression === oldSIDefault;
+                        if (isDefault) updatedStim.stimulusExpression = newDisplayDefault;
+                        updatedStim.exprInSI = false;
+                    }
+                    if (key === 'type') {
+                        updatedStim.exprInSI = false;
                     }
 
                     // Handle changing compartment
@@ -296,12 +351,13 @@ const StimMenuBox = ({
                 }
             }
             
+            const storedExpr = encodeExprForField(stimState.field, stimState.stimulusExpression || '', stimState.exprInSI);
             const stimSchemaItemBase = {
                 type: schemaType,
                 path: stimState.path || "soma",
                 ...(relpathValue !== undefined && relpathValue !== '' && { relpath: relpathValue }),
                 ...(stimState.geometryExpression && stimState.geometryExpression !== '1' && { geomExpr: stimState.geometryExpression }),
-                expr: stimState.stimulusExpression || "",
+                expr: storedExpr,
             };
             
             if (schemaType === 'field') {
@@ -530,14 +586,19 @@ const StimMenuBox = ({
 
                           {/* Stimulus Expression - Full Width, Last Row */}
                           <Grid item xs={12}>
-                              <StimExprHelpField
-                                id="stimulusExpression"
-                                label="Stimulus Expression"
-                                required
-                                value={activeStimData.stimulusExpression}
-                                onChange={(id, v) => updateStim(activeStim, id, v)}
-                                helptext={helpText.fields.stimulusExpression}
-                              />
+                              {(() => {
+                                  const unit = getStimExprUnit(activeStimData.field, activeStimData.type, activeStimData.exprInSI);
+                                  return (
+                                      <StimExprHelpField
+                                        id="stimulusExpression"
+                                        label={unit ? `Stimulus Expression (${unit})` : 'Stimulus Expression'}
+                                        required
+                                        value={activeStimData.stimulusExpression}
+                                        onChange={(id, v) => updateStim(activeStim, id, v)}
+                                        helptext={helpText.fields.stimulusExpression}
+                                      />
+                                  );
+                              })()}
                           </Grid>
                       </Grid>
 
