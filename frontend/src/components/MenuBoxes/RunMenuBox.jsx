@@ -61,6 +61,7 @@ const RunMenuBox = ({
     liveFrameData,
     isReplaying,
     modelDirty,
+    flushRef,
 }) => {
 
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
@@ -220,6 +221,12 @@ const RunMenuBox = ({
             }
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => buildConfigPayloadRef.current();
+        return () => { flushRef.current = null; };
+    }, [flushRef]);
 
     const handleStart = () => {
         const latestConfig = buildConfigPayload();

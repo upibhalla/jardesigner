@@ -103,6 +103,7 @@ export const useAppLogic = () => {
 
     const [activeSim, setActiveSim] = useState({ pid: null, data_channel_id: null, plot_filename: null });
     const [modelDirty, setModelDirty] = useState(false);
+    const activeMenuFlushRef = useRef(null);
     const socketRef = useRef(null);
     const frameQueueRef = useRef([]);
     const animationFrameId = useRef();
@@ -421,7 +422,12 @@ export const useAppLogic = () => {
     }, [jsonData, buildModelOnServer]);
 
     const handleRebuildModel = useCallback(() => {
-        const compactedData = compactJsonData(jsonData, initialJsonData);
+        let flushedPart = null;
+        if (activeMenuFlushRef.current) {
+            flushedPart = activeMenuFlushRef.current();
+        }
+        const sourceData = flushedPart ? { ...initialJsonData, ...jsonData, ...flushedPart } : jsonData;
+        const compactedData = compactJsonData(sourceData, initialJsonData);
         setModelDirty(false);
         buildModelOnServer(compactedData);
     }, [jsonData, buildModelOnServer]);
@@ -562,7 +568,7 @@ export const useAppLogic = () => {
         simError, setSimError,
         elecPaths, spinePaths,
         handleLoadTutorial,
-        modelDirty, handleRebuildModel
+        modelDirty, handleRebuildModel, activeMenuFlushRef
     };
 
     if (isStandalone) {

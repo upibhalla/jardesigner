@@ -132,6 +132,7 @@ export const AppLayout = (props) => {
     handleLoadTutorial,
     modelDirty,
     handleRebuildModel,
+    activeMenuFlushRef,
   } = props;
 
   // Extract channel names for use in Plots, Stimuli, and Adaptors.
@@ -152,12 +153,13 @@ export const AppLayout = (props) => {
 
   const menuComponents = useMemo(() => ({
     File: <FileMenuBox setJsonContent={updateJsonString} onClearModel={handleClearModel} getCurrentJsonData={getCurrentJsonData} currentConfig={jsonData.fileinfo} clientId={clientId} onMissingFilesWarned={setWarnedAboutMissing} updateJsonData={updateJsonData} />,
-    SimOutput: <SimOutputMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={jsonData.files} 
-        getChemProtos={getChemProtos} 
-        elecPaths={elecPaths} 
-        spinePaths={spinePaths} 
+    SimOutput: <SimOutputMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={jsonData.files}
+        getChemProtos={getChemProtos}
+        elecPaths={elecPaths}
+        spinePaths={spinePaths}
+        flushRef={activeMenuFlushRef}
     />,
     Run: <RunMenuBox
       onConfigurationChange={updateJsonData}
@@ -172,6 +174,7 @@ export const AppLayout = (props) => {
       liveFrameData={liveFrameData}
       isReplaying={isReplaying}
       modelDirty={modelDirty}
+      flushRef={activeMenuFlushRef}
     />,
     Morphology: <MorphoMenuBox
         onConfigurationChange={updateJsonData}
@@ -179,6 +182,7 @@ export const AppLayout = (props) => {
         onFileChange={handleMorphologyFileChange}
         clientId={clientId}
         setupThreeDConfig={threeDConfigs?.setup}
+        flushRef={activeMenuFlushRef}
     />,
     Spines: <SpineMenuBox
         onConfigurationChange={updateJsonData}
@@ -186,6 +190,7 @@ export const AppLayout = (props) => {
         elecPaths={elecPaths}
         spinePaths={spinePaths}
         cellProto={jsonData.cellProto}
+        flushRef={activeMenuFlushRef}
     />,
     Channels: <ChanMenuBox
         onConfigurationChange={updateJsonData}
@@ -194,6 +199,7 @@ export const AppLayout = (props) => {
         elecPaths={elecPaths}
         spinePaths={spinePaths}
         cellProto={jsonData.cellProto}
+        flushRef={activeMenuFlushRef}
     />,
     Passive: <PassiveMenuBox
         onConfigurationChange={updateJsonData}
@@ -201,22 +207,24 @@ export const AppLayout = (props) => {
         elecPaths={elecPaths}
         spinePaths={spinePaths}
         cellProto={jsonData.cellProto}
+        flushRef={activeMenuFlushRef}
     />,
-    Signaling: <ChemMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }} 
-        getChemProtos={getChemProtos} 
+    Signaling: <ChemMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={{ chemProto: jsonData.chemProto, chemDistrib: jsonData.chemDistrib }}
+        getChemProtos={getChemProtos}
         clientId={clientId}
-        meshMols={meshMolsData?.setup} 
-        elecPaths={elecPaths} 
-        spinePaths={spinePaths} 
+        meshMols={meshMolsData?.setup}
+        elecPaths={elecPaths}
+        spinePaths={spinePaths}
+        flushRef={activeMenuFlushRef}
     />,
-    Adaptors: <AdaptorsMenuBox 
-        onConfigurationChange={updateJsonData} 
+    Adaptors: <AdaptorsMenuBox
+        onConfigurationChange={updateJsonData}
         currentConfig={jsonData.adaptors}
-        meshMols={meshMolsData?.setup} 
-        // --- Added channelPrototypes ---
+        meshMols={meshMolsData?.setup}
         channelPrototypes={channelPrototypes}
+        flushRef={activeMenuFlushRef}
     />,
     Stimuli: <StimMenuBox
         onConfigurationChange={updateJsonData}
@@ -226,6 +234,7 @@ export const AppLayout = (props) => {
         spinePaths={spinePaths}
         channelPrototypes={channelPrototypes}
         cellProto={jsonData.cellProto}
+        flushRef={activeMenuFlushRef}
     />,
     Plots: <PlotMenuBox
         onConfigurationChange={updateJsonData}
@@ -235,14 +244,16 @@ export const AppLayout = (props) => {
         spinePaths={spinePaths}
         channelPrototypes={channelPrototypes}
         stims={jsonData.stims}
+        flushRef={activeMenuFlushRef}
     />,
-    '3D': <ThreeDMenuBox 
-        onConfigurationChange={updateJsonData} 
-        currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }} 
-        meshMols={meshMolsData?.setup} 
-        elecPaths={elecPaths} 
+    '3D': <ThreeDMenuBox
+        onConfigurationChange={updateJsonData}
+        currentConfig={{ moogli: jsonData.moogli, displayMoogli: jsonData.displayMoogli }}
+        meshMols={meshMolsData?.setup}
+        elecPaths={elecPaths}
         spinePaths={spinePaths}
         channelPrototypes={channelPrototypes}
+        flushRef={activeMenuFlushRef}
     />,
   }), [
     jsonData, updateJsonData, updateJsonString, handleClearModel, getCurrentJsonData, getChemProtos,

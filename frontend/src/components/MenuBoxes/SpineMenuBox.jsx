@@ -103,7 +103,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], cellProto }) => {
+const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], cellProto, flushRef }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.spineProto?.map(p => {
             const componentType = getComponentTypeFromSchema(p.type, p.source);
@@ -247,68 +247,73 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
         setPendingDistIndex(null);
     };
 
+    const getSpineData = useCallback(() => {
+        const currentPrototypes = prototypesRef.current;
+        const currentDistributions = distributionsRef.current;
+
+        const spineProtoData = currentPrototypes.map(protoState => {
+             let schemaType = "builtin";
+             let schemaSource = protoState.source || "";
+             if (protoState.type === 'User Function') {
+                  schemaType = "func";
+                  schemaSource = protoState.source || protoState.name;
+             }
+
+             const protoSchemaItem = {
+                 type: schemaType,
+                 source: schemaSource,
+                 name: protoState.name || getNameFromType(protoState.type),
+                 shaftDia: (toMeters(protoState.shaftDiameter) || 0),
+                 shaftLen: (toMeters(protoState.shaftLength) || 0),
+                 headDia: (toMeters(protoState.headDiameter) || 0),
+                 headLen: (toMeters(protoState.headLength) || 0),
+             };
+
+             if (schemaSource === 'makeActiveSpine()' || schemaSource === 'makeExcSpine()') {
+                 protoSchemaItem.amparGbar = parseFloat(protoState.amparGbar) || 0;
+                 protoSchemaItem.nmdarGbar = parseFloat(protoState.nmdarGbar) || 0;
+             }
+             if (schemaSource === 'makeActiveSpine()') {
+                protoSchemaItem.CaTau = parseFloat(protoState.CaTau) || 13.0;
+             }
+
+             if (!protoSchemaItem.name || !protoSchemaItem.source) return null;
+             return protoSchemaItem;
+         }).filter(p => p !== null);
+
+        const spineDistribData = currentDistributions.map(distState => {
+            const selectedProtoExists = spineProtoData.some(p => p.name === distState.prototype);
+             if (!selectedProtoExists || !distState.prototype || !distState.path) return null;
+
+             return {
+                 proto: distState.prototype,
+                 path: distState.path,
+                 spacing: numOrExpr(distState.spacing, 0, x => x * 1e-6),
+                 minSpacing: numOrExpr(distState.minSpacing, 0, x => x * 1e-6),
+                 sizeScale: numOrExpr(distState.sizeScale, 1),
+                 sizeSdev: numOrExpr(distState.sizeStdDev, 0.5),
+                 angle: numOrExpr(distState.angle, 0),
+                 angleSdev: numOrExpr(distState.angleStdDev, 6.2831853),
+                 randSeed: parseInt(distState.randSeed, 10) || 1234,
+             };
+         }).filter(d => d !== null);
+
+        return { spineProto: spineProtoData, spineDistrib: spineDistribData };
+    }, []);
+
     useEffect(() => {
-        const getSpineDataForUnmount = () => {
-            const currentPrototypes = prototypesRef.current;
-            const currentDistributions = distributionsRef.current;
-
-            const spineProtoData = currentPrototypes.map(protoState => {
-                 let schemaType = "builtin";
-                 let schemaSource = protoState.source || "";
-                 if (protoState.type === 'User Function') {
-                      schemaType = "func";
-                      schemaSource = protoState.source || protoState.name;
-                 }
-
-                 const protoSchemaItem = {
-                     type: schemaType,
-                     source: schemaSource,
-                     name: protoState.name || getNameFromType(protoState.type),
-                     shaftDia: (toMeters(protoState.shaftDiameter) || 0),
-                     shaftLen: (toMeters(protoState.shaftLength) || 0),
-                     headDia: (toMeters(protoState.headDiameter) || 0),
-                     headLen: (toMeters(protoState.headLength) || 0),
-                 };
-                
-                 if (schemaSource === 'makeActiveSpine()' || schemaSource === 'makeExcSpine()') {
-                     protoSchemaItem.amparGbar = parseFloat(protoState.amparGbar) || 0;
-                     protoSchemaItem.nmdarGbar = parseFloat(protoState.nmdarGbar) || 0;
-                 }
-                 if (schemaSource === 'makeActiveSpine()') {
-                    protoSchemaItem.CaTau = parseFloat(protoState.CaTau) || 13.0;
-                 }
-
-                 if (!protoSchemaItem.name || !protoSchemaItem.source) return null;
-                 return protoSchemaItem;
-             }).filter(p => p !== null);
-
-            const spineDistribData = currentDistributions.map(distState => {
-                const selectedProtoExists = spineProtoData.some(p => p.name === distState.prototype);
-                 if (!selectedProtoExists || !distState.prototype || !distState.path) return null;
-
-                 return {
-                     proto: distState.prototype,
-                     path: distState.path,
-                     spacing: numOrExpr(distState.spacing, 0, x => x * 1e-6),
-                     minSpacing: numOrExpr(distState.minSpacing, 0, x => x * 1e-6),
-                     sizeScale: numOrExpr(distState.sizeScale, 1),
-                     sizeSdev: numOrExpr(distState.sizeStdDev, 0.5),
-                     angle: numOrExpr(distState.angle, 0),
-                     angleSdev: numOrExpr(distState.angleStdDev, 6.2831853),
-                     randSeed: parseInt(distState.randSeed, 10) || 1234,
-                 };
-             }).filter(d => d !== null);
-
-            return { spineProto: spineProtoData, spineDistrib: spineDistribData };
-        };
-
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getSpineDataForUnmount();
-                onConfigurationChangeRef.current(configData);
+                onConfigurationChangeRef.current(getSpineData());
             }
         };
-    }, []);
+    }, [getSpineData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getSpineData;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getSpineData]);
 
     const activeProto = prototypes[activePrototype];
     const isExcOrExcCa = activeProto?.source === 'makeActiveSpine()' || activeProto?.source === 'makeExcSpine()';

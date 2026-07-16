@@ -44,7 +44,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemProtos }) => {
+const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemProtos, elecPaths, spinePaths, flushRef }) => {
     const [outputFiles, setOutputFiles] = useState(() => {
         const defaults = createNewOutputFile();
         if (Array.isArray(currentConfig) && currentConfig.length > 0) {
@@ -122,42 +122,49 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
         );
     }, []);
 
+    const getFileData = useCallback(() => {
+        return outputFilesRef.current.map(fileState => {
+             if (!fileState.file || !fileState.type || !fileState.path || !fileState.field || !fileState.dt) return null;
+             const dtNum = parseFloat(fileState.dt);
+             const flushStepsInt = parseInt(fileState.flushSteps, 10);
+             if (isNaN(dtNum) || dtNum <= 0) return null;
+             if (fileState.flushSteps && (isNaN(flushStepsInt) || flushStepsInt < 1)) return null;
+
+             const isChemField = chemFields.includes(fileState.field);
+             let relpathValue = undefined;
+
+             if (isChemField) {
+                 if (fileState.chemProto && fileState.childPath) {
+                     relpathValue = `${fileState.chemProto}/${fileState.childPath}`;
+                 } else { return null; }
+             } else {
+                 if (fileState.childPath && fileState.childPath !== '') relpathValue = fileState.childPath;
+             }
+            const fileSchemaItem = { file: fileState.file, type: fileState.type, path: fileState.path, field: fileState.field, dt: dtNum };
+            if (relpathValue !== undefined) fileSchemaItem.relpath = relpathValue;
+            if (!isNaN(flushStepsInt) && flushStepsInt >= 1 && String(fileState.flushSteps).trim() !== '') fileSchemaItem.flushSteps = flushStepsInt;
+             return fileSchemaItem;
+        }).filter(item => item !== null);
+    }, []);
+
     useEffect(() => {
-        const getFileData = () => {
-            return outputFilesRef.current.map(fileState => {
-                 if (!fileState.file || !fileState.type || !fileState.path || !fileState.field || !fileState.dt) return null;
-                 const dtNum = parseFloat(fileState.dt);
-                 const flushStepsInt = parseInt(fileState.flushSteps, 10);
-                 if (isNaN(dtNum) || dtNum <= 0) return null;
-                 if (fileState.flushSteps && (isNaN(flushStepsInt) || flushStepsInt < 1)) return null;
-
-                 const isChemField = chemFields.includes(fileState.field);
-                 let relpathValue = undefined;
-
-                 if (isChemField) {
-                     if (fileState.chemProto && fileState.childPath) {
-                         relpathValue = `${fileState.chemProto}/${fileState.childPath}`;
-                     } else { return null; }
-                 } else {
-                     if (fileState.childPath && fileState.childPath !== '') relpathValue = fileState.childPath;
-                 }
-                const fileSchemaItem = { file: fileState.file, type: fileState.type, path: fileState.path, field: fileState.field, dt: dtNum };
-                if (relpathValue !== undefined) fileSchemaItem.relpath = relpathValue;
-                if (!isNaN(flushStepsInt) && flushStepsInt >= 1 && String(fileState.flushSteps).trim() !== '') fileSchemaItem.flushSteps = flushStepsInt;
-                 return fileSchemaItem;
-            }).filter(item => item !== null);
-        };
         const initialConfigString = JSON.stringify(currentConfig || []);
         return () => {
             if (onConfigurationChangeRef.current) {
                 const finalConfigData = getFileData();
                 const finalConfigString = JSON.stringify(finalConfigData);
-                 if (finalConfigString !== initialConfigString) {
+                if (finalConfigString !== initialConfigString) {
                     onConfigurationChangeRef.current({ files: finalConfigData });
-                 }
+                }
             }
         };
-    }, [currentConfig]);
+    }, [currentConfig, getFileData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ files: getFileData() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getFileData]);
 
     const availableChemProtos = getChemProtosRef.current ? getChemProtosRef.current() : [];
     const activeFileData = outputFiles[activeOutputFileIndex];

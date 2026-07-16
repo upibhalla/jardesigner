@@ -77,6 +77,7 @@ const PassiveMenuBox = ({
     elecPaths = [],
     spinePaths = [],
     cellProto,
+    flushRef,
 }) => {
     const [tabs, setTabs] = useState(() => {
         const initialTabs = currentConfig?.map(p => ({
@@ -150,30 +151,34 @@ const PassiveMenuBox = ({
         return getCompartmentOptions(allPaths);
     }, [elecPaths, spinePaths]);
 
-    useEffect(() => {
-        const getPassiveDataForUnmount = () => {
-            return tabsRef.current.map(tabState => {
-                if (!tabState.path) return null;
-                const defs = { Em: -0.065, initVm: -0.065, CM: 0.01, RM: 1.0, RA: 1.0 };
-                // Numeric mV→V; expression strings pass through unchanged (must be in V).
-                return {
-                    path: tabState.path,
-                    Em: numOrExpr(tabState.leakReversalPotential, defs.Em, x => x / 1000),
-                    initVm: numOrExpr(tabState.initialPotential, defs.initVm, x => x / 1000),
-                    CM: numOrExpr(tabState.membraneCapacitance, defs.CM),
-                    RM: numOrExpr(tabState.membraneResistivity, defs.RM),
-                    RA: numOrExpr(tabState.axialResistivity, defs.RA),
-                };
-            }).filter(item => item !== null);
-        };
+    const getPassiveData = useCallback(() => {
+        return tabsRef.current.map(tabState => {
+            if (!tabState.path) return null;
+            const defs = { Em: -0.065, initVm: -0.065, CM: 0.01, RM: 1.0, RA: 1.0 };
+            return {
+                path: tabState.path,
+                Em: numOrExpr(tabState.leakReversalPotential, defs.Em, x => x / 1000),
+                initVm: numOrExpr(tabState.initialPotential, defs.initVm, x => x / 1000),
+                CM: numOrExpr(tabState.membraneCapacitance, defs.CM),
+                RM: numOrExpr(tabState.membraneResistivity, defs.RM),
+                RA: numOrExpr(tabState.axialResistivity, defs.RA),
+            };
+        }).filter(item => item !== null);
+    }, []);
 
+    useEffect(() => {
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getPassiveDataForUnmount();
-                onConfigurationChangeRef.current({ passiveDistrib: configData });
+                onConfigurationChangeRef.current({ passiveDistrib: getPassiveData() });
             }
         };
-    }, []);
+    }, [getPassiveData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ passiveDistrib: getPassiveData() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getPassiveData]);
 
     const activeTabData = tabs[activeTab];
 

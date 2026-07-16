@@ -93,7 +93,7 @@ function countSwcCompartments(setupConfig) {
 }
 
 // --- The Main Component ---
-const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, clientId, setupThreeDConfig }) => {
+const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, clientId, setupThreeDConfig, flushRef }) => {
     const [tabIndex, setTabIndex] = useState(() => typeToIndexMap[currentConfig?.type] ?? 0);
 
     const [somaValues, setSomaValues] = useState(() =>
@@ -155,57 +155,63 @@ const MorphoMenuBox = ({ onConfigurationChange, currentConfig, onFileChange, cli
     const handleYBranchChange = useCallback((field, value) => setYBranchValues(prev => ({ ...prev, [field]: value })), []);
     const handleTabChange = (event, newIndex) => setTabIndex(newIndex);
 
-    useEffect(() => {
-        const getMorphologyDataForUnmount = () => {
-            const { tabIndex, somaValues, ballAndStickValues, yBranchValues } = stateRefs.current;
-            // Uploaded tab: file-based morphology is handled by onFileChange, not here
-            if (tabIndex === 3) return null;
+    const getMorphologyData = useCallback(() => {
+        const { tabIndex, somaValues, ballAndStickValues, yBranchValues } = stateRefs.current;
+        // Uploaded tab: file-based morphology is handled by onFileChange, not here
+        if (tabIndex === 3) return null;
 
-            const type = indexToTypeMap[tabIndex];
-            if (!type) return null;
+        const type = indexToTypeMap[tabIndex];
+        if (!type) return null;
 
-            let cellProtoData = { type };
-            try {
-                switch (tabIndex) {
-                    case 0:
-                        cellProtoData.somaDia = toMeters(somaValues.somaDia);
-                        cellProtoData.somaLen = toMeters(somaValues.somaLen);
-                        break;
-                    case 1:
-                        cellProtoData.somaDia = toMeters(ballAndStickValues.somaDia);
-                        cellProtoData.somaLen = toMeters(ballAndStickValues.somaLen);
-                        cellProtoData.dendDia = toMeters(ballAndStickValues.dendDia);
-                        cellProtoData.dendLen = toMeters(ballAndStickValues.dendLen);
-                        cellProtoData.dendNumSeg = parseInt(ballAndStickValues.dendNumSeg, 10) || 1;
-                        break;
-                    case 2:
-                        cellProtoData.somaDia = toMeters(yBranchValues.somaDia);
-                        cellProtoData.somaLen = toMeters(yBranchValues.somaLen);
-                        cellProtoData.dendDia = toMeters(yBranchValues.dendDia);
-                        cellProtoData.dendLen = toMeters(yBranchValues.dendLen);
-                        cellProtoData.dendNumSeg = parseInt(yBranchValues.dendNumSeg, 10) || 1;
-                        cellProtoData.branchDia = toMeters(yBranchValues.branchDia);
-                        cellProtoData.branchLen = toMeters(yBranchValues.branchLen);
-                        cellProtoData.branchNumSeg = parseInt(yBranchValues.branchNumSeg, 10) || 1;
-                        break;
-                    default: break;
-                }
-            } catch (error) {
-                console.error("Error formatting morphology data on unmount:", error);
-                return { cellProto: { type: "error" } };
+        let cellProtoData = { type };
+        try {
+            switch (tabIndex) {
+                case 0:
+                    cellProtoData.somaDia = toMeters(somaValues.somaDia);
+                    cellProtoData.somaLen = toMeters(somaValues.somaLen);
+                    break;
+                case 1:
+                    cellProtoData.somaDia = toMeters(ballAndStickValues.somaDia);
+                    cellProtoData.somaLen = toMeters(ballAndStickValues.somaLen);
+                    cellProtoData.dendDia = toMeters(ballAndStickValues.dendDia);
+                    cellProtoData.dendLen = toMeters(ballAndStickValues.dendLen);
+                    cellProtoData.dendNumSeg = parseInt(ballAndStickValues.dendNumSeg, 10) || 1;
+                    break;
+                case 2:
+                    cellProtoData.somaDia = toMeters(yBranchValues.somaDia);
+                    cellProtoData.somaLen = toMeters(yBranchValues.somaLen);
+                    cellProtoData.dendDia = toMeters(yBranchValues.dendDia);
+                    cellProtoData.dendLen = toMeters(yBranchValues.dendLen);
+                    cellProtoData.dendNumSeg = parseInt(yBranchValues.dendNumSeg, 10) || 1;
+                    cellProtoData.branchDia = toMeters(yBranchValues.branchDia);
+                    cellProtoData.branchLen = toMeters(yBranchValues.branchLen);
+                    cellProtoData.branchNumSeg = parseInt(yBranchValues.branchNumSeg, 10) || 1;
+                    break;
+                default: break;
             }
-            return { cellProto: cellProtoData };
-        };
+        } catch (error) {
+            console.error("Error formatting morphology data:", error);
+            return null;
+        }
+        return { cellProto: cellProtoData };
+    }, []);
 
+    useEffect(() => {
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getMorphologyDataForUnmount();
-                if (configData && configData.cellProto?.type !== "error") {
+                const configData = getMorphologyData();
+                if (configData) {
                     onConfigurationChangeRef.current(configData);
                 }
             }
         };
-    }, []);
+    }, [getMorphologyData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getMorphologyData;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getMorphologyData]);
     const [open, setOpen] = React.useState(false);
     const handleOpen = () => setOpen(true);
     const handleClose = () => setOpen(false);

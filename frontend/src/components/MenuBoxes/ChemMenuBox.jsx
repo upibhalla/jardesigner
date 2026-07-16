@@ -114,13 +114,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ChemMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    clientId, 
+const ChemMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    clientId,
     meshMols,
     elecPaths = [],
-    spinePaths = []
+    spinePaths = [],
+    flushRef
 }) => {
 	console.log("ChemMenuBox rendered. meshMols prop:", meshMols);
     const [prototypes, setPrototypes] = useState(() => {
@@ -473,7 +474,13 @@ const ChemMenuBox = ({
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
-    
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getChemDataForSave;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getChemDataForSave]);
+
     const activeProtoData = prototypes[activePrototype];
     const activeDistribData = distributions[activeDistribution];
 

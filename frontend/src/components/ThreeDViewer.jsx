@@ -368,18 +368,10 @@ Aa: Auto-position`;
                 </>
             )}
             {showSetupControls && (
-                <>
-                    <TextField
-                        label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
-                        InputProps={{ readOnly: true }} sx={{ minWidth: '30ch' }}
-                    />
-                    {handleRebuildModel && (
-                        <Button size="small" variant="contained" disabled={!modelDirty} onClick={handleRebuildModel}
-                            sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
-                            Rebuild
-                        </Button>
-                    )}
-                </>
+                <TextField
+                    label="Selected Path" size="small" variant="outlined" value={displayedSimPath}
+                    InputProps={{ readOnly: true }} sx={{ minWidth: '30ch' }}
+                />
             )}
 
             {/* Spacer and Settings Icon */}

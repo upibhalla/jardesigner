@@ -118,6 +118,7 @@ const ChanMenuBox = ({
     elecPaths = [],
     spinePaths = [],
     cellProto,
+    flushRef,
 }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chanProto?.map(p => {
@@ -296,49 +297,54 @@ const ChanMenuBox = ({
         setPendingDistIndex(null);
     };
 
+    const getElecData = useCallback(() => {
+        const currentPrototypes = prototypesRef.current;
+        const currentDistributions = distributionsRef.current;
+
+        const chanProtoData = currentPrototypes.map(protoState => {
+            let schemaType = "builtin";
+            let schemaSource = "";
+            if (protoState.type === 'File') {
+                schemaType = "neuroml";
+                schemaSource = protoState.file || "";
+            } else {
+                schemaSource = getChannelSourceString(protoState.type);
+            }
+            if (!protoState.name || !schemaSource) { return null; }
+            return { type: schemaType, source: schemaSource, name: protoState.name };
+        }).filter(p => p !== null);
+
+        const chanDistribData = currentDistributions.map(distState => {
+            const distribSchemaItem = { proto: distState.prototype || "", path: distState.path || "soma" };
+            const selectedPrototype = currentPrototypes.find(p => p.name === distState.prototype);
+
+            if (selectedPrototype && selectedPrototype.type === 'Ca_conc') {
+                 distribSchemaItem.tau = numOrExpr(distState.caTau, 0.013);
+            } else {
+                 distribSchemaItem.Gbar = numOrExpr(distState.maxConductance, 0);
+            }
+            if (!distribSchemaItem.proto || !distribSchemaItem.path || (distribSchemaItem.Gbar === undefined && distribSchemaItem.tau === undefined)) {
+                 return null;
+             }
+            return distribSchemaItem;
+        }).filter(item => item !== null);
+
+        return { chanProto: chanProtoData, chanDistrib: chanDistribData };
+    }, []);
+
     useEffect(() => {
-        const getElecDataForUnmount = () => {
-            const currentPrototypes = prototypesRef.current;
-            const currentDistributions = distributionsRef.current;
-
-            const chanProtoData = currentPrototypes.map(protoState => {
-                let schemaType = "builtin";
-                let schemaSource = "";
-                if (protoState.type === 'File') {
-                    schemaType = "neuroml";
-                    schemaSource = protoState.file || "";
-                } else {
-                    schemaSource = getChannelSourceString(protoState.type);
-                }
-                if (!protoState.name || !schemaSource) { return null; }
-                return { type: schemaType, source: schemaSource, name: protoState.name };
-            }).filter(p => p !== null);
-
-            const chanDistribData = currentDistributions.map(distState => {
-                const distribSchemaItem = { proto: distState.prototype || "", path: distState.path || "soma" };
-                const selectedPrototype = currentPrototypes.find(p => p.name === distState.prototype);
-
-                if (selectedPrototype && selectedPrototype.type === 'Ca_conc') {
-                     distribSchemaItem.tau = numOrExpr(distState.caTau, 0.013);
-                } else {
-                     distribSchemaItem.Gbar = numOrExpr(distState.maxConductance, 0);
-                }
-                if (!distribSchemaItem.proto || !distribSchemaItem.path || (distribSchemaItem.Gbar === undefined && distribSchemaItem.tau === undefined)) {
-                     return null;
-                 }
-                return distribSchemaItem;
-            }).filter(item => item !== null);
-
-            return { chanProto: chanProtoData, chanDistrib: chanDistribData };
-        };
-
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getElecDataForUnmount();
-                onConfigurationChangeRef.current(configData);
+                onConfigurationChangeRef.current(getElecData());
             }
         };
-    }, []);
+    }, [getElecData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getElecData;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getElecData]);
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>

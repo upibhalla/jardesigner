@@ -123,26 +123,34 @@ const DisplayWindow = (props) => {
       </Box>
       
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
-         {threeDConfigs?.setup && (
-            <ThreeDViewer
-              {...props}
-              defaultDiaScale={2.5}
-              threeDConfig={threeDConfigs.setup}
-              simulationFrames={simulationFrames.setup}
-              drawableVisibility={drawableVisibility.setup}
-              setDrawableVisibility={setSetupDrawableVisibility}
-              clickSelected={clickSelected.setup}
-              explodeAxis={explodeAxis.setup}
-              onManagerReady={onManagerReadySetup}
-              onSelectionChange={onSelectionChangeSetup}
-              onExplodeAxisToggle={onExplodeAxisToggleSetup}
-              onSceneBuilt={onSceneBuiltSetup}
-              isReplaying={false}
-              onStartReplay={() => {}}
-              onPauseReplay={() => {}}
-              onSeekReplay={() => {}}
-            />
-        )}
+         <Box sx={{ px: 1, py: 0.5, flexShrink: 0, display: 'flex', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
+           <Button size="small" variant="contained" onClick={handleRebuildModel}
+             sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
+             Rebuild
+           </Button>
+         </Box>
+         <Box sx={{ flexGrow: 1, overflow: 'hidden', position: 'relative' }}>
+           {threeDConfigs?.setup && (
+              <ThreeDViewer
+                {...props}
+                defaultDiaScale={2.5}
+                threeDConfig={threeDConfigs.setup}
+                simulationFrames={simulationFrames.setup}
+                drawableVisibility={drawableVisibility.setup}
+                setDrawableVisibility={setSetupDrawableVisibility}
+                clickSelected={clickSelected.setup}
+                explodeAxis={explodeAxis.setup}
+                onManagerReady={onManagerReadySetup}
+                onSelectionChange={onSelectionChangeSetup}
+                onExplodeAxisToggle={onExplodeAxisToggleSetup}
+                onSceneBuilt={onSceneBuiltSetup}
+                isReplaying={false}
+                onStartReplay={() => {}}
+                onPauseReplay={() => {}}
+                onSeekReplay={() => {}}
+              />
+          )}
+         </Box>
       </Box>
 
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 4 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>

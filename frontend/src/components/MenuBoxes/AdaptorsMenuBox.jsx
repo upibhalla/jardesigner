@@ -72,11 +72,12 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const AdaptorsMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    meshMols, 
-    channelPrototypes = [] 
+const AdaptorsMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    meshMols,
+    channelPrototypes = [],
+    flushRef,
 }) => {
     // --- Initialize State ---
     const [adaptors, setAdaptors] = useState(() => {
@@ -227,45 +228,50 @@ const AdaptorsMenuBox = ({
     };
 
     // --- Save/Refresh Logic ---
+    const getAdaptorData = useCallback(() => {
+        return adaptorsRef.current.map(a => {
+            const chemPath = (a.chemMesh && a.chemMol) ? `${a.chemMesh}/${a.chemMol}` : '';
+            const elecPath = a.elecEntity;
+
+            if (!chemPath || !elecPath) return null;
+
+            const baselineNum = parseFloat(a.baseline);
+            const slopeNum = parseFloat(a.slope);
+            if (isNaN(baselineNum) || isNaN(slopeNum)) return null;
+
+            const baseObj = {
+                baseline: baselineNum,
+                slope: slopeNum,
+            };
+
+            if (a.direction === 'chemToElec') {
+                baseObj.source = chemPath;
+                baseObj.sourceField = a.chemField;
+                baseObj.dest = elecPath;
+                baseObj.destField = a.elecField;
+            } else {
+                baseObj.source = elecPath;
+                baseObj.sourceField = a.elecField;
+                baseObj.dest = chemPath;
+                baseObj.destField = a.chemField;
+            }
+            return baseObj;
+        }).filter(item => item !== null);
+    }, []);
+
     useEffect(() => {
-        const getAdaptorDataForUnmount = () => {
-            return adaptorsRef.current.map(a => {
-                const chemPath = (a.chemMesh && a.chemMol) ? `${a.chemMesh}/${a.chemMol}` : '';
-                const elecPath = a.elecEntity;
-
-                if (!chemPath || !elecPath) return null;
-
-                const baselineNum = parseFloat(a.baseline);
-                const slopeNum = parseFloat(a.slope);
-                if (isNaN(baselineNum) || isNaN(slopeNum)) return null;
-
-                const baseObj = {
-                    baseline: baselineNum,
-                    slope: slopeNum,
-                };
-
-                if (a.direction === 'chemToElec') {
-                    baseObj.source = chemPath;
-                    baseObj.sourceField = a.chemField;
-                    baseObj.dest = elecPath;
-                    baseObj.destField = a.elecField;
-                } else {
-                    baseObj.source = elecPath;
-                    baseObj.sourceField = a.elecField;
-                    baseObj.dest = chemPath;
-                    baseObj.destField = a.chemField;
-                }
-                return baseObj;
-            }).filter(item => item !== null);
-        };
-
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getAdaptorDataForUnmount();
-                onConfigurationChangeRef.current({ adaptors: configData });
+                onConfigurationChangeRef.current({ adaptors: getAdaptorData() });
             }
         };
-    }, []);
+    }, [getAdaptorData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ adaptors: getAdaptorData() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getAdaptorData]);
 
     // --- Render Helpers ---
     const renderChemicalSection = () => (

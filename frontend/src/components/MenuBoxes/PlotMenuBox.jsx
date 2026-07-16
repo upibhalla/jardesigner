@@ -106,7 +106,8 @@ const PlotMenuBox = ({
     elecPaths = [],
     spinePaths = [],
     channelPrototypes = [],
-    stims = []
+    stims = [],
+    flushRef
 }) => {
     const [plots, setPlots] = useState(() => {
         const initialPlots = currentConfig?.map(p => {
@@ -364,7 +365,13 @@ const PlotMenuBox = ({
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
-    
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ plots: getPlotDataForSave() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getPlotDataForSave]);
+
     const getTabLabel = (plot) => {
         const isChem = chemFieldOptions.includes(plot.field);
         if (isChem) {

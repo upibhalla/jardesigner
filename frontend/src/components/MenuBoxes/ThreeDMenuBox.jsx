@@ -98,13 +98,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ThreeDMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
+const ThreeDMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
     meshMols,
-    elecPaths = [], 
+    elecPaths = [],
     spinePaths = [],
-    channelPrototypes = [] 
+    channelPrototypes = [],
+    flushRef
 }) => {
     const [tabs, setTabs] = useState(() => {
         const defaults = createDefaultMoogliEntry();
@@ -353,6 +354,12 @@ const ThreeDMenuBox = ({
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getThreeDDataForSave;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getThreeDDataForSave]);
 
     const getTabLabel = (tab) => {
         const isChem = chemFields.includes(tab.field);

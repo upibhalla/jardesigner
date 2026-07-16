@@ -92,6 +92,7 @@ const StimMenuBox = ({
     spinePaths = [],
     channelPrototypes = [],
     cellProto,
+    flushRef,
 }) => {
     const [stims, setStims] = useState(() => {
         const initialStims = currentConfig?.map(s => {
@@ -329,6 +330,12 @@ const StimMenuBox = ({
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ stims: getStimDataForSave() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getStimDataForSave]);
 
     const getTabLabel = (stim) => {
         const isChem = stim.type === 'Field' && chemFieldOptions.includes(stim.field);
