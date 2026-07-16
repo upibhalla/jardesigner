@@ -30,6 +30,7 @@ const nonChemFieldOptions = [
     'Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'Cm', 'Rm', 'Ra',
     'Ca', 'current', 'activation', 'modulation', 'psdArea'
 ];
+const RELPATH_REQUIRED_FIELDS = new Set(['Gbar', 'Gk', 'Ik', 'ICa', 'Ca', 'activation', 'modulation']);
 const nonChemFieldLabels = {
     'current': 'vclamp current',
     'activation': 'channel activation',
@@ -53,7 +54,8 @@ const computeDefaultTitle = (path, field, childPath) => {
     if (chemFieldOptions.includes(field)) {
         return [(childPath || ''), capitalize(field || '')].filter(Boolean).join(' ');
     }
-    return [capitalize(path || ''), capitalize(getFieldLabel(field || ''))].filter(Boolean).join(' ');
+    const pathPart = childPath ? `${path || ''}/${childPath}` : (path || '');
+    return [capitalize(pathPart), capitalize(getFieldLabel(field || ''))].filter(Boolean).join(' ');
 };
 
 // --- Default state for a new plot entry ---
@@ -500,17 +502,22 @@ const PlotMenuBox = ({
                                  {stims.length > 0 && !vclampPaths.has(activePlotData.path) &&
                                      <FormHelperText error>Warning: No VClamp stim on this compartment</FormHelperText>}
                              </Grid>
-                         ) : (
+                         ) : (() => {
+                             const relpathRequired = RELPATH_REQUIRED_FIELDS.has(activePlotData.field);
+                             return (
                              <>
                                  {/* Relative Path as Menu for Non-Chem Fields */}
                                  <Grid item xs={12} sm={6}>
                                     <HelpField
                                         id="childPath"
-                                        label="Relative Path (Optional)"
+                                        label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
                                         select
+                                        required={relpathRequired}
                                         value={activePlotData.childPath}
                                         onChange={(id, v) => handleChildPathChange(activePlot, v)}
                                         helptext={helpText.fields.childPath}
+                                        error={relpathRequired && !activePlotData.childPath}
+                                        helperText={relpathRequired && !activePlotData.childPath ? 'Required for this field' : undefined}
                                     >
                                         <MenuItem value=""><em>None</em></MenuItem>
                                         {activePlotData.childPath &&
@@ -525,7 +532,8 @@ const PlotMenuBox = ({
                                     </HelpField>
                                 </Grid>
                              </>
-                         )}
+                             );
+                         })()}
                          
                          <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activePlotData.title} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.title} /></Grid>
                          <Grid item xs={12} sm={6}><HelpField id="yMin" label="Y Min (Optional, 0=auto)" type="number" value={activePlotData.yMin} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMin} /></Grid>

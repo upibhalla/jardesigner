@@ -35,9 +35,19 @@ const nonChemFieldOptions = [
 ];
 const chemFieldOptions = ['n', 'conc', 'concInit', 'nInit'];
 const chemFields = [...chemFieldOptions];
+const RELPATH_REQUIRED_FIELDS = new Set(['Gbar', 'Gk', 'Ik', 'ICa', 'Ca', 'activation', 'modulation']);
 const fastDtFields = ['Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'activation', 'current', 'Ca'];
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
 const backgroundOptions = ['default', 'white', 'black', 'grey', 'beige'];
+
+const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+const computeDefaultTitle = (path, field, childPath) => {
+    if (chemFields.includes(field)) {
+        return [(childPath || ''), capitalize(field || '')].filter(Boolean).join(' ');
+    }
+    const pathPart = childPath ? `${path || ''}/${childPath}` : (path || '');
+    return [capitalize(pathPart), capitalize(field || '')].filter(Boolean).join(' ');
+};
 
 // --- Helper to safely convert value to string ---
 const safeToString = (value, defaultValue = '') => {
@@ -45,17 +55,21 @@ const safeToString = (value, defaultValue = '') => {
 };
 
 // --- Default state creators ---
-const createDefaultMoogliEntry = () => ({
-    path: '#', // Default to # per request
-    field: nonChemFieldOptions[0],
+const createDefaultMoogliEntry = () => {
+    const path = '#';
+    const field = nonChemFieldOptions[0];
+    return {
+    path,
+    field,
     chemProto: '.',
     childPath: '',
-    title: '',
+    title: computeDefaultTitle(path, field, ''),
     diameterScale: '1.0',
     min: '0',
     max: '0',
     dt: '0.001',
-});
+    };
+};
 
 const createDefaultGlobalSettings = () => ({
     rotation: '0.0',
@@ -117,7 +131,7 @@ const ThreeDMenuBox = ({
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
-                title: m.title || '',
+                title: m.title || computeDefaultTitle(m.path || defaults.path, field, initialChildPath),
                 diameterScale: formatFloat(m.diaScale) || defaults.diameterScale,
                 min: formatFloat(m.ymin) || defaults.min,
                 max: formatFloat(m.ymax) || defaults.max,
@@ -172,7 +186,7 @@ const ThreeDMenuBox = ({
             prevTabs.map((tab, i) => {
                 if (i === index) {
                     const updatedTab = { ...tab, [key]: value };
-                    
+
                     if (key === 'field') {
                         const isNowChem = chemFields.includes(value);
                         const wasChem = chemFields.includes(tab.field);
@@ -187,7 +201,14 @@ const ThreeDMenuBox = ({
                     }
 
                     if (key === 'chemProto') {
-                        updatedTab.childPath = ''; 
+                        updatedTab.childPath = '';
+                    }
+
+                    if (['field', 'path', 'childPath', 'chemProto'].includes(key)) {
+                        const oldAutoTitle = computeDefaultTitle(tab.path, tab.field, tab.childPath);
+                        if (tab.title === oldAutoTitle || tab.title === '') {
+                            updatedTab.title = computeDefaultTitle(updatedTab.path, updatedTab.field, updatedTab.childPath);
+                        }
                     }
 
                     return updatedTab;
@@ -460,17 +481,22 @@ const ThreeDMenuBox = ({
                                     {!activeTabData.childPath && <FormHelperText error>Required</FormHelperText>}
                                  </Grid>
                              </>
-                         ) : (
+                         ) : (() => {
+                             const relpathRequired = RELPATH_REQUIRED_FIELDS.has(activeTabData.field);
+                             return (
                              <>
                                  {/* Relative Path as Menu for Non-Chem Fields */}
                                  <Grid item xs={12} sm={6}>
-                                    <HelpField 
-                                        id="childPath" 
-                                        label="Relative Path (Optional)" 
+                                    <HelpField
+                                        id="childPath"
+                                        label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
                                         select
-                                        value={activeTabData.childPath} 
-                                        onChange={(id, v) => handleChildPathChange({ target: { value: v } })} 
+                                        required={relpathRequired}
+                                        value={activeTabData.childPath}
+                                        onChange={(id, v) => handleChildPathChange({ target: { value: v } })}
                                         helptext={helpText.dataSources.childPath}
+                                        error={relpathRequired && !activeTabData.childPath}
+                                        helperText={relpathRequired && !activeTabData.childPath ? 'Required for this field' : undefined}
                                     >
                                         <MenuItem value=""><em>None</em></MenuItem>
                                         {channelPrototypes.map(chan => <MenuItem key={chan} value={chan}>{chan}</MenuItem>)}
@@ -479,7 +505,8 @@ const ThreeDMenuBox = ({
                                     </HelpField>
                                 </Grid>
                              </>
-                         )}
+                             );
+                         })()}
                         <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
                         <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} helperText={diaWarn || undefined} FormHelperTextProps={diaWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
                         <Grid item xs={12} sm={6}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>

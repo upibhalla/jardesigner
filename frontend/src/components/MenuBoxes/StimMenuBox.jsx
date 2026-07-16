@@ -30,6 +30,7 @@ import ExprHelpField from '../ExprHelpField';
 // --- Define fieldOptions and typeOptions outside ---
 const nonChemFieldOptions = ['inject', 'vclamp', 'activation', 'modulation'];
 const chemFieldOptions = ['conc', 'concInit', 'n', 'nInit'];
+const RELPATH_REQUIRED_FIELDS = new Set(['activation', 'modulation']);
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
 
 const defaultStimExpressions = {
@@ -484,16 +485,21 @@ const StimMenuBox = ({
                                     />
                                 </Grid>
                              </>
-                         ) : (
+                         ) : (() => {
+                             const relpathRequired = RELPATH_REQUIRED_FIELDS.has(activeStimData.field);
+                             return (
                              // --- Non-Chemical (Electrical/Synapse) Logic ---
                              <Grid item xs={12} sm={6}>
-                                <HelpField 
-                                    id="childPath" 
-                                    label="Relative Path (Optional)" 
+                                <HelpField
+                                    id="childPath"
+                                    label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
                                     select
-                                    value={activeStimData.childPath} 
-                                    onChange={(id, v) => handleChildPathChange({ target: { value: v } })} 
+                                    required={relpathRequired}
+                                    value={activeStimData.childPath}
+                                    onChange={(id, v) => handleChildPathChange({ target: { value: v } })}
                                     helptext="Select an Ion Channel Prototype or specify custom."
+                                    error={relpathRequired && !activeStimData.childPath}
+                                    helperText={relpathRequired && !activeStimData.childPath ? 'Required for this field' : undefined}
                                 >
                                     <MenuItem value=""><em>None</em></MenuItem>
                                     {channelPrototypes.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
@@ -501,7 +507,8 @@ const StimMenuBox = ({
                                     <MenuItem value={OPTION_USER_SPECIFIED}>{OPTION_USER_SPECIFIED}</MenuItem>
                                 </HelpField>
                             </Grid>
-                         )}
+                             );
+                         })()}
 
                           <Grid item xs={12} sm={6}>
                               <ExprHelpField
