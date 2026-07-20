@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+
+const CHEM_FIELDS = new Set(['conc', 'n', 'concInit', 'nInit', 'volume']);
 
 const helpText = {
     runControls: { totalRuntime: "The total duration for the simulation run in seconds.", currentTime: "The current time of the active simulation." },
@@ -58,6 +60,8 @@ const RunMenuBox = ({
     activeSimPid,
     liveFrameData,
     isReplaying,
+    modelDirty,
+    flushRef,
 }) => {
 
     const [runtime, setRuntime] = useState(() => safeToString(currentConfig?.runtime, defaultRunConfig.runtime));
@@ -218,6 +222,12 @@ const RunMenuBox = ({
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => buildConfigPayloadRef.current();
+        return () => { flushRef.current = null; };
+    }, [flushRef]);
+
     const handleStart = () => {
         const latestConfig = buildConfigPayload();
         if (currentTime === 0) {
@@ -251,20 +261,77 @@ const RunMenuBox = ({
 
     const startButtonText = currentTime > 0 ? 'Continue' : 'Start';
 
+    const isEntirelyChemical = useMemo(() => {
+        const allEntries = [
+            ...(currentConfig?.plots || []),
+            ...(currentConfig?.moogli || []),
+            ...(currentConfig?.files || []),
+        ];
+        return allEntries.length > 0 && allEntries.every(e => CHEM_FIELDS.has(e.field));
+    }, [currentConfig?.plots, currentConfig?.moogli, currentConfig?.files]);
+
+    const hasNoOutputs = (currentConfig?.plots?.length ?? 0) === 0 &&
+        (currentConfig?.moogli?.length ?? 0) === 0 &&
+        (currentConfig?.files?.length ?? 0) === 0;
+
+    const runtimeNum = Number(runtime);
+    const runtimeError = isNaN(runtimeNum) || runtimeNum <= 0 ? 'Must be a positive number' : null;
+
+    const elecNum = Number(clocks.elec);
+    const chemNum = Number(clocks.chem);
+    const diffNum = Number(clocks.diffusion);
+    const elecPlotNum = Number(clocks.elecPlot);
+    const chemPlotNum = Number(clocks.chemPlotDt);
+    const funcNum = Number(clocks.function);
+
+    const elecError = !configSettings.turnOffElec && (isNaN(elecNum) || elecNum <= 0) ? 'Must be a positive number' : null;
+    const chemError = isNaN(chemNum) || chemNum <= 0 ? 'Must be a positive number' : null;
+    const diffError = isNaN(diffNum) || diffNum <= 0 ? 'Must be a positive number' : null;
+    const elecPlotError = !configSettings.turnOffElec && (isNaN(elecPlotNum) || elecPlotNum <= 0) ? 'Must be a positive number' : null;
+    const chemPlotError = isNaN(chemPlotNum) || chemPlotNum <= 0 ? 'Must be a positive number' : null;
+    const funcError = isNaN(funcNum) || funcNum <= 0 ? 'Must be a positive number' : null;
+
+    const elecPlotWarn = !configSettings.turnOffElec && !elecError && !elecPlotError && elecPlotNum < elecNum
+        ? 'Elec plot Dt smaller than elec Dt — recording limited to elec Dt'
+        : null;
+    const chemPlotWarn = !chemError && !chemPlotError && chemPlotNum < chemNum
+        ? 'Chem plot Dt smaller than chem Dt — recording limited to chem Dt'
+        : null;
+
+    const tempNum = Number(configSettings.temperature);
+    const tempWarn = !isNaN(tempNum) && (tempNum < 0 || tempNum > 45)
+        ? 'Outside typical biological range (0–45°C)'
+        : null;
+
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || !activeSimPid}>{startButtonText}</Button></Grid>
+                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || (currentTime > 0 && !activeSimPid)}>{startButtonText}</Button></Grid>
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleStop} disabled={!isSimulating}>Stop</Button></Grid>
                 <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<RestartAltIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
             </Grid>
 
-            {statusMessage.text && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
+            {statusMessage.text && !(modelDirty && !activeSimPid && !isSimulating) && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
+            {modelDirty && !isSimulating && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    Model has changed — Start will rebuild before running.
+                </Alert>
+            )}
+            {hasNoOutputs && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    No plots, 3D displays, or file saves are configured — the simulation will run but produce no visible output.
+                </Alert>
+            )}
+            {isEntirelyChemical && !configSettings.turnOffElec && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    All outputs (plots, 3D, file saves) use chemical fields — consider enabling <strong>Turn Off Elec</strong> to skip electrical calculations and allow longer chemical time steps.
+                </Alert>
+            )}
 
             <Grid container spacing={1.5} sx={{ mb: 2 }}>
                 <Grid item xs={6}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} />
+                        <TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} error={!!runtimeError} helperText={runtimeError || undefined} />
                         <InfoTooltip title={helpText.runControls.totalRuntime} />
                     </Box>
                 </Grid>
@@ -285,14 +352,14 @@ const RunMenuBox = ({
 
             <Grid container spacing={1.5} sx={{mb: 2}}>
                 <Grid item xs={12} sm={6} container spacing={1.5}>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} disabled={configSettings.turnOffElec} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} /><InfoTooltip title={helpText.clocks.chemDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} /><InfoTooltip title={helpText.clocks.diffusionDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} disabled={configSettings.turnOffElec} error={!!elecError} helperText={elecError || undefined} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} error={!!chemError} helperText={chemError || undefined} /><InfoTooltip title={helpText.clocks.chemDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} error={!!diffError} helperText={diffError || undefined} /><InfoTooltip title={helpText.clocks.diffusionDt} /></Box></Grid>
                 </Grid>
                 <Grid item xs={12} sm={6} container spacing={1.5}>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} disabled={configSettings.turnOffElec} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} /><InfoTooltip title={helpText.clocks.chemPlotDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} /><InfoTooltip title={helpText.clocks.functionDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} disabled={configSettings.turnOffElec} error={!!elecPlotError} helperText={elecPlotError || elecPlotWarn || undefined} FormHelperTextProps={!elecPlotError && elecPlotWarn ? { sx: { color: 'warning.main' } } : undefined} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} error={!!chemPlotError} helperText={chemPlotError || chemPlotWarn || undefined} FormHelperTextProps={!chemPlotError && chemPlotWarn ? { sx: { color: 'warning.main' } } : undefined} /><InfoTooltip title={helpText.clocks.chemPlotDt} /></Box></Grid>
+                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} error={!!funcError} helperText={funcError || undefined} /><InfoTooltip title={helpText.clocks.functionDt} /></Box></Grid>
                     <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} /><InfoTooltip title={helpText.clocks.statusDt} /></Box></Grid>
                 </Grid>
             </Grid>
@@ -329,7 +396,7 @@ const RunMenuBox = ({
                         <InfoTooltip title={helpText.otherSettings.randSeed} />
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} />
+                        <TextField fullWidth size="small" label="Temperature (°C)" type="text" value={configSettings.temperature} onChange={(e) => updateConfigSetting('temperature', e.target.value)} helperText={tempWarn || undefined} FormHelperTextProps={tempWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         <InfoTooltip title={helpText.otherSettings.temperature} />
                     </Box>
                 </Grid>

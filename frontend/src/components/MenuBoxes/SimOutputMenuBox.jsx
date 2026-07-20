@@ -44,7 +44,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemProtos }) => {
+const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemProtos, elecPaths, spinePaths, flushRef }) => {
     const [outputFiles, setOutputFiles] = useState(() => {
         const defaults = createNewOutputFile();
         if (Array.isArray(currentConfig) && currentConfig.length > 0) {
@@ -122,47 +122,64 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
         );
     }, []);
 
+    const getFileData = useCallback(() => {
+        return outputFilesRef.current.map(fileState => {
+             if (!fileState.file || !fileState.type || !fileState.path || !fileState.field || !fileState.dt) return null;
+             const dtNum = parseFloat(fileState.dt);
+             const flushStepsInt = parseInt(fileState.flushSteps, 10);
+             if (isNaN(dtNum) || dtNum <= 0) return null;
+             if (fileState.flushSteps && (isNaN(flushStepsInt) || flushStepsInt < 1)) return null;
+
+             const isChemField = chemFields.includes(fileState.field);
+             let relpathValue = undefined;
+
+             if (isChemField) {
+                 if (fileState.chemProto && fileState.childPath) {
+                     relpathValue = `${fileState.chemProto}/${fileState.childPath}`;
+                 } else { return null; }
+             } else {
+                 if (fileState.childPath && fileState.childPath !== '') relpathValue = fileState.childPath;
+             }
+            const fileSchemaItem = { file: fileState.file, type: fileState.type, path: fileState.path, field: fileState.field, dt: dtNum };
+            if (relpathValue !== undefined) fileSchemaItem.relpath = relpathValue;
+            if (!isNaN(flushStepsInt) && flushStepsInt >= 1 && String(fileState.flushSteps).trim() !== '') fileSchemaItem.flushSteps = flushStepsInt;
+             return fileSchemaItem;
+        }).filter(item => item !== null);
+    }, []);
+
     useEffect(() => {
-        const getFileData = () => {
-            return outputFilesRef.current.map(fileState => {
-                 if (!fileState.file || !fileState.type || !fileState.path || !fileState.field || !fileState.dt) return null;
-                 const dtNum = parseFloat(fileState.dt);
-                 const flushStepsInt = parseInt(fileState.flushSteps, 10);
-                 if (isNaN(dtNum) || dtNum <= 0) return null;
-                 if (fileState.flushSteps && (isNaN(flushStepsInt) || flushStepsInt < 1)) return null;
-
-                 const isChemField = chemFields.includes(fileState.field);
-                 let relpathValue = undefined;
-
-                 if (isChemField) {
-                     if (fileState.chemProto && fileState.childPath) {
-                         relpathValue = `${fileState.chemProto}/${fileState.childPath}`;
-                     } else { return null; }
-                 } else {
-                     if (fileState.childPath && fileState.childPath !== '') relpathValue = fileState.childPath;
-                 }
-                const fileSchemaItem = { file: fileState.file, type: fileState.type, path: fileState.path, field: fileState.field, dt: dtNum };
-                if (relpathValue !== undefined) fileSchemaItem.relpath = relpathValue;
-                if (!isNaN(flushStepsInt) && flushStepsInt >= 1 && String(fileState.flushSteps).trim() !== '') fileSchemaItem.flushSteps = flushStepsInt;
-                 return fileSchemaItem;
-            }).filter(item => item !== null);
-        };
         const initialConfigString = JSON.stringify(currentConfig || []);
         return () => {
             if (onConfigurationChangeRef.current) {
                 const finalConfigData = getFileData();
                 const finalConfigString = JSON.stringify(finalConfigData);
-                 if (finalConfigString !== initialConfigString) {
+                if (finalConfigString !== initialConfigString) {
                     onConfigurationChangeRef.current({ files: finalConfigData });
-                 }
+                }
             }
         };
-    }, [currentConfig]);
+    }, [currentConfig, getFileData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ files: getFileData() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getFileData]);
 
     const availableChemProtos = getChemProtosRef.current ? getChemProtosRef.current() : [];
     const activeFileData = outputFiles[activeOutputFileIndex];
     const isChemField = activeFileData && chemFields.includes(activeFileData.field);
     const showChemProtoWarning = isChemField && !availableChemProtos.length;
+
+    const fileError = activeFileData && !activeFileData.file ? 'Required' : null;
+    const pathError = activeFileData && !activeFileData.path ? 'Required' : null;
+    const dtNum = parseFloat(activeFileData?.dt);
+    const dtError = activeFileData && (isNaN(dtNum) || dtNum <= 0) ? 'Must be a positive number' : null;
+    const flushVal = String(activeFileData?.flushSteps ?? '').trim();
+    const flushInt = parseInt(flushVal, 10);
+    const flushError = activeFileData && flushVal !== '' && (isNaN(flushInt) || flushInt < 1)
+        ? 'Must be a whole number ≥ 1'
+        : null;
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
@@ -179,9 +196,9 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
              {activeFileData && (
                  <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
                      <Grid container spacing={2}>
-                         <Grid item xs={12} sm={7}><HelpField id="file" label="Output Filename" required value={activeFileData.file} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.file} /></Grid>
+                         <Grid item xs={12} sm={7}><HelpField id="file" label="Output Filename" required value={activeFileData.file} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.file} error={!!fileError} helperText={fileError || undefined} /></Grid>
                          <Grid item xs={12} sm={5}><HelpField id="type" label="File Type" required select value={activeFileData.type} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.type}>{outputTypeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="path" label="Data Source Path" required value={activeFileData.path} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.path} /></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="path" label="Data Source Path" required value={activeFileData.path} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.path} error={!!pathError} helperText={pathError || undefined} /></Grid>
                          <Grid item xs={12} sm={6}>
                              <HelpField id="field" label="Data Source Field" required select value={activeFileData.field} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.field}>
                                  <MenuItem value=""><em>Select...</em></MenuItem>
@@ -205,8 +222,8 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
                                   <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeFileData.childPath} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.childPath}/></Grid>
                               </>
                           )}
-                         <Grid item xs={12} sm={6}><HelpField id="dt" label="Sampling Interval dt (s)" required type="number" value={activeFileData.dt} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.dt} InputProps={{ inputProps: { min: 1e-7, step: 0.01 } }}/></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="flushSteps" label="Flush Steps (Optional, >=1)" type="number" value={activeFileData.flushSteps} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.flushSteps} InputProps={{ inputProps: { min: 1, step: 1 } }}/></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="dt" label="Sampling Interval dt (s)" required type="number" value={activeFileData.dt} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.dt} InputProps={{ inputProps: { min: 1e-7, step: 0.01 } }} error={!!dtError} helperText={dtError || undefined} /></Grid>
+                         <Grid item xs={12} sm={6}><HelpField id="flushSteps" label="Flush Steps (Optional, >=1)" type="number" value={activeFileData.flushSteps} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.flushSteps} InputProps={{ inputProps: { min: 1, step: 1 } }} error={!!flushError} helperText={flushError || undefined} /></Grid>
                      </Grid>
                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeOutputFile(activeOutputFileIndex)} sx={{ mt: 2 }}>
                          Remove Output File

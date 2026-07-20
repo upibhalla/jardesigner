@@ -18,12 +18,12 @@
   "distributions": {
     "prototype": "Select which of the defined spine prototypes to distribute with this rule.",
     "path": "The morphological path where spines will be placed (e.g., 'dend' for all dendrites, or a specific path like '/cell/dend[2]').",
-    "spacing": "The average distance between spines along the specified path, in microns (μm).",
-    "minSpacing": "The minimum allowed distance between any two spines, in microns (μm).",
-    "sizeScale": "A multiplier to scale the size of all dimensions of the selected spine prototype (e.g., 1.2 makes it 20% larger).",
-    "sizeStdDev": "The standard deviation for the size scaling, allowing for random variability in the size of each spine.",
-    "angle": "The mean angle (in radians) at which spines emerge from the dendrite, where 0 is perpendicular to the surface.",
-    "angleStdDev": "The standard deviation for the emergence angle (in radians), allowing for random variability in spine orientation.",
+    "spacing": "Average distance between spines, in µm. May be a number or a muParser expression (in m). Allowed variables: p (path dist from soma, m), g (geometric dist, m), L (electrotonic dist, λ), len (compartment length, m), dia (compartment diameter, m), maxP, maxG, maxL.",
+    "minSpacing": "Minimum allowed distance between any two spines, in µm. May be a number or a muParser expression (in m) using: p, g, L, len, dia, maxP, maxG, maxL.",
+    "sizeScale": "Multiplier for all spine dimensions (e.g. 1.2 = 20% larger). May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL. Example: 1+0.5*H(0.3e-6-p) gives larger spines near soma.",
+    "sizeStdDev": "Standard deviation for size scaling, adding random variability. May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL.",
+    "angle": "Mean emergence angle of spines from the dendrite, in radians (0 = perpendicular). May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL.",
+    "angleStdDev": "Standard deviation for emergence angle (radians). May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL.",
     "randSeed": "Integer. Random seed for spine building, affects all of spacing, sizeScale, and angle. randSeed>0 gives repeatable distributions. randSeed==0 uses ongoing system values and outcomes will differ between runs."
   }
 }

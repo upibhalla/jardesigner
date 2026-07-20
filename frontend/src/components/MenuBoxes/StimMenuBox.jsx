@@ -23,16 +23,64 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import helpText from './StimMenuBox.Help.json';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
+import StimExprHelpField from '../StimExprHelpField';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Define fieldOptions and typeOptions outside ---
 const nonChemFieldOptions = ['inject', 'vclamp', 'activation', 'modulation'];
 const chemFieldOptions = ['conc', 'concInit', 'n', 'nInit'];
+const RELPATH_REQUIRED_FIELDS = new Set(['activation', 'modulation']);
 const typeOptions = ['Field', 'Periodic Synapse', 'Random Synapse'];
 
-const defaultStimExpressions = {
+// SI defaults (for recognising old-format expressions on load)
+const defaultStimExpressionsSI = {
     'inject': '1e-11*(t>0.1)*(t<0.2)',
     'vclamp': '-0.065+0.065*(t>0.1)*(t<0.2)',
+};
+// Display defaults for new stimuli (in friendly units)
+const defaultStimExpressionsDisplay = {
+    'inject': '10*(t>0.1)*(t<0.2)',      // pA
+    'vclamp': '-65+65*(t>0.1)*(t<0.2)', // mV
+};
+
+// Inverse scale factors written into JSON to mark friendly-unit expressions
+const FIELD_INV_SCALE = { 'inject': '1e-12', 'vclamp': '1e-3' };
+
+// Friendly unit labels (when scale is recognised) and SI fallbacks
+const FIELD_UNIT_FRIENDLY = { 'inject': 'pA', 'vclamp': 'mV' };
+const FIELD_UNIT_SI       = { 'inject': 'A (SI)', 'vclamp': 'V (SI)' };
+const FIELD_UNIT_FIXED    = { 'conc': 'mM', 'concInit': 'mM', 'n': 'number', 'nInit': 'number' };
+
+// Decode a stored expression into { displayExpr, exprInSI }
+const decodeExprForField = (field, schemaType, storedExpr) => {
+    const invScale = FIELD_INV_SCALE[field];
+    if (invScale && schemaType === 'field') {
+        const suffix = `*${invScale}`;
+        const trimmed = (storedExpr || '').trim();
+        if (trimmed.endsWith(suffix)) {
+            let inner = trimmed.slice(0, -suffix.length).trim();
+            if (inner.startsWith('(') && inner.endsWith(')')) inner = inner.slice(1, -1);
+            return { displayExpr: inner, exprInSI: false };
+        }
+        return { displayExpr: storedExpr || '', exprInSI: true };
+    }
+    return { displayExpr: storedExpr || '', exprInSI: false };
+};
+
+// Encode display expression back to SI for JSON storage
+const encodeExprForField = (field, displayExpr, exprInSI) => {
+    if (!displayExpr) return '';
+    const invScale = FIELD_INV_SCALE[field];
+    if (invScale && !exprInSI) return `(${displayExpr})*${invScale}`;
+    return displayExpr;
+};
+
+// Compute the unit label for the stimulus expression field
+const getStimExprUnit = (field, type, exprInSI) => {
+    if (type === 'Periodic Synapse' || type === 'Random Synapse') return 'Hz';
+    if (FIELD_UNIT_FRIENDLY[field]) return exprInSI ? FIELD_UNIT_SI[field] : FIELD_UNIT_FRIENDLY[field];
+    return FIELD_UNIT_FIXED[field] || null;
 };
 
 // --- Regex to parse chem paths like "DEND/Ca[0]" ---
@@ -53,7 +101,8 @@ const createDefaultStim = () => {
         childPath: '',
         molIndex: '',
         geometryExpression: '1',
-        stimulusExpression: defaultStimExpressions[field] || '',
+        stimulusExpression: defaultStimExpressionsDisplay[field] || '',
+        exprInSI: false,
         type: typeOptions[0],
         weight: '1.0',
     };
@@ -81,13 +130,15 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 });
 
 // --- Main Component ---
-const StimMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    meshMols, 
-    elecPaths = [], // Injected: List of electrical paths
-    spinePaths = [], // Injected: List of spine paths
-    channelPrototypes = [] // Injected: List of channels
+const StimMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    meshMols,
+    elecPaths = [],
+    spinePaths = [],
+    channelPrototypes = [],
+    cellProto,
+    flushRef,
 }) => {
     const [stims, setStims] = useState(() => {
         const initialStims = currentConfig?.map(s => {
@@ -122,15 +173,18 @@ const StimMenuBox = ({
             } else {
                 initialChildPath = s.relpath || '';
             }
+            const componentType = mapSchemaTypeToComponent(s.type);
+            const { displayExpr, exprInSI } = decodeExprForField(field, s.type, s.expr || defaultStimExpressionsSI[field] || '');
             return {
-                path: s.path || 'soma', // Obtain ParentElecCompartment from 'path'
+                path: s.path || 'soma',
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
                 molIndex: initialMolIndex,
                 geometryExpression: s.geomExpr || '1',
-                stimulusExpression: s.expr || defaultStimExpressions[field] || '',
-                type: mapSchemaTypeToComponent(s.type),
+                stimulusExpression: displayExpr,
+                exprInSI,
+                type: componentType,
                 weight: safeToString(s.weight, '1.0'),
             };
         }) || [];
@@ -181,11 +235,17 @@ const StimMenuBox = ({
                     }
 
                     if (key === 'field') {
-                        const oldDefault = defaultStimExpressions[stim.field] || '';
-                        const newDefault = defaultStimExpressions[value] || '';
-                        if (stim.stimulusExpression === '' || stim.stimulusExpression === oldDefault) {
-                            updatedStim.stimulusExpression = newDefault;
-                        }
+                        const oldDisplayDefault = defaultStimExpressionsDisplay[stim.field] || '';
+                        const oldSIDefault = defaultStimExpressionsSI[stim.field] || '';
+                        const newDisplayDefault = defaultStimExpressionsDisplay[value] || '';
+                        const isDefault = stim.stimulusExpression === '' ||
+                                          stim.stimulusExpression === oldDisplayDefault ||
+                                          stim.stimulusExpression === oldSIDefault;
+                        if (isDefault) updatedStim.stimulusExpression = newDisplayDefault;
+                        updatedStim.exprInSI = false;
+                    }
+                    if (key === 'type') {
+                        updatedStim.exprInSI = false;
                     }
 
                     // Handle changing compartment
@@ -291,12 +351,13 @@ const StimMenuBox = ({
                 }
             }
             
+            const storedExpr = encodeExprForField(stimState.field, stimState.stimulusExpression || '', stimState.exprInSI);
             const stimSchemaItemBase = {
                 type: schemaType,
                 path: stimState.path || "soma",
                 ...(relpathValue !== undefined && relpathValue !== '' && { relpath: relpathValue }),
                 ...(stimState.geometryExpression && stimState.geometryExpression !== '1' && { geomExpr: stimState.geometryExpression }),
-                expr: stimState.stimulusExpression || "",
+                expr: storedExpr,
             };
             
             if (schemaType === 'field') {
@@ -325,6 +386,12 @@ const StimMenuBox = ({
             handleRefreshModel();
         };
     }, [handleRefreshModel]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ stims: getStimDataForSave() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getStimDataForSave]);
 
     const getTabLabel = (stim) => {
         const isChem = stim.type === 'Field' && chemFieldOptions.includes(stim.field);
@@ -397,7 +464,13 @@ const StimMenuBox = ({
                           
                           {isFieldType && (
                             <Grid item xs={12} sm={6}>
-                                <HelpField id="field" label="Field" select required value={activeStimData.field} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.field}>
+                                <HelpField id="field" label="Field" select required
+                                    error={!activeStimData.field}
+                                    helperText={!activeStimData.field ? 'Select a field' : undefined}
+                                    value={activeStimData.field}
+                                    onChange={(id, v) => updateStim(activeStim, id, v)}
+                                    helptext={helpText.fields.field}
+                                >
                                     <MenuItem value=""><em>Select Field...</em></MenuItem>
                                     <ListSubheader>Electrical/Other</ListSubheader>
                                     {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
@@ -406,12 +479,23 @@ const StimMenuBox = ({
                                 </HelpField>
                             </Grid>
                           )}
-                          
-                          {!isFieldType && (
-                              <Grid item xs={12} sm={6}>
-                                  <HelpField id="weight" label="Weight" type="number" required value={activeStimData.weight} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.weight} InputProps={{ inputProps: { step: 0.1 } }} />
-                              </Grid>
-                          )}
+
+                          {!isFieldType && (() => {
+                              const weightN = Number(activeStimData.weight);
+                              const weightWarn = !isNaN(weightN) && weightN <= 0 ? 'Weight should be positive' : undefined;
+                              return (
+                                  <Grid item xs={12} sm={6}>
+                                      <HelpField id="weight" label="Weight" type="number" required
+                                          value={activeStimData.weight}
+                                          onChange={(id, v) => updateStim(activeStim, id, v)}
+                                          helptext={helpText.fields.weight}
+                                          InputProps={{ inputProps: { step: 0.1 } }}
+                                          helperText={weightWarn}
+                                          {...(weightWarn && { FormHelperTextProps: { sx: { color: 'warning.main' } } })}
+                                      />
+                                  </Grid>
+                              );
+                          })()}
 
                           {/* Conditional Rendering based on Field Type */}
                           {isChemField ? (
@@ -464,16 +548,21 @@ const StimMenuBox = ({
                                     />
                                 </Grid>
                              </>
-                         ) : (
+                         ) : (() => {
+                             const relpathRequired = RELPATH_REQUIRED_FIELDS.has(activeStimData.field);
+                             return (
                              // --- Non-Chemical (Electrical/Synapse) Logic ---
                              <Grid item xs={12} sm={6}>
-                                <HelpField 
-                                    id="childPath" 
-                                    label="Relative Path (Optional)" 
+                                <HelpField
+                                    id="childPath"
+                                    label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
                                     select
-                                    value={activeStimData.childPath} 
-                                    onChange={(id, v) => handleChildPathChange({ target: { value: v } })} 
+                                    required={relpathRequired}
+                                    value={activeStimData.childPath}
+                                    onChange={(id, v) => handleChildPathChange({ target: { value: v } })}
                                     helptext="Select an Ion Channel Prototype or specify custom."
+                                    error={relpathRequired && !activeStimData.childPath}
+                                    helperText={relpathRequired && !activeStimData.childPath ? 'Required for this field' : undefined}
                                 >
                                     <MenuItem value=""><em>None</em></MenuItem>
                                     {channelPrototypes.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
@@ -481,28 +570,35 @@ const StimMenuBox = ({
                                     <MenuItem value={OPTION_USER_SPECIFIED}>{OPTION_USER_SPECIFIED}</MenuItem>
                                 </HelpField>
                             </Grid>
-                         )}
+                             );
+                         })()}
 
                           <Grid item xs={12} sm={6}>
-                              <HelpField 
-                                id="geometryExpression" 
-                                label="Geometry Expr" 
-                                value={activeStimData.geometryExpression} 
-                                onChange={(id, v) => updateStim(activeStim, id, v)} 
+                              <ExprHelpField
+                                id="geometryExpression"
+                                label="Geometry Expr"
+                                value={activeStimData.geometryExpression}
+                                onChange={(id, v) => updateStim(activeStim, id, v)}
                                 helptext={helpText.fields.geometryExpression}
-                            />
+                                warning={warnSingleSegExpr(activeStimData.geometryExpression, cellProto)}
+                              />
                           </Grid>
 
                           {/* Stimulus Expression - Full Width, Last Row */}
                           <Grid item xs={12}>
-                              <HelpField 
-                                id="stimulusExpression" 
-                                label="Stimulus Expression" 
-                                required 
-                                value={activeStimData.stimulusExpression} 
-                                onChange={(id, v) => updateStim(activeStim, id, v)} 
-                                helptext={helpText.fields.stimulusExpression}
-                            />
+                              {(() => {
+                                  const unit = getStimExprUnit(activeStimData.field, activeStimData.type, activeStimData.exprInSI);
+                                  return (
+                                      <StimExprHelpField
+                                        id="stimulusExpression"
+                                        label={unit ? `Stimulus Expression (${unit})` : 'Stimulus Expression'}
+                                        required
+                                        value={activeStimData.stimulusExpression}
+                                        onChange={(id, v) => updateStim(activeStim, id, v)}
+                                        helptext={helpText.fields.stimulusExpression}
+                                      />
+                                  );
+                              })()}
                           </Grid>
                       </Grid>
 

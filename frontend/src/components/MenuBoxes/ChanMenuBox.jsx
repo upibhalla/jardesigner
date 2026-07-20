@@ -10,6 +10,7 @@ import {
     MenuItem,
     Button,
     Tooltip,
+    Alert,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -21,8 +22,9 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import helpText from './ChanMenuBox.Help.json';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
 import ProtoPickerDialog from '../ProtoPickerDialog';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Helper Functions ---
 const getChannelSourceString = (componentType) => {
@@ -52,6 +54,31 @@ const prototypeTypeOptions = [
 
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Return number if parseable, otherwise return expression string as-is.
+const numOrExpr = (str, defaultVal) => {
+    if (!str || String(str).trim() === '') return defaultVal;
+    const n = Number(str); // Number() is strict: Number("100*p") === NaN, parseFloat would give 100
+    return isNaN(n) ? str : n;
+};
+
+const gbarWarn = (str) => {
+    const n = Number(str);
+    if (isNaN(n)) return null; // expression — skip
+    if (n < 0) return 'Gbar must be positive';
+    if (n === 0) return 'Gbar=0 is valid: channel will not be built for this distribution';
+    if (n > 10000) return 'Unusually high conductance (> 10,000 S/m²)';
+    return null;
+};
+
+const caTauWarn = (str) => {
+    const n = Number(str);
+    if (isNaN(n)) return null; // expression — skip
+    if (n <= 0) return 'Ca Tau must be positive';
+    if (n < 0.001) return 'Very short time constant (< 1 ms)';
+    if (n > 10) return 'Very long time constant (> 10 s)';
+    return null;
 };
 
 // --- Default State Definitions ---
@@ -84,12 +111,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ChanMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    clientId, 
-    elecPaths = [], 
-    spinePaths = [] 
+const ChanMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    clientId,
+    elecPaths = [],
+    spinePaths = [],
+    cellProto,
+    flushRef,
 }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.chanProto?.map(p => {
@@ -273,10 +302,9 @@ const ChanMenuBox = ({
         setPendingDistIndex(null);
     };
 
-    useEffect(() => {
-        const getElecDataForUnmount = () => {
-            const currentPrototypes = prototypesRef.current;
-            const currentDistributions = distributionsRef.current;
+    const getElecData = useCallback(() => {
+        const currentPrototypes = prototypesRef.current;
+        const currentDistributions = distributionsRef.current;
 
             const chanProtoData = currentPrototypes.map(protoState => {
                 let schemaType = "builtin";
@@ -294,31 +322,37 @@ const ChanMenuBox = ({
                 return { type: schemaType, source: schemaSource, name: protoState.name };
             }).filter(p => p !== null);
 
-            const chanDistribData = currentDistributions.map(distState => {
-                const distribSchemaItem = { proto: distState.prototype || "", path: distState.path || "soma" };
-                const selectedPrototype = currentPrototypes.find(p => p.name === distState.prototype);
+        const chanDistribData = currentDistributions.map(distState => {
+            const distribSchemaItem = { proto: distState.prototype || "", path: distState.path || "soma" };
+            const selectedPrototype = currentPrototypes.find(p => p.name === distState.prototype);
 
-                if (selectedPrototype && selectedPrototype.type === 'Ca_conc') {
-                     distribSchemaItem.tau = parseFloat(distState.caTau) || 0.013;
-                } else {
-                     distribSchemaItem.Gbar = parseFloat(distState.maxConductance) || 0;
-                }
-                if (!distribSchemaItem.proto || !distribSchemaItem.path || (distribSchemaItem.Gbar === undefined && distribSchemaItem.tau === undefined)) {
-                     return null;
-                 }
-                return distribSchemaItem;
-            }).filter(item => item !== null);
+            if (selectedPrototype && selectedPrototype.type === 'Ca_conc') {
+                 distribSchemaItem.tau = numOrExpr(distState.caTau, 0.013);
+            } else {
+                 distribSchemaItem.Gbar = numOrExpr(distState.maxConductance, 0);
+            }
+            if (!distribSchemaItem.proto || !distribSchemaItem.path || (distribSchemaItem.Gbar === undefined && distribSchemaItem.tau === undefined)) {
+                 return null;
+             }
+            return distribSchemaItem;
+        }).filter(item => item !== null);
 
-            return { chanProto: chanProtoData, chanDistrib: chanDistribData };
-        };
+        return { chanProto: chanProtoData, chanDistrib: chanDistribData };
+    }, []);
 
+    useEffect(() => {
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getElecDataForUnmount();
-                onConfigurationChangeRef.current(configData);
+                onConfigurationChangeRef.current(getElecData());
             }
         };
-    }, []);
+    }, [getElecData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getElecData;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getElecData]);
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
@@ -362,14 +396,15 @@ const ChanMenuBox = ({
                         {prototypes[activePrototype].type === 'File' && (
                            <Grid item xs={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                                    <TextField 
-                                        fullWidth 
-                                        size="small" 
-                                        label="Source File (NeuroML)" 
+                                    <TextField
+                                        fullWidth
+                                        size="small"
+                                        label="Source File (NeuroML)"
                                         variant="outlined"
-                                        value={prototypes[activePrototype].file} 
+                                        value={prototypes[activePrototype].file}
                                         InputProps={{ readOnly: true }}
-                                        helperText="Click button to select file"
+                                        error={!prototypes[activePrototype].file}
+                                        helperText={prototypes[activePrototype].file ? undefined : 'No file selected — click Select to upload a NeuroML file'}
                                     />
                                     <Button 
                                         variant="outlined" 
@@ -412,6 +447,11 @@ const ChanMenuBox = ({
                     <IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton>
                  </Tooltip>
             </Box>
+            {prototypes.length === 0 && (
+                <Alert severity="info" sx={{ mb: 1 }}>
+                    Define at least one prototype above before adding distributions.
+                </Alert>
+            )}
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                  <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }} aria-label="Channel Distributions">
                      {distributions.map((d, i) => <Tab key={i} label={`${d.prototype || 'New'} @ ${d.path || '?'}`} />)}
@@ -443,16 +483,32 @@ const ChanMenuBox = ({
                         </Grid>
 
                         <Grid item xs={12} sm={6}>
-                             <HelpField id="prototype" label="Prototype" select required value={distributions[activeDistribution].prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
+                             <HelpField id="prototype" label="Prototype" select required
+                                 error={!distributions[activeDistribution].prototype}
+                                 helperText={!distributions[activeDistribution].prototype ? 'Select a prototype' : undefined}
+                                 value={distributions[activeDistribution].prototype}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.prototype}
+                             >
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </HelpField>
                          </Grid>
                          <Grid item xs={12} sm={6}>
                              {prototypes.find(p => p.name === distributions[activeDistribution].prototype)?.type === 'Ca_conc' ? (
-                                 <HelpField id="caTau" label="Ca Tau (s)" type="number" required value={distributions[activeDistribution].caTau} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.caTau} />
+                                 <ExprHelpField id="caTau" label="Ca Tau (s)" required
+                                     value={distributions[activeDistribution].caTau}
+                                     onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                     helptext={helpText.distributions.caTau}
+                                     warning={caTauWarn(distributions[activeDistribution].caTau) || warnSingleSegExpr(distributions[activeDistribution].caTau, cellProto)}
+                                 />
                              ) : (
-                                 <HelpField id="maxConductance" label="Gbar (Max Conductance)" type="number" required value={distributions[activeDistribution].maxConductance} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.maxConductance} />
+                                 <ExprHelpField id="maxConductance" label="Gbar (Max Conductance)" required
+                                     value={distributions[activeDistribution].maxConductance}
+                                     onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                     helptext={helpText.distributions.maxConductance}
+                                     warning={gbarWarn(distributions[activeDistribution].maxConductance) || warnSingleSegExpr(distributions[activeDistribution].maxConductance, cellProto)}
+                                 />
                              )}
                         </Grid>
                     </Grid>

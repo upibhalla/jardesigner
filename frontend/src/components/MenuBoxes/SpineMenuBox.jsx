@@ -20,7 +20,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './SpineMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Helper Functions ---
 const getNameFromType = (type) => {
@@ -54,6 +55,25 @@ const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
 };
 
+// Return number (optionally scaled) if parseable, otherwise return expression string as-is.
+const numOrExpr = (str, defaultVal, scaleFn) => {
+    if (!str || String(str).trim() === '') return defaultVal;
+    const n = Number(str); // Number() is strict: Number("100*p") === NaN, parseFloat would give 100
+    if (isNaN(n)) return str;
+    return scaleFn ? scaleFn(n) : n;
+};
+
+// Warn if numeric spacing (µm) exceeds the dendrite length for parametric morphologies.
+const spacingDendWarn = (spacingMicrons, cellProto) => {
+    const n = Number(spacingMicrons);
+    if (isNaN(n)) return null; // expression — skip
+    if (!cellProto || (cellProto.type !== 'ballAndStick' && cellProto.type !== 'branchedCell')) return null;
+    if (!cellProto.dendLen) return null;
+    if (n * 1e-6 > cellProto.dendLen)
+        return `Spacing (${n} µm) exceeds dendrite length (${(cellProto.dendLen * 1e6).toFixed(0)} µm) — no spines will be placed`;
+    return null;
+};
+
 // --- Default State Definitions ---
 const createDefaultPrototype = () => ({
     type: 'Excitatory', name: 'exc', source: 'makeExcSpine()',
@@ -83,7 +103,7 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) => {
+const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], cellProto, flushRef }) => {
     const [prototypes, setPrototypes] = useState(() => {
         const initialProtos = currentConfig?.spineProto?.map(p => {
             const componentType = getComponentTypeFromSchema(p.type, p.source);
@@ -227,68 +247,113 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
         setPendingDistIndex(null);
     };
 
+    const getSpineData = useCallback(() => {
+        const currentPrototypes = prototypesRef.current;
+        const currentDistributions = distributionsRef.current;
+
+        const spineProtoData = currentPrototypes.map(protoState => {
+             let schemaType = "builtin";
+             let schemaSource = protoState.source || "";
+             if (protoState.type === 'User Function') {
+                  schemaType = "func";
+                  schemaSource = protoState.source || protoState.name;
+             }
+
+             const protoSchemaItem = {
+                 type: schemaType,
+                 source: schemaSource,
+                 name: protoState.name || getNameFromType(protoState.type),
+                 shaftDia: (toMeters(protoState.shaftDiameter) || 0),
+                 shaftLen: (toMeters(protoState.shaftLength) || 0),
+                 headDia: (toMeters(protoState.headDiameter) || 0),
+                 headLen: (toMeters(protoState.headLength) || 0),
+             };
+
+             if (schemaSource === 'makeActiveSpine()' || schemaSource === 'makeExcSpine()') {
+                 protoSchemaItem.amparGbar = parseFloat(protoState.amparGbar) || 0;
+                 protoSchemaItem.nmdarGbar = parseFloat(protoState.nmdarGbar) || 0;
+             }
+             if (schemaSource === 'makeActiveSpine()') {
+                protoSchemaItem.CaTau = parseFloat(protoState.CaTau) || 13.0;
+             }
+
+             if (!protoSchemaItem.name || !protoSchemaItem.source) return null;
+             return protoSchemaItem;
+         }).filter(p => p !== null);
+
+        const spineDistribData = currentDistributions.map(distState => {
+            const selectedProtoExists = spineProtoData.some(p => p.name === distState.prototype);
+             if (!selectedProtoExists || !distState.prototype || !distState.path) return null;
+
+             return {
+                 proto: distState.prototype,
+                 path: distState.path,
+                 spacing: numOrExpr(distState.spacing, 0, x => x * 1e-6),
+                 minSpacing: numOrExpr(distState.minSpacing, 0, x => x * 1e-6),
+                 sizeScale: numOrExpr(distState.sizeScale, 1),
+                 sizeSdev: numOrExpr(distState.sizeStdDev, 0.5),
+                 angle: numOrExpr(distState.angle, 0),
+                 angleSdev: numOrExpr(distState.angleStdDev, 6.2831853),
+                 randSeed: parseInt(distState.randSeed, 10) || 1234,
+             };
+         }).filter(d => d !== null);
+
+        return { spineProto: spineProtoData, spineDistrib: spineDistribData };
+    }, []);
+
     useEffect(() => {
-        const getSpineDataForUnmount = () => {
-            const currentPrototypes = prototypesRef.current;
-            const currentDistributions = distributionsRef.current;
-
-            const spineProtoData = currentPrototypes.map(protoState => {
-                 let schemaType = "builtin";
-                 let schemaSource = protoState.source || "";
-                 if (protoState.type === 'User Function') {
-                      schemaType = "func";
-                      schemaSource = protoState.source || protoState.name;
-                 }
-
-                 const protoSchemaItem = {
-                     type: schemaType,
-                     source: schemaSource,
-                     name: protoState.name || getNameFromType(protoState.type),
-                     shaftDia: (toMeters(protoState.shaftDiameter) || 0),
-                     shaftLen: (toMeters(protoState.shaftLength) || 0),
-                     headDia: (toMeters(protoState.headDiameter) || 0),
-                     headLen: (toMeters(protoState.headLength) || 0),
-                 };
-                
-                 if (schemaSource === 'makeActiveSpine()' || schemaSource === 'makeExcSpine()') {
-                     protoSchemaItem.amparGbar = parseFloat(protoState.amparGbar) || 0;
-                     protoSchemaItem.nmdarGbar = parseFloat(protoState.nmdarGbar) || 0;
-                 }
-                 if (schemaSource === 'makeActiveSpine()') {
-                    protoSchemaItem.CaTau = parseFloat(protoState.CaTau) || 13.0;
-                 }
-
-                 if (!protoSchemaItem.name || !protoSchemaItem.source) return null;
-                 return protoSchemaItem;
-             }).filter(p => p !== null);
-
-            const spineDistribData = currentDistributions.map(distState => {
-                const selectedProtoExists = spineProtoData.some(p => p.name === distState.prototype);
-                 if (!selectedProtoExists || !distState.prototype || !distState.path) return null;
-
-                 return {
-                     proto: distState.prototype,
-                     path: distState.path,
-                     spacing: (toMeters(distState.spacing) || 0),
-                     minSpacing: (toMeters(distState.minSpacing) || 0),
-                     sizeScale: parseFloat(distState.sizeScale) || 1,
-                     sizeSdev: parseFloat(distState.sizeStdDev) || 0.5,
-                     angle: parseFloat(distState.angle) || 0,
-                     angleSdev: parseFloat(distState.angleStdDev) || 6.2831853,
-                     randSeed: parseInt(distState.randSeed, 10) || 1234, 
-                 };
-             }).filter(d => d !== null);
-
-            return { spineProto: spineProtoData, spineDistrib: spineDistribData };
-        };
-
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getSpineDataForUnmount();
-                onConfigurationChangeRef.current(configData);
+                onConfigurationChangeRef.current(getSpineData());
             }
         };
-    }, []);
+    }, [getSpineData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getSpineData;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getSpineData]);
+
+    const activeProto = prototypes[activePrototype];
+    const isExcOrExcCa = activeProto?.source === 'makeActiveSpine()' || activeProto?.source === 'makeExcSpine()';
+    const isExcCa = activeProto?.source === 'makeActiveSpine()';
+
+    const shaftDiaNum = Number(activeProto?.shaftDiameter);
+    const shaftDiaError = activeProto && (isNaN(shaftDiaNum) || shaftDiaNum <= 0) ? 'Must be > 0' : null;
+    const shaftDiaWarn = !shaftDiaError && activeProto && (shaftDiaNum < 0.05 || shaftDiaNum > 1.0) ? 'Typical range 0.05–1.0 µm' : null;
+
+    const shaftLenNum = Number(activeProto?.shaftLength);
+    const shaftLenError = activeProto && (isNaN(shaftLenNum) || shaftLenNum <= 0) ? 'Must be > 0' : null;
+    const shaftLenWarn = !shaftLenError && activeProto && (shaftLenNum < 0.1 || shaftLenNum > 5.0) ? 'Typical range 0.1–5.0 µm' : null;
+
+    const headDiaNum = Number(activeProto?.headDiameter);
+    const headDiaError = activeProto && (isNaN(headDiaNum) || headDiaNum <= 0) ? 'Must be > 0' : null;
+    const headDiaWarn = !headDiaError && activeProto && (headDiaNum < 0.1 || headDiaNum > 5.0) ? 'Typical range 0.1–5.0 µm' : null;
+
+    const headLenNum = Number(activeProto?.headLength);
+    const headLenError = activeProto && (isNaN(headLenNum) || headLenNum <= 0) ? 'Must be > 0' : null;
+    const headLenWarn = !headLenError && activeProto && (headLenNum < 0.1 || headLenNum > 5.0) ? 'Typical range 0.1–5.0 µm' : null;
+
+    const amparGbarNum = Number(activeProto?.amparGbar);
+    const amparGbarError = isExcOrExcCa && (isNaN(amparGbarNum) || amparGbarNum < 0) ? 'Must be ≥ 0' : null;
+    const amparGbarWarn = !amparGbarError && isExcOrExcCa
+        ? (amparGbarNum === 0 ? 'Gbar = 0 — AMPAR will not fire'
+            : amparGbarNum > 10000 ? 'AMPAR Gbar > 10000 S/m² is unusually high'
+            : null)
+        : null;
+
+    const nmdarGbarNum = Number(activeProto?.nmdarGbar);
+    const nmdarGbarError = isExcOrExcCa && (isNaN(nmdarGbarNum) || nmdarGbarNum < 0) ? 'Must be ≥ 0' : null;
+    const nmdarGbarWarn = !nmdarGbarError && isExcOrExcCa
+        ? (nmdarGbarNum === 0 ? 'Gbar = 0 — NMDAR will not fire'
+            : nmdarGbarNum > 10000 ? 'NMDAR Gbar > 10000 S/m² is unusually high'
+            : null)
+        : null;
+
+    const caTauNum = Number(activeProto?.CaTau);
+    const caTauError = isExcCa && (isNaN(caTauNum) || caTauNum <= 0) ? 'Must be > 0' : null;
+    const caTauWarn = !caTauError && isExcCa && (caTauNum < 0.001 || caTauNum > 1.0) ? 'Typical Ca decay time is 0.001–1.0 s' : null;
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
@@ -322,27 +387,27 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                              <HelpField id="source" label="Source (auto)" value={prototypes[activePrototype].source} onChange={() => {}} helptext={helpText.prototypes.source} InputProps={{ readOnly: true }} variant="filled" />
                         </Grid>
                          <Grid item xs={6}>
-                            <HelpField id="shaftDiameter" label="Shaft Diameter (μm)" type="number" value={prototypes[activePrototype].shaftDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftDiameter} />
+                            <HelpField id="shaftDiameter" label="Shaft Diameter (μm)" type="number" value={prototypes[activePrototype].shaftDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftDiameter} error={!!shaftDiaError} helperText={shaftDiaError || shaftDiaWarn || undefined} FormHelperTextProps={!shaftDiaError && shaftDiaWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="shaftLength" label="Shaft Length (μm)" type="number" value={prototypes[activePrototype].shaftLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftLength} />
+                             <HelpField id="shaftLength" label="Shaft Length (μm)" type="number" value={prototypes[activePrototype].shaftLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.shaftLength} error={!!shaftLenError} helperText={shaftLenError || shaftLenWarn || undefined} FormHelperTextProps={!shaftLenError && shaftLenWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="headDiameter" label="Head Diameter (μm)" type="number" value={prototypes[activePrototype].headDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headDiameter} />
+                             <HelpField id="headDiameter" label="Head Diameter (μm)" type="number" value={prototypes[activePrototype].headDiameter} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headDiameter} error={!!headDiaError} helperText={headDiaError || headDiaWarn || undefined} FormHelperTextProps={!headDiaError && headDiaWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="headLength" label="Head Length (μm)" type="number" value={prototypes[activePrototype].headLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headLength} />
+                             <HelpField id="headLength" label="Head Length (μm)" type="number" value={prototypes[activePrototype].headLength} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.headLength} error={!!headLenError} helperText={headLenError || headLenWarn || undefined} FormHelperTextProps={!headLenError && headLenWarn ? { sx: { color: 'warning.main' } } : undefined} />
                         </Grid>
                         
                         {(prototypes[activePrototype].source === 'makeActiveSpine()' || prototypes[activePrototype].source === 'makeExcSpine()') && (
                             <>
                                 <Grid item xs={12}><Typography variant="caption" display="block">Receptor Params</Typography></Grid>
-                                <Grid item xs={6}><HelpField id="amparGbar" label="AMPAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].amparGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.amparGbar} /></Grid>
-                                <Grid item xs={6}><HelpField id="nmdarGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdarGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdarGbar} /></Grid>
-                                
+                                <Grid item xs={6}><HelpField id="amparGbar" label="AMPAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].amparGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.amparGbar} error={!!amparGbarError} helperText={amparGbarError || amparGbarWarn || undefined} FormHelperTextProps={!amparGbarError && amparGbarWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                                <Grid item xs={6}><HelpField id="nmdarGbar" label="NMDAR Gbar (S/m^2)" type="number" value={prototypes[activePrototype].nmdarGbar} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.nmdarGbar} error={!!nmdarGbarError} helperText={nmdarGbarError || nmdarGbarWarn || undefined} FormHelperTextProps={!nmdarGbarError && nmdarGbarWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+
                                 {(prototypes[activePrototype].source === 'makeActiveSpine()') && (
                                     <Grid item xs={6}>
-                                        <HelpField id="CaTau" label="Ca decay time (s)" type="number" value={prototypes[activePrototype].CaTau} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.CaTau} />
+                                        <HelpField id="CaTau" label="Ca decay time (s)" type="number" value={prototypes[activePrototype].CaTau} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.CaTau} error={!!caTauError} helperText={caTauError || caTauWarn || undefined} FormHelperTextProps={!caTauError && caTauWarn ? { sx: { color: 'warning.main' } } : undefined} />
                                     </Grid>
                                 )}
                              </>
@@ -387,29 +452,64 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [] }) 
                         </Grid>
 
                         <Grid item xs={6}>
-                             <HelpField id="prototype" label="Prototype" select value={distributions[activeDistribution].prototype} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.prototype}>
+                             <HelpField id="prototype" label="Prototype" select
+                                 error={!distributions[activeDistribution].prototype}
+                                 helperText={!distributions[activeDistribution].prototype ? 'Select a prototype' : undefined}
+                                 value={distributions[activeDistribution].prototype}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.prototype}
+                             >
                                 <MenuItem value=""><em>Select...</em></MenuItem>
                                 {prototypes.filter(p => p.name).map((p) => <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>)}
                             </HelpField>
                         </Grid>
-                        {/* 'path' was here previously */}
                         <Grid item xs={6}>
-                             <HelpField id="spacing" label="Spacing (μm)" type="number" value={distributions[activeDistribution].spacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.spacing}/>
+                             <ExprHelpField id="spacing" label="Spacing (μm)"
+                                 value={distributions[activeDistribution].spacing}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.spacing}
+                                 warning={spacingDendWarn(distributions[activeDistribution].spacing, cellProto) || warnSingleSegExpr(distributions[activeDistribution].spacing, cellProto)}
+                             />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="minSpacing" label="Min Spacing (μm)" type="number" value={distributions[activeDistribution].minSpacing} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.minSpacing}/>
+                             <ExprHelpField id="minSpacing" label="Min Spacing (μm)"
+                                 value={distributions[activeDistribution].minSpacing}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.minSpacing}
+                                 warning={warnSingleSegExpr(distributions[activeDistribution].minSpacing, cellProto)}
+                             />
                         </Grid>
                          <Grid item xs={6}>
-                            <HelpField id="sizeScale" label="Size Scale" type="number" value={distributions[activeDistribution].sizeScale} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeScale}/>
+                            <ExprHelpField id="sizeScale" label="Size Scale"
+                                value={distributions[activeDistribution].sizeScale}
+                                onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                helptext={helpText.distributions.sizeScale}
+                                warning={warnSingleSegExpr(distributions[activeDistribution].sizeScale, cellProto)}
+                            />
                         </Grid>
                         <Grid item xs={6}>
-                            <HelpField id="sizeStdDev" label="Size Std Dev" type="number" value={distributions[activeDistribution].sizeStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.sizeStdDev}/>
+                            <ExprHelpField id="sizeStdDev" label="Size Std Dev"
+                                value={distributions[activeDistribution].sizeStdDev}
+                                onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                helptext={helpText.distributions.sizeStdDev}
+                                warning={warnSingleSegExpr(distributions[activeDistribution].sizeStdDev, cellProto)}
+                            />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="angle" label="Angle (rad)" type="number" value={distributions[activeDistribution].angle} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angle}/>
+                             <ExprHelpField id="angle" label="Angle (rad)"
+                                 value={distributions[activeDistribution].angle}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.angle}
+                                 warning={warnSingleSegExpr(distributions[activeDistribution].angle, cellProto)}
+                             />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="angleStdDev" label="Angle Std Dev (rad)" type="number" value={distributions[activeDistribution].angleStdDev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.angleStdDev}/>
+                             <ExprHelpField id="angleStdDev" label="Angle Std Dev (rad)"
+                                 value={distributions[activeDistribution].angleStdDev}
+                                 onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
+                                 helptext={helpText.distributions.angleStdDev}
+                                 warning={warnSingleSegExpr(distributions[activeDistribution].angleStdDev, cellProto)}
+                             />
                         </Grid>
                         <Grid item xs={6}>
                              <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>

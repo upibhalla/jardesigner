@@ -61,10 +61,9 @@ function GuideTab() {
     );
 }
 
-function TutorialsTab({ clientId, onLoadTutorial }) {
+function TutorialsTab({ clientId }) {
     const [index, setIndex] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [loadingName, setLoadingName] = useState(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -74,17 +73,10 @@ function TutorialsTab({ clientId, onLoadTutorial }) {
             .catch(() => { setError('Could not load tutorial list.'); setLoading(false); });
     }, []);
 
-    const handleLoad = useCallback(async (name) => {
-        setLoadingName(name);
-        setError('');
-        try {
-            await onLoadTutorial(name);
-        } catch {
-            setError(`Failed to load tutorial "${name}".`);
-        } finally {
-            setLoadingName(null);
-        }
-    }, [onLoadTutorial]);
+    const handleLoad = useCallback((name) => {
+        const url = `${window.location.origin}${window.location.pathname}?tutorial=${encodeURIComponent(name)}`;
+        window.open(url, '_blank');
+    }, []);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}><CircularProgress /></Box>;
 
@@ -113,9 +105,8 @@ function TutorialsTab({ clientId, onLoadTutorial }) {
                         />
                         <ListItemSecondaryAction>
                             <Button size="small" variant="contained"
-                                    disabled={loadingName === item.name}
                                     onClick={() => handleLoad(item.name)}>
-                                {loadingName === item.name ? <CircularProgress size={16} /> : 'Load'}
+                                Load
                             </Button>
                         </ListItemSecondaryAction>
                     </ListItem>
@@ -186,7 +177,7 @@ const MarkdownText = ({ clientId, docFile, onLoadTutorial }) => {
             </Tabs>
             <Box sx={{ flex: 1, overflow: 'hidden' }}>
                 {tab === 0 && <GuideTab />}
-                {tab === 1 && <TutorialsTab clientId={clientId} onLoadTutorial={onLoadTutorial} />}
+                {tab === 1 && <TutorialsTab clientId={clientId} />}
                 {tab === 2 && <ModelNotesTab clientId={clientId} docFile={docFile} />}
             </Box>
         </Box>

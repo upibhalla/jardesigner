@@ -11,7 +11,7 @@
   "distributions": {
     "prototype": "Select which of the defined channel prototypes to distribute with this rule.",
     "path": "The morphological path where channels will be placed (e.g., 'soma', 'axon', 'dend', or a specific path like '/cell/dend[0]/branch[1]').",
-    "maxConductance": "The maximum conductance density (Gbar) for this channel at this location. The units depend on the specific channel model but are typically in Siemens per square meter (S/m^2).",
-    "caTau": "The time constant for calcium decay, in seconds (s). This parameter is only applicable when distributing a calcium concentration prototype ('Ca_conc')."
+    "maxConductance": "The maximum conductance density (Gbar) for this channel, in S/m^2. May be a number or a muParser expression. Allowed variables: p (path dist from soma, m), g (geometric dist from soma, m), L (electrotonic dist, λ), len (compartment length, m), dia (compartment diameter, m), maxP, maxG, maxL (max values of p/g/L). Example: 400*H(0.5e-6 - p) places channels only within 0.5 µm of soma.",
+    "caTau": "The time constant for calcium decay, in seconds. Only used when distributing a Ca_conc prototype. May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL."
   }
 }

@@ -127,7 +127,9 @@ const ThreeDViewer = (props) => {
     isReplaying, onStartReplay, onPauseReplay, onSeekReplay, replayInterval, setReplayInterval, totalRuntime,
     explodeAxis, onExplodeAxisToggle, onSceneBuilt,
     defaultDiaScale,
-    clickSelected
+    clickSelected,
+    modelDirty,
+    handleRebuildModel,
   } = props;
 
   const { replayTime } = useContext(ReplayContext);
