@@ -1,5 +1,5 @@
 import React, { useState, memo, useCallback, useEffect, useRef } from 'react'; 
-import { Box, Tabs, Tab } from '@mui/material';
+import { Box, Tabs, Tab, Button } from '@mui/material';
 import GraphWindow from './GraphWindow';
 import JsonText from './JsonText';
 import MarkdownText from './MarkdownText';
@@ -36,6 +36,8 @@ const DisplayWindow = (props) => {
     reactionGraphs,
     docFile,
     onLoadTutorial,
+    modelDirty,
+    handleRebuildModel,
   } = props;
 
   // ... (Keep all existing hooks/logic exactly as is) ...
@@ -47,10 +49,11 @@ const DisplayWindow = (props) => {
   useEffect(() => {
     const hasNewSetupConfig = threeDConfigs?.setup && !prevThreeDConfigSetup.current;
     if (hasNewSetupConfig && tabIndex !== 2) {
-      setTabIndex(3);
+      const hasPlots = jsonData?.plots?.length > 0;
+      setTabIndex(hasPlots ? 0 : 3);
     }
     prevThreeDConfigSetup.current = threeDConfigs?.setup;
-  }, [threeDConfigs?.setup, tabIndex]);
+  }, [threeDConfigs?.setup, tabIndex, jsonData?.plots?.length]);
 
   // Switch to Documentation tab when a docFile first appears (tutorial loaded or doc uploaded).
   useEffect(() => {
@@ -60,14 +63,15 @@ const DisplayWindow = (props) => {
     prevDocFile.current = docFile;
   }, [docFile]);
 
-  // When a run starts, switch to Graph if plots are defined, else Run 3D.
+  // When a run starts: Graph → Run 3D → Setup 3D.
   useEffect(() => {
     if (!prevIsSimulating.current && isSimulating) {
       const hasPlots = jsonData?.plots?.length > 0;
-      setTabIndex(hasPlots ? 0 : 4);
+      const hasRunThreeD = jsonData?.moogli?.length > 0;
+      setTabIndex(hasPlots ? 0 : hasRunThreeD ? 4 : 3);
     }
     prevIsSimulating.current = isSimulating;
-  }, [isSimulating, jsonData?.plots?.length]);
+  }, [isSimulating, jsonData?.plots?.length, jsonData?.moogli?.length]);
 
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
@@ -119,26 +123,34 @@ const DisplayWindow = (props) => {
       </Box>
       
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 3 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
-         {threeDConfigs?.setup && (
-            <ThreeDViewer
-              {...props}
-              defaultDiaScale={2.5}
-              threeDConfig={threeDConfigs.setup}
-              simulationFrames={simulationFrames.setup}
-              drawableVisibility={drawableVisibility.setup}
-              setDrawableVisibility={setSetupDrawableVisibility}
-              clickSelected={clickSelected.setup}
-              explodeAxis={explodeAxis.setup}
-              onManagerReady={onManagerReadySetup}
-              onSelectionChange={onSelectionChangeSetup}
-              onExplodeAxisToggle={onExplodeAxisToggleSetup}
-              onSceneBuilt={onSceneBuiltSetup}
-              isReplaying={false}
-              onStartReplay={() => {}}
-              onPauseReplay={() => {}}
-              onSeekReplay={() => {}}
-            />
-        )}
+         <Box sx={{ px: 1, py: 0.5, flexShrink: 0, display: 'flex', alignItems: 'center', borderBottom: '1px solid #e0e0e0' }}>
+           <Button size="small" variant="contained" onClick={handleRebuildModel}
+             sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
+             Rebuild
+           </Button>
+         </Box>
+         <Box sx={{ flexGrow: 1, overflow: 'hidden', position: 'relative' }}>
+           {threeDConfigs?.setup && (
+              <ThreeDViewer
+                {...props}
+                defaultDiaScale={2.5}
+                threeDConfig={threeDConfigs.setup}
+                simulationFrames={simulationFrames.setup}
+                drawableVisibility={drawableVisibility.setup}
+                setDrawableVisibility={setSetupDrawableVisibility}
+                clickSelected={clickSelected.setup}
+                explodeAxis={explodeAxis.setup}
+                onManagerReady={onManagerReadySetup}
+                onSelectionChange={onSelectionChangeSetup}
+                onExplodeAxisToggle={onExplodeAxisToggleSetup}
+                onSceneBuilt={onSceneBuiltSetup}
+                isReplaying={false}
+                onStartReplay={() => {}}
+                onPauseReplay={() => {}}
+                onSeekReplay={() => {}}
+              />
+          )}
+         </Box>
       </Box>
 
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 4 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
@@ -163,11 +175,16 @@ const DisplayWindow = (props) => {
       </Box>
 
       {/* 2. REACTION GRAPH PANEL (Tab Index 5) */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 5 ? 'flex' : 'none', position: 'relative' }}>
-         <MemoizedReactionGraph 
-             // Pass the Setup graph data specifically
-             graphData={reactionGraphs?.setup} 
-         />
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: tabIndex === 5 ? 'flex' : 'none', flexDirection: 'column', position: 'relative' }}>
+         <Box sx={{ p: 0.5, flexShrink: 0 }}>
+           <Button size="small" variant="contained" disabled={!modelDirty} onClick={handleRebuildModel}
+             sx={{ bgcolor: modelDirty ? 'warning.main' : undefined, '&:hover': { bgcolor: modelDirty ? 'warning.dark' : undefined } }}>
+             Rebuild
+           </Button>
+         </Box>
+         <Box sx={{ flexGrow: 1, overflow: 'hidden', position: 'relative' }}>
+           <MemoizedReactionGraph graphData={reactionGraphs?.setup} />
+         </Box>
       </Box>
     </Box>
   );

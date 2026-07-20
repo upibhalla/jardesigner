@@ -21,11 +21,29 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import helpText from './PassiveMenuBox.Help.json';
 import { formatFloat } from '../../utils/formatters.js';
-import { getCompartmentOptions, OPTION_USER_SPECIFIED } from '../../utils/menuHelpers';
+import { getCompartmentOptions, OPTION_USER_SPECIFIED, warnSingleSegExpr } from '../../utils/menuHelpers';
+import ExprHelpField from '../ExprHelpField';
 
 // --- Helper to safely convert value to string ---
 const safeToString = (value, defaultValue = '') => {
     return value !== undefined && value !== null ? String(value) : defaultValue;
+};
+
+// Range warning for a plain numeric field. Returns warning string or null.
+// Skips check when value is an expression (non-numeric) — can't evaluate without spatial vars.
+const rangeWarn = (str, min, max, msg) => {
+    const n = Number(str);
+    if (isNaN(n)) return null; // expression — skip
+    if (n < min || n > max) return msg;
+    return null;
+};
+
+// Return number (optionally scaled) if parseable, otherwise return expression string as-is.
+const numOrExpr = (str, defaultVal, scaleFn) => {
+    if (!str || String(str).trim() === '') return defaultVal;
+    const n = Number(str); // Number() is strict: Number("100*p") === NaN, parseFloat would give 100
+    if (isNaN(n)) return str;
+    return scaleFn ? scaleFn(n) : n;
 };
 
 // --- Default state for a new passive distribution entry ---
@@ -53,11 +71,13 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const PassiveMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
-    elecPaths = [], 
-    spinePaths = [] 
+const PassiveMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
+    elecPaths = [],
+    spinePaths = [],
+    cellProto,
+    flushRef,
 }) => {
     const [tabs, setTabs] = useState(() => {
         const initialTabs = currentConfig?.map(p => ({
@@ -131,34 +151,34 @@ const PassiveMenuBox = ({
         return getCompartmentOptions(allPaths);
     }, [elecPaths, spinePaths]);
 
-    useEffect(() => {
-        const getPassiveDataForUnmount = () => {
-            return tabsRef.current.map(tabState => {
-                if (!tabState.path) return null;
-                const defaultSchemaValues = { Em: -0.065, initVm: -0.065, CM: 0.01, RM: 1.0, RA: 1.0 };
-                const Em_V = parseFloat(tabState.leakReversalPotential) / 1000;
-                const initVm_V = parseFloat(tabState.initialPotential) / 1000;
-                const CM_F_m2 = parseFloat(tabState.membraneCapacitance);
-                const RM_Ohm_m2 = parseFloat(tabState.membraneResistivity);
-                const RA_Ohm_m = parseFloat(tabState.axialResistivity);
-                return {
-                    path: tabState.path,
-                    Em: isNaN(Em_V) ? defaultSchemaValues.Em : Em_V,
-                    initVm: isNaN(initVm_V) ? defaultSchemaValues.initVm : initVm_V,
-                    CM: isNaN(CM_F_m2) ? defaultSchemaValues.CM : CM_F_m2,
-                    RM: isNaN(RM_Ohm_m2) ? defaultSchemaValues.RM : RM_Ohm_m2,
-                    RA: isNaN(RA_Ohm_m) ? defaultSchemaValues.RA : RA_Ohm_m,
-                };
-            }).filter(item => item !== null);
-        };
+    const getPassiveData = useCallback(() => {
+        return tabsRef.current.map(tabState => {
+            if (!tabState.path) return null;
+            const defs = { Em: -0.065, initVm: -0.065, CM: 0.01, RM: 1.0, RA: 1.0 };
+            return {
+                path: tabState.path,
+                Em: numOrExpr(tabState.leakReversalPotential, defs.Em, x => x / 1000),
+                initVm: numOrExpr(tabState.initialPotential, defs.initVm, x => x / 1000),
+                CM: numOrExpr(tabState.membraneCapacitance, defs.CM),
+                RM: numOrExpr(tabState.membraneResistivity, defs.RM),
+                RA: numOrExpr(tabState.axialResistivity, defs.RA),
+            };
+        }).filter(item => item !== null);
+    }, []);
 
+    useEffect(() => {
         return () => {
             if (onConfigurationChangeRef.current) {
-                const configData = getPassiveDataForUnmount();
-                onConfigurationChangeRef.current({ passiveDistrib: configData });
+                onConfigurationChangeRef.current({ passiveDistrib: getPassiveData() });
             }
         };
-    }, []);
+    }, [getPassiveData]);
+
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = () => ({ passiveDistrib: getPassiveData() });
+        return () => { flushRef.current = null; };
+    }, [flushRef, getPassiveData]);
 
     const activeTabData = tabs[activeTab];
 
@@ -206,19 +226,24 @@ const PassiveMenuBox = ({
                         </Grid>
 
                         <Grid item xs={6}>
-                            <HelpField id="leakReversalPotential" label="Em (Leak Reversal, mV)" type="number" required value={activeTabData.leakReversalPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.leakReversalPotential} />
+                            <ExprHelpField id="leakReversalPotential" label="Em (mV, or expr in V)" required value={activeTabData.leakReversalPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.leakReversalPotential}
+                                warning={rangeWarn(activeTabData.leakReversalPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.leakReversalPotential, cellProto)} />
                         </Grid>
                         <Grid item xs={6}>
-                             <HelpField id="initialPotential" label="initVm (Initial Vm, mV)" type="number" required value={activeTabData.initialPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.initialPotential} />
+                             <ExprHelpField id="initialPotential" label="initVm (mV, or expr in V)" required value={activeTabData.initialPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.initialPotential}
+                                warning={rangeWarn(activeTabData.initialPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.initialPotential, cellProto)} />
                         </Grid>
-                        <Grid item xs={4}>
-                            <HelpField id="membraneCapacitance" label="CM (F/m^2)" type="number" required value={activeTabData.membraneCapacitance} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneCapacitance} />
+                        <Grid item xs={12}>
+                            <ExprHelpField id="membraneCapacitance" label="CM (F/m^2)" required value={activeTabData.membraneCapacitance} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneCapacitance}
+                                warning={rangeWarn(activeTabData.membraneCapacitance, 1e-4, 1.0, 'Unusual value (typical range: 1e-4 to 1.0 F/m²)') || warnSingleSegExpr(activeTabData.membraneCapacitance, cellProto)} />
                         </Grid>
-                        <Grid item xs={4}>
-                            <HelpField id="membraneResistivity" label="RM (Ohm.m^2)" type="number" required value={activeTabData.membraneResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneResistivity} />
+                        <Grid item xs={12}>
+                            <ExprHelpField id="membraneResistivity" label="RM (Ohm.m^2)" required value={activeTabData.membraneResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneResistivity}
+                                warning={rangeWarn(activeTabData.membraneResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m²)') || warnSingleSegExpr(activeTabData.membraneResistivity, cellProto)} />
                         </Grid>
-                        <Grid item xs={4}>
-                            <HelpField id="axialResistivity" label="RA (Ohm.m)" type="number" required value={activeTabData.axialResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.axialResistivity} />
+                        <Grid item xs={12}>
+                            <ExprHelpField id="axialResistivity" label="RA (Ohm.m)" required value={activeTabData.axialResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.axialResistivity}
+                                warning={rangeWarn(activeTabData.axialResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m)') || warnSingleSegExpr(activeTabData.axialResistivity, cellProto)} />
                         </Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>

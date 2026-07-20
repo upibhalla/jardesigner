@@ -35,9 +35,19 @@ const nonChemFieldOptions = [
 ];
 const chemFieldOptions = ['n', 'conc', 'concInit', 'nInit'];
 const chemFields = [...chemFieldOptions];
+const RELPATH_REQUIRED_FIELDS = new Set(['Gbar', 'Gk', 'Ik', 'ICa', 'Ca', 'activation', 'modulation']);
 const fastDtFields = ['Vm', 'Im', 'inject', 'Gbar', 'Gk', 'Ik', 'ICa', 'activation', 'current', 'Ca'];
 const colormapOptions = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'jet', 'gray', 'cool', 'hot', 'bwr'];
 const backgroundOptions = ['default', 'white', 'black', 'grey', 'beige'];
+
+const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+const computeDefaultTitle = (path, field, childPath) => {
+    if (chemFields.includes(field)) {
+        return [(childPath || ''), capitalize(field || '')].filter(Boolean).join(' ');
+    }
+    const pathPart = childPath ? `${path || ''}/${childPath}` : (path || '');
+    return [capitalize(pathPart), capitalize(field || '')].filter(Boolean).join(' ');
+};
 
 // --- Helper to safely convert value to string ---
 const safeToString = (value, defaultValue = '') => {
@@ -45,17 +55,21 @@ const safeToString = (value, defaultValue = '') => {
 };
 
 // --- Default state creators ---
-const createDefaultMoogliEntry = () => ({
-    path: '#', // Default to # per request
-    field: nonChemFieldOptions[0],
+const createDefaultMoogliEntry = () => {
+    const path = '#';
+    const field = nonChemFieldOptions[0];
+    return {
+    path,
+    field,
     chemProto: '.',
     childPath: '',
-    title: '',
+    title: computeDefaultTitle(path, field, ''),
     diameterScale: '1.0',
     min: '0',
     max: '0',
     dt: '0.001',
-});
+    };
+};
 
 const createDefaultGlobalSettings = () => ({
     rotation: '0.0',
@@ -84,13 +98,14 @@ const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullW
 
 
 // --- Main Component ---
-const ThreeDMenuBox = ({ 
-    onConfigurationChange, 
-    currentConfig, 
+const ThreeDMenuBox = ({
+    onConfigurationChange,
+    currentConfig,
     meshMols,
-    elecPaths = [], 
+    elecPaths = [],
     spinePaths = [],
-    channelPrototypes = [] 
+    channelPrototypes = [],
+    flushRef
 }) => {
     const [tabs, setTabs] = useState(() => {
         const defaults = createDefaultMoogliEntry();
@@ -117,7 +132,7 @@ const ThreeDMenuBox = ({
                 field: field,
                 chemProto: initialChemProto,
                 childPath: initialChildPath,
-                title: m.title || '',
+                title: m.title || computeDefaultTitle(m.path || defaults.path, field, initialChildPath),
                 diameterScale: formatFloat(m.diaScale) || defaults.diameterScale,
                 min: formatFloat(m.ymin) || defaults.min,
                 max: formatFloat(m.ymax) || defaults.max,
@@ -172,7 +187,7 @@ const ThreeDMenuBox = ({
             prevTabs.map((tab, i) => {
                 if (i === index) {
                     const updatedTab = { ...tab, [key]: value };
-                    
+
                     if (key === 'field') {
                         const isNowChem = chemFields.includes(value);
                         const wasChem = chemFields.includes(tab.field);
@@ -187,7 +202,14 @@ const ThreeDMenuBox = ({
                     }
 
                     if (key === 'chemProto') {
-                        updatedTab.childPath = ''; 
+                        updatedTab.childPath = '';
+                    }
+
+                    if (['field', 'path', 'childPath', 'chemProto'].includes(key)) {
+                        const oldAutoTitle = computeDefaultTitle(tab.path, tab.field, tab.childPath);
+                        if (tab.title === oldAutoTitle || tab.title === '') {
+                            updatedTab.title = computeDefaultTitle(updatedTab.path, updatedTab.field, updatedTab.childPath);
+                        }
                     }
 
                     return updatedTab;
@@ -333,6 +355,12 @@ const ThreeDMenuBox = ({
         };
     }, [handleRefreshModel]);
 
+    useEffect(() => {
+        if (!flushRef) return;
+        flushRef.current = getThreeDDataForSave;
+        return () => { flushRef.current = null; };
+    }, [flushRef, getThreeDDataForSave]);
+
     const getTabLabel = (tab) => {
         const isChem = chemFields.includes(tab.field);
         if (isChem) {
@@ -344,6 +372,30 @@ const ThreeDMenuBox = ({
     };
     
     const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
+
+    const dtNum = Number(activeTabData?.dt);
+    const dtError = activeTabData && (isNaN(dtNum) || dtNum <= 0) ? 'Must be a positive number' : null;
+
+    const minNum = Number(activeTabData?.min);
+    const maxNum = Number(activeTabData?.max);
+    const minMaxWarn = activeTabData && !isNaN(minNum) && !isNaN(maxNum) &&
+        (minNum !== 0 || maxNum !== 0) && minNum >= maxNum
+        ? 'Max should be greater than Min for meaningful color scaling'
+        : null;
+
+    const diaNum = Number(activeTabData?.diameterScale);
+    const diaWarn = activeTabData && !isNaN(diaNum) && diaNum <= 0
+        ? 'Diameter scale ≤ 0 — compartments will be invisible'
+        : null;
+
+    let centerWarn = null;
+    try {
+        const parsed = JSON.parse(globalSettings.center);
+        if (!Array.isArray(parsed) || parsed.length !== 3 || !parsed.every(n => typeof n === 'number'))
+            centerWarn = 'Must be a JSON array of 3 numbers, e.g. [0,0,0]';
+    } catch {
+        centerWarn = 'Must be a JSON array of 3 numbers, e.g. [0,0,0]';
+    }
 
     return (
         <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
@@ -436,17 +488,22 @@ const ThreeDMenuBox = ({
                                     {!activeTabData.childPath && <FormHelperText error>Required</FormHelperText>}
                                  </Grid>
                              </>
-                         ) : (
+                         ) : (() => {
+                             const relpathRequired = RELPATH_REQUIRED_FIELDS.has(activeTabData.field);
+                             return (
                              <>
                                  {/* Relative Path as Menu for Non-Chem Fields */}
                                  <Grid item xs={12} sm={6}>
-                                    <HelpField 
-                                        id="childPath" 
-                                        label="Relative Path (Optional)" 
+                                    <HelpField
+                                        id="childPath"
+                                        label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
                                         select
-                                        value={activeTabData.childPath} 
-                                        onChange={(id, v) => handleChildPathChange({ target: { value: v } })} 
+                                        required={relpathRequired}
+                                        value={activeTabData.childPath}
+                                        onChange={(id, v) => handleChildPathChange({ target: { value: v } })}
                                         helptext={helpText.dataSources.childPath}
+                                        error={relpathRequired && !activeTabData.childPath}
+                                        helperText={relpathRequired && !activeTabData.childPath ? 'Required for this field' : undefined}
                                     >
                                         <MenuItem value=""><em>None</em></MenuItem>
                                         {channelPrototypes.map(chan => <MenuItem key={chan} value={chan}>{chan}</MenuItem>)}
@@ -455,12 +512,13 @@ const ThreeDMenuBox = ({
                                     </HelpField>
                                 </Grid>
                              </>
-                         )}
+                             );
+                         })()}
                         <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} helperText={diaWarn || undefined} FormHelperTextProps={diaWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
                         <Grid item xs={12} sm={6}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} helperText={minMaxWarn || undefined} FormHelperTextProps={minMaxWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                        <Grid item xs={12} sm={6}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} error={!!dtError} helperText={dtError || undefined} /></Grid>
                     </Grid>
                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>Remove Data Source</Button>
                 </Box>
@@ -478,7 +536,7 @@ const ThreeDMenuBox = ({
                     <Grid item xs={12} sm={6}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
                     <Grid item xs={12} sm={6}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
                     <Grid item xs={12} sm={6}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} /></Grid>
+                    <Grid item xs={12} sm={6}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} helperText={centerWarn || undefined} FormHelperTextProps={centerWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
                     <Grid item xs={12} container spacing={1} sx={{ mt: 1 }}>
                         <Grid item xs="auto"><Tooltip title={helpText.globalSettings.mergeDisplays}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" /></Tooltip></Grid>
                         <Grid item xs="auto"><Tooltip title={helpText.globalSettings.fullScreen}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" /></Tooltip></Grid>

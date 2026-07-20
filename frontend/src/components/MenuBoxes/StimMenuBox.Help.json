@@ -8,6 +8,6 @@
     "chemProto": "For chemical stimuli (when 'Field' is set to 'conc', 'n', etc.), select the chemical prototype this stimulus belongs to. For non-chemical stimuli, this should be '.'.",
     "childPath": "A relative path from the main 'Path'. For chemical fields, this specifies the target object within the chemical model. For other fields, this can point to a child object like a specific channel instance (e.g., 'Na_HH').",
     "geometryExpression": "An optional mathematical expression that can scale the stimulus based on the geometry of the target compartment (e.g., using 'area' or 'volume'). Defaults to 1 if empty.",
-    "stimulusExpression": "The core mathematical expression defining the stimulus waveform over time. Use 't' as the variable for time in seconds."
+    "stimulusExpression": "Mathematical expression defining the stimulus waveform. The only allowed variable is t (time in seconds). Example: 1e-11*(t>0.1)*(t<0.2) injects current between 0.1 and 0.2 s. Functions available: sin, cos, exp, log, sqrt, abs, H (Heaviside), sign."
   }
 }

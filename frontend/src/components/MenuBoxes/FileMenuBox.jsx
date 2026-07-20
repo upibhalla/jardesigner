@@ -372,6 +372,8 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                         label="Suggested File Name"
                         value={modelFileName}
                         onChange={(e) => setModelFileName(e.target.value)}
+                        helperText={/[/\\:*?"<>|]/.test(modelFileName) ? 'Contains characters invalid in filenames (/ \\ : * ? " < > |)' : undefined}
+                        FormHelperTextProps={/[/\\:*?"<>|]/.test(modelFileName) ? { sx: { color: 'warning.main' } } : undefined}
                     />
                 </Grid>
                 <Grid item xs={12}>
@@ -501,29 +503,6 @@ const FileMenuBox = ({ setJsonContent, currentConfig, getCurrentJsonData, client
                 </DialogActions>
             </Dialog>
 
-
-            <Dialog open={showMissingFilesDialog} onClose={() => setShowMissingFilesDialog(false)} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    External files required
-                    <IconButton size="small" onClick={() => setShowMissingFilesDialog(false)}><CloseIcon /></IconButton>
-                </DialogTitle>
-                <DialogContent>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        This model references files that are not embedded in the JSON.
-                        Load them from their respective panels:
-                    </Typography>
-                    {missingFiles.map(({ file, where }, i) => (
-                        <Box key={i} sx={{ mb: 1 }}>
-                            <Typography variant="body2">
-                                {file} --- {where}.
-                            </Typography>
-                        </Box>
-                    ))}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setShowMissingFilesDialog(false)}>OK</Button>
-                </DialogActions>
-            </Dialog>
 
         </Box>
     );
