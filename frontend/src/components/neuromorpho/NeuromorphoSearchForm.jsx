@@ -49,8 +49,12 @@ export default function NeuromorphoSearchForm({ onResults, footerEl, baseUrl = '
     const [cellType, setCellType]         = useState(null);
     const [archive, setArchive]           = useState(null);
     const [speciesList, setSpeciesList]   = useState([]);
-    const [metaOpts, setMetaOpts]         = useState({ brain_region: [], cell_type: [], archive: [] });
+    const [metaOpts, setMetaOpts]         = useState({ brain_region: [], cell_type: [], archive: [], cell_types_by_region: {} });
     const [metaLoading, setMetaLoading]   = useState(false);
+
+    const cellTypeOptions = brainRegion
+        ? (metaOpts.cell_types_by_region[brainRegion] || [])
+        : metaOpts.cell_type;
 
     // Results state
     const [searching, setSearching] = useState(false);
@@ -69,7 +73,7 @@ export default function NeuromorphoSearchForm({ onResults, footerEl, baseUrl = '
 
     useEffect(() => {
         if (!species) {
-            setMetaOpts({ brain_region: [], cell_type: [], archive: [] });
+            setMetaOpts({ brain_region: [], cell_type: [], archive: [], cell_types_by_region: {} });
             setBrainRegion(null); setCellType(null); setArchive(null);
             return;
         }
@@ -77,12 +81,23 @@ export default function NeuromorphoSearchForm({ onResults, footerEl, baseUrl = '
         fetch(`${baseUrl}/neuromorpho/metadata?species=${encodeURIComponent(species)}`)
             .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error || `HTTP ${r.status}`); }))
             .then(d => {
-                setMetaOpts({ brain_region: d.brain_region || [], cell_type: d.cell_type || [], archive: d.archive || [] });
+                setMetaOpts({
+                    brain_region: d.brain_region || [],
+                    cell_type: d.cell_type || [],
+                    archive: d.archive || [],
+                    cell_types_by_region: d.cell_types_by_region || {},
+                });
                 setBrainRegion(null); setCellType(null); setArchive(null);
             })
-            .catch(e => { console.error('metadata fetch failed:', e.message); setMetaOpts({ brain_region: [], cell_type: [], archive: [] }); })
+            .catch(e => { console.error('metadata fetch failed:', e.message); setMetaOpts({ brain_region: [], cell_type: [], archive: [], cell_types_by_region: {} }); })
             .finally(() => setMetaLoading(false));
     }, [species, baseUrl]);
+
+    const handleBrainRegionChange = (_, val) => {
+        setBrainRegion(val);
+        const validTypes = val ? (metaOpts.cell_types_by_region[val] || []) : metaOpts.cell_type;
+        if (cellType && !validTypes.includes(cellType)) setCellType(null);
+    };
 
     const _fetchPage = async (query, pg, pgSize, { showSpinner = false } = {}) => {
         if (showSpinner) setSearching(true);
@@ -157,7 +172,7 @@ export default function NeuromorphoSearchForm({ onResults, footerEl, baseUrl = '
                                 size="small" sx={{ width: 200 }}
                                 options={metaOpts.brain_region}
                                 value={brainRegion}
-                                onChange={(_, val) => setBrainRegion(val)}
+                                onChange={handleBrainRegionChange}
                                 disabled={searching || metaLoading}
                                 loading={metaLoading}
                                 renderInput={(params) => (
@@ -170,7 +185,7 @@ export default function NeuromorphoSearchForm({ onResults, footerEl, baseUrl = '
                         {species && (
                             <Autocomplete
                                 size="small" sx={{ width: 200 }}
-                                options={metaOpts.cell_type}
+                                options={cellTypeOptions}
                                 value={cellType}
                                 onChange={(_, val) => setCellType(val)}
                                 disabled={searching || metaLoading}
