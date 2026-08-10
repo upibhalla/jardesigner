@@ -53,21 +53,10 @@ function MarkdownRenderer({ markdown, scrollRef }) {
 }
 
 function GuideTab() {
-    const [htmlContent, setHtmlContent] = useState('');
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetch('Guide.html')
-            .then(r => { if (!r.ok) throw new Error(); return r.text(); })
-            .then(text => { setHtmlContent(text); setLoading(false); })
-            .catch(() => { setHtmlContent('<p>Could not load Guide.html</p>'); setLoading(false); });
-    }, []);
-
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}><CircularProgress /></Box>;
     return (
         <Box sx={{ height: '100%' }}>
-            <iframe srcDoc={htmlContent} style={{ width: '100%', height: '100%', border: 'none' }}
-                    title="Jardesigner Guide" sandbox="allow-same-origin" />
+            <iframe src="Guide.html" style={{ width: '100%', height: '100%', border: 'none' }}
+                    title="Jardesigner Guide" />
         </Box>
     );
 }

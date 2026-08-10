@@ -39,6 +39,7 @@ from . import fixXreacs
 
 from moose.neuroml.NeuroML import NeuroML
 from moose.neuroml.ChannelML import ChannelML
+from moose import channels
 from . import context
 
 _cmd_queue = queue.Queue()
@@ -721,6 +722,15 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
                     if chanName != cp['name']:
                         chan = moose.element( '/library/' + chanName )
                         chan.name = cp['name']
+                elif ctype == 'icg':
+                    suffix, modeldb_id = cp['source'].rsplit( '_', 1 )
+                    proto = channels.make_prototype(
+                                modeldb_id=int( modeldb_id ),
+                                suffix=suffix,
+                                temperature=self.temperature,
+                            )
+                    if proto.name != cp['name']:
+                        proto.name = cp['name']
 
     def buildChemProto( self ):
         if hasattr( self, "chemProto" ):
