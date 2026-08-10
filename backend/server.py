@@ -246,7 +246,7 @@ def _load_registry(proto_type):
     path = os.path.join(PROTO_REGISTRY_DIR, f'{proto_type}_protos.json')
     if not os.path.exists(path):
         return None
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 @app.route('/proto_digest/<proto_type>', methods=['GET'])
