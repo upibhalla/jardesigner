@@ -87,7 +87,9 @@ def search_neurons(
 
 def fetch_neuron_metadata(species: str) -> Dict:
     """
-    Collect all brain regions, cell types, and archives for a species.
+    Collect all brain regions, cell types, and archives for a species, plus
+    which cell types co-occur with each brain region (so the frontend can
+    narrow the cell type dropdown once a brain region is picked).
 
     This fetches every page sequentially — it's the slow call (~5-20s for
     large species). Cache the result on disk; see neuromorpho_routes.py.
@@ -108,6 +110,7 @@ def fetch_neuron_metadata(species: str) -> Dict:
     brain_regions: set = set()
     cell_types: set = set()
     archives: set = set()
+    region_cell_types: Dict[str, set] = {}
 
     for page in range(total_pages):
         try:
@@ -126,9 +129,14 @@ def fetch_neuron_metadata(species: str) -> Dict:
                 data = r.json()
             neurons = data.get("_embedded", {}).get("neuronResources", [])
             for n in neurons:
-                _collect(brain_regions, n.get("brain_region"))
-                _collect(cell_types, n.get("cell_type"))
+                regions = n.get("brain_region")
+                types = n.get("cell_type")
+                _collect(brain_regions, regions)
+                _collect(cell_types, types)
                 _collect(archives, n.get("archive"))
+                for region in _as_list(regions):
+                    for cell_type in _as_list(types):
+                        region_cell_types.setdefault(str(region), set()).add(str(cell_type))
         except Exception as e:
             print(f"[neuromorpho] page {page} failed: {e}")
 
@@ -137,6 +145,7 @@ def fetch_neuron_metadata(species: str) -> Dict:
         "brain_region": sorted(str(v) for v in brain_regions),
         "cell_type": sorted(str(v) for v in cell_types),
         "archive": sorted(str(v) for v in archives),
+        "cell_types_by_region": {r: sorted(v) for r, v in region_cell_types.items()},
     }
 
 
@@ -299,3 +308,9 @@ def _collect(target: set, value) -> None:
         target.update(v for v in value if v)
     elif value:
         target.add(value)
+
+
+def _as_list(value) -> List:
+    if isinstance(value, list):
+        return [v for v in value if v]
+    return [value] if value else []

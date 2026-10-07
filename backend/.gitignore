@@ -215,9 +215,19 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# database
+/metadata/*
+
+!/metadata/neuromorpho/
+/metadata/neuromorpho/*
+
+!/metadata/neuromorpho/mouse.json
+!/metadata/neuromorpho/rat.json
+!/metadata/neuromorpho/human.json
+!/metadata/neuromorpho/drosophila_melanogaster.json
+
 **/OLD/
 /temp_configs
 /TestModels
 /__pycache__
-/data
 user_uploads/

@@ -5,7 +5,7 @@ import {
     Tab,
     Typography,
     TextField,
-    Grid,
+    Grid2 as Grid,
     IconButton,
     MenuItem,
     Button,
@@ -493,7 +493,7 @@ const ChemMenuBox = ({
                      : spacingSoftWarn  ? 'Very fine spacing (< 0.5 µm)' : undefined;
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -521,19 +521,19 @@ const ChemMenuBox = ({
                 clientId={clientId}
             />
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
+                <Tabs value={activePrototype} onChange={(e, nv) => setActivePrototype(nv)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
                     {prototypes.map((p, i) => <Tab key={i} label={p.name || `Proto ${i + 1}`} />)}
                 </Tabs>
             </Box>
             {activeProtoData && (
-                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                     <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <HelpField id="name" label="Prototype Name" value={activeProtoData.name} onChange={(id,v) => setCustomPrototypeName(activePrototype, v)} helptext={helpText.prototypes.name} required/>
                         </Grid>
                          
                          {['SBML', 'kkit'].includes(activeProtoData.type) && (
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <TextField
                                         fullWidth
@@ -562,7 +562,7 @@ const ChemMenuBox = ({
                         )}
 
                          {['User Func', 'In-memory'].includes(activeProtoData.type) && (
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                                 <HelpField id="source" label="Source" value={activeProtoData.source} onChange={(id,v) => updatePrototype(activePrototype, id, v)} helptext={helpText.prototypes.source} required
                                     error={!activeProtoData.source}
                                     helperText={!activeProtoData.source ? 'Enter a source function or model name' : undefined}
@@ -570,7 +570,7 @@ const ChemMenuBox = ({
                             </Grid>
                         )}
                     </Grid>
-                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removePrototype(activePrototype)} sx={{ mt: 2 }}>
+                     <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removePrototype(activePrototype)} sx={{ mt: 2 }}>
                         Remove '{activeProtoData.name}'
                     </Button>
                 </Box>
@@ -581,16 +581,16 @@ const ChemMenuBox = ({
                 <Tooltip title={helpText.headings.distributions} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                 <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
+                 <Tabs value={activeDistribution} onChange={(e, nv) => setActiveDistribution(nv)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
                      {distributions.map((d, i) => <Tab key={i} label={`${d.prototype || 'New'} @ ${d.path || '?'}`} />)}
                      <IconButton onClick={addDistribution} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                  </Tabs>
              </Box>
             {activeDistribData && (
-                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                      <Grid container spacing={2}>
                          {/* Row 1: Parent Elec Compartment (Full Width, Menu) */}
-                         <Grid item xs={12}>
+                         <Grid size={12}>
                              <HelpField 
                                 id="path" 
                                 label="Parent Elec Compartment" 
@@ -611,7 +611,7 @@ const ChemMenuBox = ({
                          </Grid>
 
                          {/* Row 2: Type of chemical compartment (Full Width) */}
-                         <Grid item xs={12}>
+                         <Grid size={12}>
                               <HelpField id="location" label="Type of chemical compartment" select required value={activeDistribData.location} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.location}>
                                  {locationOptions.map(loc => (
                                      <MenuItem key={loc} value={loc}>
@@ -622,7 +622,7 @@ const ChemMenuBox = ({
                           </Grid>
                          
                          {/* Row 3: Chem Compartment and Diffusion Length */}
-                         <Grid item xs={12} sm={6}>
+                         <Grid size={{ xs: 12, sm: 6 }}>
                              <HelpField id="prototype" label="Chem Compartment" select required
                                  error={!activeDistribData.prototype}
                                  helperText={!activeDistribData.prototype ? 'Select a compartment' : undefined}
@@ -637,7 +637,7 @@ const ChemMenuBox = ({
                          {activeDistribData.location === 'Dendrite' && (() => {
                              const diffWarn = rangeWarn(activeDistribData.diffusionLength_um, 1, 10000, 'Unusual diffusion length (typical range: 1–10,000 µm)');
                              return (
-                                 <Grid item xs={12} sm={6}>
+                                 <Grid size={{ xs: 12, sm: 6 }}>
                                      <HelpField id="diffusionLength_um" label="Diffusion Length (μm)" type="number"
                                          value={activeDistribData.diffusionLength_um}
                                          onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
@@ -652,7 +652,7 @@ const ChemMenuBox = ({
                          {/* --- Location-Specific Fields --- */}
 
                          {(activeDistribData.location === 'Spine' || activeDistribData.location === 'PSD') && (
-                             <Grid item xs={12} sm={6}>
+                             <Grid size={{ xs: 12, sm: 6 }}>
                                  <HelpField id="parent" label="Parent" value={activeDistribData.parent} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.parent} />
                              </Grid>
                          )}
@@ -663,10 +663,10 @@ const ChemMenuBox = ({
                              const rrHard = !isNaN(rrN) && activeDistribData.radiusRatio !== '' && (rrN <= 0 || rrN >= 1);
                              return (
                                  <>
-                                     <Grid item xs={12} sm={6}>
+                                     <Grid size={{ xs: 12, sm: 6 }}>
                                          <HelpField id="parent" label="Parent" value={activeDistribData.parent} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.parent} />
                                      </Grid>
-                                     <Grid item xs={12} sm={6}>
+                                     <Grid size={{ xs: 12, sm: 6 }}>
                                          <HelpField id="radiusRatio" label="Radius Ratio" type="number"
                                              value={activeDistribData.radiusRatio}
                                              onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
@@ -675,7 +675,7 @@ const ChemMenuBox = ({
                                              helperText={rrHard ? 'Must be between 0 and 1 (exclusive)' : undefined}
                                          />
                                      </Grid>
-                                     <Grid item xs={12} sm={6}>
+                                     <Grid size={{ xs: 12, sm: 6 }}>
                                          <HelpField id="spacing_um" label="Spacing (μm)" type="number"
                                              value={activeDistribData.spacing_um}
                                              onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
@@ -691,10 +691,10 @@ const ChemMenuBox = ({
 
                          {activeDistribData.location === 'Presyn_spine' && (
                              <>
-                                 <Grid item xs={12} sm={6}>
+                                 <Grid size={{ xs: 12, sm: 6 }}>
                                      <HelpField id="radiusByPsd" label="Radius by PSD" type="number" value={activeDistribData.radiusByPsd} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radiusByPsd} />
                                  </Grid>
-                                 <Grid item xs={12} sm={6}>
+                                 <Grid size={{ xs: 12, sm: 6 }}>
                                      <HelpField id="radiusByPsdSdev" label="Radius by PSD Sdev" type="number" value={activeDistribData.radiusByPsdSdev} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.radiusByPsdSdev} />
                                  </Grid>
                              </>
@@ -705,7 +705,7 @@ const ChemMenuBox = ({
                              const rsdevWarn = rangeWarn(activeDistribData.radiusSdev_um, 0, 5, 'Radius Sdev > 5 µm is unusually large');
                              return (
                                  <>
-                                     <Grid item xs={12} sm={6}>
+                                     <Grid size={{ xs: 12, sm: 6 }}>
                                          <HelpField id="radius_um" label="Radius (μm)" type="number"
                                              value={activeDistribData.radius_um}
                                              onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
@@ -714,7 +714,7 @@ const ChemMenuBox = ({
                                              {...(radWarn && { FormHelperTextProps: { sx: { color: 'warning.main' } } })}
                                          />
                                      </Grid>
-                                     <Grid item xs={12} sm={6}>
+                                     <Grid size={{ xs: 12, sm: 6 }}>
                                          <HelpField id="radiusSdev_um" label="Radius Sdev (μm)" type="number"
                                              value={activeDistribData.radiusSdev_um}
                                              onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
@@ -723,7 +723,7 @@ const ChemMenuBox = ({
                                              {...(rsdevWarn && { FormHelperTextProps: { sx: { color: 'warning.main' } } })}
                                          />
                                      </Grid>
-                                     <Grid item xs={12} sm={6}>
+                                     <Grid size={{ xs: 12, sm: 6 }}>
                                          <HelpField id="spacing_um" label="Spacing (μm)" type="number"
                                              value={activeDistribData.spacing_um}
                                              onChange={(id,v) => updateDistribution(activeDistribution, id, v)}
@@ -737,7 +737,7 @@ const ChemMenuBox = ({
                              );
                          })()}
                      </Grid>
-                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeDistribution(activeDistribution)} sx={{ mt: 2 }}>
+                     <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeDistribution(activeDistribution)} sx={{ mt: 2 }}>
                          Remove Distribution
                      </Button>
                  </Box>
@@ -760,8 +760,8 @@ const ChemMenuBox = ({
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveCustomPath}>Set Path</Button>
+                    <Button variant="text" onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleSaveCustomPath}>Set Path</Button>
                 </DialogActions>
             </Dialog>
         </Box>

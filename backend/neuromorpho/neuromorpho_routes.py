@@ -18,7 +18,7 @@ from .neuromorpho import (
 neuromorpho_routes = Blueprint("neuromorpho", __name__)
 
 # Cache directory for species metadata (shared across sessions)
-_CACHE_DIR = Path("data") / "neuromorpho"
+_CACHE_DIR = Path("metadata") / "neuromorpho"
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 USER_UPLOADS_DIR = Path(__file__).resolve().parent.parent / "user_uploads"
@@ -42,7 +42,7 @@ def get_metadata():
     """
     GET /neuromorpho/metadata?species=rat
     Returns brain regions, cell types, archives for the species.
-    Result is cached in data/neuromorpho/<safe_name>.json.
+    Result is cached in metadata/neuromorpho/<safe_name>.json.
     """
     species = request.args.get("species")
     if not species:

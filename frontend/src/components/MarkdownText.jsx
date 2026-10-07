@@ -1,10 +1,28 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Box, Typography, CircularProgress, Tabs, Tab, List, ListItem,
          ListItemText, ListItemSecondaryAction, Button, Chip, Stack, Alert } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import { getThemeExtras } from '../theme.js';
 
 const API_BASE_URL = `http://${window.location.hostname}:5000`;
+
+// Derived from the theme's iframe token group so injected iframe CSS stays in
+// sync with the app's dark surface (see theme.js getThemeExtras).
+const { bg: IFRAME_BG, text: IFRAME_TEXT, link: IFRAME_LINK,
+        border: IFRAME_BORDER, mark: IFRAME_MARK } = getThemeExtras('dark').iframe;
+
+const DARK_IFRAME_RULES = `
+  html, body { background: ${IFRAME_BG} !important; color: ${IFRAME_TEXT} !important; }
+  a { color: ${IFRAME_LINK} !important; }
+  table, th, td { border-color: ${IFRAME_BORDER} !important; }
+  span.annotation_style_by_filter { background-color: ${IFRAME_MARK} !important; }
+`;
+
+const DARK_IFRAME_CSS = `<style>${DARK_IFRAME_RULES}</style>`;
+
+const withIframeTheme = (html, isDark) => (isDark ? DARK_IFRAME_CSS + html : html);
 
 const generateSlug = (text) =>
     String(text).toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
@@ -53,21 +71,34 @@ function MarkdownRenderer({ markdown, scrollRef }) {
 }
 
 function GuideTab() {
-    const [htmlContent, setHtmlContent] = useState('');
-    const [loading, setLoading] = useState(true);
+    
+    const iframeRef = useRef(null);
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
-    useEffect(() => {
-        fetch('Guide.html')
-            .then(r => { if (!r.ok) throw new Error(); return r.text(); })
-            .then(text => { setHtmlContent(text); setLoading(false); })
-            .catch(() => { setHtmlContent('<p>Could not load Guide.html</p>'); setLoading(false); });
-    }, []);
+    const applyIframeTheme = useCallback(() => {
+        const doc = iframeRef.current?.contentDocument;
+        if (!doc) return;
+        let styleEl = doc.getElementById('dark-mode-override');
+        if (isDark) {
+            if (!styleEl) {
+                styleEl = doc.createElement('style');
+                styleEl.id = 'dark-mode-override';
+                doc.head?.appendChild(styleEl);
+            }
+            styleEl.textContent = DARK_IFRAME_RULES;
+        } else if (styleEl) {
+            styleEl.remove();
+        }
+    }, [isDark]);
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}><CircularProgress /></Box>;
+    useEffect(() => { applyIframeTheme(); }, [applyIframeTheme]);
+
     return (
         <Box sx={{ height: '100%' }}>
-            <iframe srcDoc={htmlContent} style={{ width: '100%', height: '100%', border: 'none' }}
-                    title="Jardesigner Guide" sandbox="allow-same-origin" />
+            <iframe ref={iframeRef} src="Guide.html" onLoad={applyIframeTheme}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                    title="Jardesigner Guide" />
         </Box>
     );
 }
@@ -130,6 +161,8 @@ function TutorialsTab({ clientId }) {
 function ModelNotesTab({ clientId, docFile }) {
     const [htmlContent, setHtmlContent] = useState('');
     const [loading, setLoading] = useState(false);
+    const theme = useTheme();
+    const isDark = theme.palette.mode === 'dark';
 
     useEffect(() => {
         if (!docFile || !clientId) { setHtmlContent(''); return; }
@@ -139,6 +172,8 @@ function ModelNotesTab({ clientId, docFile }) {
             .then(text => { setHtmlContent(text); setLoading(false); })
             .catch(() => { setHtmlContent(''); setLoading(false); });
     }, [clientId, docFile]);
+
+    const srcDoc = useMemo(() => withIframeTheme(htmlContent, isDark), [htmlContent, isDark]);
 
     if (!docFile) {
         return (
@@ -158,7 +193,7 @@ function ModelNotesTab({ clientId, docFile }) {
     return (
         <Box sx={{ height: '100%' }}>
             <iframe
-                srcDoc={htmlContent}
+                srcDoc={srcDoc}
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title="Model Documentation"
                 sandbox="allow-same-origin"

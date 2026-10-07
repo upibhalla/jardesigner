@@ -5,7 +5,7 @@ import {
     Tab,
     Typography,
     TextField,
-    Grid,
+    Grid2 as Grid,
     IconButton,
     Button,
     Tooltip,
@@ -183,7 +183,7 @@ const PassiveMenuBox = ({
     const activeTabData = tabs[activeTab];
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Passive Distribution</Typography>
                 <Tooltip title={helpText.main} placement="right">
@@ -196,17 +196,17 @@ const PassiveMenuBox = ({
                     {tabs.map((tab, index) => (
                         <Tab key={index} label={tab.path || `Entry ${index + 1}`} />
                     ))}
-                    <Button onClick={addTab} startIcon={<AddIcon />} sx={{ minWidth: 'auto', p: '6px 8px', ml: '10px', alignSelf: 'center' }}>
+                    <Button variant="text" onClick={addTab} startIcon={<AddIcon />} sx={{ minWidth: 'auto', p: '6px 8px', ml: '10px', alignSelf: 'center' }}>
                         Add Entry
                     </Button>
                 </Tabs>
             </Box>
 
             {activeTabData && (
-                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                     <Grid container spacing={2}>
                         {/* Modified Path Field: Dropdown + Dialog Logic */}
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <HelpField 
                                 id="path" 
                                 label="Electrical Compartment" 
@@ -225,28 +225,28 @@ const PassiveMenuBox = ({
                             </HelpField>
                         </Grid>
 
-                        <Grid item xs={6}>
+                        <Grid size={6}>
                             <ExprHelpField id="leakReversalPotential" label="Em (mV, or expr in V)" required value={activeTabData.leakReversalPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.leakReversalPotential}
                                 warning={rangeWarn(activeTabData.leakReversalPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.leakReversalPotential, cellProto)} />
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid size={6}>
                              <ExprHelpField id="initialPotential" label="initVm (mV, or expr in V)" required value={activeTabData.initialPotential} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.initialPotential}
                                 warning={rangeWarn(activeTabData.initialPotential, -150, 0, 'Unusual value (typical range: −150 to 0 mV)') || warnSingleSegExpr(activeTabData.initialPotential, cellProto)} />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <ExprHelpField id="membraneCapacitance" label="CM (F/m^2)" required value={activeTabData.membraneCapacitance} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneCapacitance}
                                 warning={rangeWarn(activeTabData.membraneCapacitance, 1e-4, 1.0, 'Unusual value (typical range: 1e-4 to 1.0 F/m²)') || warnSingleSegExpr(activeTabData.membraneCapacitance, cellProto)} />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <ExprHelpField id="membraneResistivity" label="RM (Ohm.m^2)" required value={activeTabData.membraneResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.membraneResistivity}
                                 warning={rangeWarn(activeTabData.membraneResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m²)') || warnSingleSegExpr(activeTabData.membraneResistivity, cellProto)} />
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                             <ExprHelpField id="axialResistivity" label="RA (Ohm.m)" required value={activeTabData.axialResistivity} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.fields.axialResistivity}
                                 warning={rangeWarn(activeTabData.axialResistivity, 0.01, 100, 'Unusual value (typical range: 0.01 to 100 Ohm·m)') || warnSingleSegExpr(activeTabData.axialResistivity, cellProto)} />
                         </Grid>
                     </Grid>
-                    <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>
+                    <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>
                         Remove Entry '{activeTabData.path || activeTab + 1}'
                     </Button>
                 </Box>
@@ -272,8 +272,8 @@ const PassiveMenuBox = ({
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveDialog}>Set</Button>
+                    <Button variant="text" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleSaveDialog}>Set</Button>
                 </DialogActions>
             </Dialog>
         </Box>

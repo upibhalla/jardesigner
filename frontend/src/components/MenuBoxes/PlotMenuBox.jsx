@@ -5,7 +5,7 @@ import {
     Tab,
     Typography,
     TextField,
-    Grid,
+    Grid2 as Grid,
     IconButton,
     MenuItem,
     Button,
@@ -385,7 +385,7 @@ const PlotMenuBox = ({
     const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Plot Configuration</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
@@ -395,17 +395,17 @@ const PlotMenuBox = ({
             </Box>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-                <Tabs value={activePlot} onChange={(e, nv) => setActivePlot(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
+                <Tabs value={activePlot} onChange={(e, nv) => setActivePlot(nv)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
                     {plots.map((plot, index) => <Tab key={index} label={getTabLabel(plot)} />)}
                     <IconButton onClick={addPlot} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                 </Tabs>
             </Box>
 
             {activePlotData && (
-                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                     <Grid container spacing={2}>
                         {/* 1. Parent Elec Compartment: Top, Full Width, Menu+Dialog */}
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                              <HelpField 
                                 id="path" 
                                 label="Parent Elec Compartment" 
@@ -425,7 +425,7 @@ const PlotMenuBox = ({
                              </HelpField>
                         </Grid>
 
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <HelpField id="field" label="Field" select required
                                 error={!activePlotData.field}
                                 helperText={!activePlotData.field ? 'Select a field to plot' : undefined}
@@ -441,7 +441,7 @@ const PlotMenuBox = ({
                             </HelpField>
                         </Grid>
                          
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <HelpField 
                                 id="chemProto" 
                                 label="Chem Compartment" 
@@ -462,7 +462,7 @@ const PlotMenuBox = ({
                         
                          {isChemField ? (
                              <>
-                                <Grid item xs={12} sm={6}>
+                                <Grid size={{ xs: 12, sm: 6 }}>
                                     <HelpField 
                                         id="childPath" 
                                         label="Molecule Path" 
@@ -479,7 +479,7 @@ const PlotMenuBox = ({
                                     </HelpField>
                                     {!activePlotData.childPath && <FormHelperText error>Required</FormHelperText>}
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid size={{ xs: 12, sm: 6 }}>
                                     <HelpField 
                                         id="molIndex" 
                                         label="Molecule Index (int/blank)" 
@@ -491,7 +491,7 @@ const PlotMenuBox = ({
                                 </Grid>
                              </>
                          ) : activePlotData.field === 'current' ? (
-                             <Grid item xs={12} sm={6}>
+                             <Grid size={{ xs: 12, sm: 6 }}>
                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                                      <TextField
                                          fullWidth
@@ -514,7 +514,7 @@ const PlotMenuBox = ({
                              return (
                              <>
                                  {/* Relative Path as Menu for Non-Chem Fields */}
-                                 <Grid item xs={12} sm={6}>
+                                 <Grid size={{ xs: 12, sm: 6 }}>
                                     <HelpField
                                         id="childPath"
                                         label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
@@ -542,9 +542,9 @@ const PlotMenuBox = ({
                              );
                          })()}
                          
-                         <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activePlotData.title} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.title} /></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="yMin" label="Y Min (Optional, 0=auto)" type="number" value={activePlotData.yMin} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMin} /></Grid>
-                         <Grid item xs={12} sm={6}>{(() => {
+                         <Grid size={{ xs: 12, sm: 6 }}><HelpField id="title" label="Title (Optional)" value={activePlotData.title} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.title} /></Grid>
+                         <Grid size={{ xs: 12, sm: 6 }}><HelpField id="yMin" label="Y Min (Optional, 0=auto)" type="number" value={activePlotData.yMin} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.yMin} /></Grid>
+                         <Grid size={{ xs: 12, sm: 6 }}>{(() => {
                              const yMinN = parseFloat(activePlotData.yMin);
                              const yMaxN = parseFloat(activePlotData.yMax);
                              const yRangeWarn = (!isNaN(yMinN) && yMinN !== 0 && !isNaN(yMaxN) && yMaxN !== 0 && yMaxN < yMinN)
@@ -561,12 +561,12 @@ const PlotMenuBox = ({
                          })()}</Grid>
 
                         {/* Mode moved to bottom next to Wave Frames */}
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <HelpField id="mode" label="Mode (Optional)" select value={activePlotData.mode} onChange={(id, v) => updatePlot(activePlot, id, v)} helptext={helpText.fields.mode}>
                                 {modeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
                              </HelpField>
                          </Grid>
-                        <Grid item xs={12} sm={6}>{(() => {
+                        <Grid size={{ xs: 12, sm: 6 }}>{(() => {
                             const wfN = parseInt(activePlotData.waveFrames, 10);
                             const wfError = activePlotData.mode === 'wave' && (!isNaN(wfN) && wfN <= 0);
                             return (
@@ -582,7 +582,7 @@ const PlotMenuBox = ({
                             );
                         })()}</Grid>
                     </Grid>
-                    <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removePlot(activePlot)} sx={{ mt: 2 }}>
+                    <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removePlot(activePlot)} sx={{ mt: 2 }}>
                         Remove Plot
                     </Button>
                 </Box>
@@ -606,8 +606,8 @@ const PlotMenuBox = ({
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveCustomPath}>Set Path</Button>
+                    <Button variant="text" onClick={() => setCustomPathDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleSaveCustomPath}>Set Path</Button>
                 </DialogActions>
             </Dialog>
         </Box>

@@ -5,7 +5,7 @@ import {
     Tab,
     Typography,
     TextField,
-    Grid,
+    Grid2 as Grid,
     IconButton,
     MenuItem,
     Button,
@@ -398,7 +398,7 @@ const ThreeDMenuBox = ({
     }
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>3D Visualization (Moogli)</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
@@ -418,10 +418,10 @@ const ThreeDMenuBox = ({
                 </Tabs>
             </Box>
             {activeTabData && (
-                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                     <Grid container spacing={2}>
                         {/* 1. Parent Elec Compartment: First entry, Full Width */}
-                        <Grid item xs={12}>
+                        <Grid size={12}>
                              <HelpField 
                                 id="path" 
                                 label="Parent Elec Compartment" 
@@ -440,7 +440,7 @@ const ThreeDMenuBox = ({
                              </HelpField>
                         </Grid>
 
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <HelpField id="field" label="Field" required select value={activeTabData.field} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.field}>
                                 <ListSubheader>Electrical/Other</ListSubheader>
                                 {nonChemFieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
@@ -449,7 +449,7 @@ const ThreeDMenuBox = ({
                             </HelpField>
                         </Grid>
                         
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <HelpField 
                                 id="chemProto" 
                                 label="Chem Compartment" 
@@ -470,7 +470,7 @@ const ThreeDMenuBox = ({
 
                         {isChemField ? (
                              <>
-                                 <Grid item xs={12} sm={6}>
+                                 <Grid size={{ xs: 12, sm: 6 }}>
                                      <HelpField 
                                         id="childPath" 
                                         label="Molecule Path" 
@@ -493,7 +493,7 @@ const ThreeDMenuBox = ({
                              return (
                              <>
                                  {/* Relative Path as Menu for Non-Chem Fields */}
-                                 <Grid item xs={12} sm={6}>
+                                 <Grid size={{ xs: 12, sm: 6 }}>
                                     <HelpField
                                         id="childPath"
                                         label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
@@ -514,13 +514,13 @@ const ThreeDMenuBox = ({
                              </>
                              );
                          })()}
-                        <Grid item xs={12} sm={6}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} helperText={diaWarn || undefined} FormHelperTextProps={diaWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} helperText={minMaxWarn || undefined} FormHelperTextProps={minMaxWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
-                        <Grid item xs={12} sm={6}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} error={!!dtError} helperText={dtError || undefined} /></Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}><HelpField id="title" label="Title (Optional)" value={activeTabData.title} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.title} /></Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}><HelpField id="diameterScale" label="Diameter Scale" type="number" value={activeTabData.diameterScale} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.diameterScale} helperText={diaWarn || undefined} FormHelperTextProps={diaWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}><HelpField id="min" label="Min (ymin)" type="number" value={activeTabData.min} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.min} /></Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}><HelpField id="max" label="Max (ymax)" type="number" value={activeTabData.max} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.max} helperText={minMaxWarn || undefined} FormHelperTextProps={minMaxWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}><HelpField id="dt" label="Frame dt (s)" type="number" value={activeTabData.dt} onChange={(id, v) => updateTab(activeTab, id, v)} helptext={helpText.dataSources.dt} error={!!dtError} helperText={dtError || undefined} /></Grid>
                     </Grid>
-                    <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>Remove Data Source</Button>
+                    <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeTab(activeTab)} sx={{ mt: 2 }}>Remove Data Source</Button>
                 </Box>
             )}
 
@@ -529,18 +529,18 @@ const ThreeDMenuBox = ({
                 <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold', mb: 0 }}>Global Display Settings</Typography>
                 <Tooltip title={helpText.headings.globalSettings} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
             </Box>
-            <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+            <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                 <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}><HelpField id="rotation" label="Rotation (rad/step)" type="number" value={globalSettings.rotation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.rotation} /></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="azimuth" label="Azimuth (azim)" type="number" value={globalSettings.azimuth} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.azimuth} /></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                    <Grid item xs={12} sm={6}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} helperText={centerWarn || undefined} FormHelperTextProps={centerWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
-                    <Grid item xs={12} container spacing={1} sx={{ mt: 1 }}>
-                        <Grid item xs="auto"><Tooltip title={helpText.globalSettings.mergeDisplays}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" /></Tooltip></Grid>
-                        <Grid item xs="auto"><Tooltip title={helpText.globalSettings.fullScreen}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" /></Tooltip></Grid>
-                        <Grid item xs="auto"><Tooltip title={helpText.globalSettings.block}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.block)} onChange={(e) => updateGlobalSetting('block', e.target.checked)} />} label="Block Thread" /></Tooltip></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><HelpField id="rotation" label="Rotation (rad/step)" type="number" value={globalSettings.rotation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.rotation} /></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><HelpField id="azimuth" label="Azimuth (azim)" type="number" value={globalSettings.azimuth} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.azimuth} /></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><HelpField id="elevation" label="Elevation (elev)" type="number" value={globalSettings.elevation} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.elevation} /></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><HelpField id="colormap" label="Colormap" select value={globalSettings.colormap} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.colormap}>{colormapOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><HelpField id="background" label="Background (bg)" select value={globalSettings.background} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.background}>{backgroundOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}><HelpField id="center" label="Center [x,y,z]" value={globalSettings.center} onChange={(id, v) => updateGlobalSetting(id, v)} helptext={helpText.globalSettings.center} helperText={centerWarn || undefined} FormHelperTextProps={centerWarn ? { sx: { color: 'warning.main' } } : undefined} /></Grid>
+                    <Grid size={12} container spacing={1} sx={{ mt: 1 }}>
+                        <Grid size="auto"><Tooltip title={helpText.globalSettings.mergeDisplays}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.mergeDisplays)} onChange={(e) => updateGlobalSetting('mergeDisplays', e.target.checked)} />} label="Merge Displays" /></Tooltip></Grid>
+                        <Grid size="auto"><Tooltip title={helpText.globalSettings.fullScreen}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.fullScreen)} onChange={(e) => updateGlobalSetting('fullScreen', e.target.checked)} />} label="Fullscreen" /></Tooltip></Grid>
+                        <Grid size="auto"><Tooltip title={helpText.globalSettings.block}><FormControlLabel control={<Checkbox checked={Boolean(globalSettings.block)} onChange={(e) => updateGlobalSetting('block', e.target.checked)} />} label="Block Thread" /></Tooltip></Grid>
                     </Grid>
                 </Grid>
             </Box>
@@ -561,8 +561,8 @@ const ThreeDMenuBox = ({
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveDialog}>Set</Button>
+                    <Button variant="text" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleSaveDialog}>Set</Button>
                 </DialogActions>
             </Dialog>
         </Box>

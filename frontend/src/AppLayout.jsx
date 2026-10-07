@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
-import { AppBar, Toolbar, Button, Grid, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Typography, Box } from '@mui/material';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { AppBar, Tabs, Tab, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Typography, Box, Tooltip, IconButton } from '@mui/material';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 import runIcon from './assets/run.svg';
 import morphoIcon from './assets/morpho.svg';
 import spinesIcon from './assets/spines.svg';
@@ -26,6 +28,21 @@ import ThreeDMenuBox from './components/MenuBoxes/ThreeDMenuBox';
 import StimMenuBox from './components/MenuBoxes/StimMenuBox';
 import DisplayWindow from './components/DisplayWindow';
 import { ReplayContext } from './components/ReplayContext';
+
+const MENU_ITEMS = [
+  { key: 'File',      icon: fileIcon,      label: 'File'       },
+  { key: 'Run',       icon: runIcon,       label: 'Run'        },
+  { key: 'Morphology',icon: morphoIcon,    label: 'Morphology' },
+  { key: 'Spines',    icon: spinesIcon,    label: 'Spines'     },
+  { key: 'Channels',  icon: elecIcon,      label: 'Channels'   },
+  { key: 'Passive',   icon: passiveIcon,   label: 'Passive'    },
+  { key: 'Signaling', icon: chemIcon,      label: 'Signaling'  },
+  { key: 'Adaptors',  icon: adaptorsIcon,  label: 'Adaptors'   },
+  { key: 'Stimuli',   icon: stimIcon,      label: 'Stimuli'    },
+  { key: 'Plots',     icon: plotsIcon,     label: 'Plots'      },
+  { key: '3D',        icon: d3Icon,        label: '3D'         },
+  { key: 'SimOutput', icon: simOutputIcon, label: 'Sim Output' },
+];
 
 // --- Helper: Analyze Error Message ---
 const analyzeError = (error) => {
@@ -133,6 +150,8 @@ export const AppLayout = (props) => {
     modelDirty,
     handleRebuildModel,
     activeMenuFlushRef,
+    toggleColorMode,
+    colorMode,
   } = props;
 
   // Extract channel names for use in Plots, Stimuli, and Adaptors.
@@ -271,73 +290,140 @@ export const AppLayout = (props) => {
 
   const errorAnalysis = useMemo(() => analyzeError(simError), [simError]);
 
+  // Resizable panel split
+  const [splitPct, setSplitPct] = useState(33);
+  const [isResizing, setIsResizing] = useState(false);
+  const isResizingRef = useRef(false);
+  const containerRef = useRef(null);
+
+  const onDividerMouseDown = useCallback((e) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    setIsResizing(true);
+  }, []);
+
+  const onMouseMove = useCallback((e) => {
+    if (!isResizingRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    setSplitPct(Math.max(18, Math.min(58, pct)));
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    isResizingRef.current = false;
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [onMouseMove, onMouseUp]);
+
   return (
     <ReplayContext.Provider value={{ replayTime }}>
-      <AppBar position="static">
-        <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
-            <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} >
-                <img src={fileIcon} alt="File Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                File
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Run')} style={{ flexDirection: 'column', color: activeMenu === 'Run' ? 'orange' : 'inherit' }} >
-                <img src={runIcon} alt="Run Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Run
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Morphology')} style={{ flexDirection: 'column', color: activeMenu === 'Morphology' ? 'orange' : 'inherit' }} >
-                <img src={morphoIcon} alt="Morphology Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Morphology
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Spines')} style={{ flexDirection: 'column', color: activeMenu === 'Spines' ? 'orange' : 'inherit' }} >
-                <img src={spinesIcon} alt="Spines Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Spines
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Channels')} style={{ flexDirection: 'column', color: activeMenu === 'Channels' ? 'orange' : 'inherit' }} >
-                <img src={elecIcon} alt="Channels Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Channels
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Passive')} style={{ flexDirection: 'column', color: activeMenu === 'Passive' ? 'orange' : 'inherit' }} >
-                <img src={passiveIcon} alt="Passive Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Passive
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Signaling')} style={{ flexDirection: 'column', color: activeMenu === 'Signaling' ? 'orange' : 'inherit' }} >
-                <img src={chemIcon} alt="Signaling Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Signaling
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Adaptors')} style={{ flexDirection: 'column', color: activeMenu === 'Adaptors' ? 'orange' : 'inherit' }} >
-                <img src={adaptorsIcon} alt="Adaptors Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Adaptors
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Stimuli')} style={{ flexDirection: 'column', color: activeMenu === 'Stimuli' ? 'orange' : 'inherit' }} >
-                <img src={stimIcon} alt="Stimuli Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Stimuli
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('Plots')} style={{ flexDirection: 'column', color: activeMenu === 'Plots' ? 'orange' : 'inherit' }} >
-                <img src={plotsIcon} alt="Plots Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Plots
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('3D')} style={{ flexDirection: 'column', color: activeMenu === '3D' ? 'orange' : 'inherit' }} >
-                <img src={d3Icon} alt="3D Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                3D
-            </Button>
-            <Button color="inherit" onClick={() => toggleMenu('SimOutput')} style={{ flexDirection: 'column', color: activeMenu === 'SimOutput' ? 'orange' : 'inherit' }} >
-                <img src={simOutputIcon} alt="Sim Output Icon" style={{ width: '72px', marginBottom: '4px' }} />
-                Sim Output
-            </Button>
-        </Toolbar>
-      </AppBar>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <AppBar position="static">
+          <Tabs
+            value={activeMenu || false}
+            onChange={(_, newValue) => newValue !== activeMenu && toggleMenu(newValue)}
+            variant="fullWidth"
+            TabIndicatorProps={{
+              sx: { backgroundColor: 'warning.main', height: '2.5px' },
+            }}
+            sx={{ minHeight: 'auto' }}
+          >
+            {MENU_ITEMS.map(({ key, icon, label }) => (
+              <Tab
+                key={key}
+                value={key}
+                label={label}
+                icon={<Box component="img" src={icon} alt="" sx={{ width: 72, height: 72, display: 'block' }} />}
+                iconPosition="top"
+                onClick={() => activeMenu === key && toggleMenu(key)}
+                sx={{
+                  minWidth: 56,
+                  minHeight: 'auto',
+                  py: 0.75,
+                  px: 1.5,
+                  borderRadius: 0,
+                  color: 'common.white',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  '&.Mui-selected': { color: 'warning.main', fontWeight: 800 },
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.10)', color: 'common.white' },
+                }}
+              />
+            ))}
+          </Tabs>
+        </AppBar>
 
-      <Grid container spacing={2} style={{ padding: '16px', height: 'calc(100vh - 64px)' }}>
-        <Grid item xs={4} style={{ height: '100%' }}>
-          {activeMenu && menuComponents[activeMenu]}
-        </Grid>
-        <Grid item xs={8} style={{ height: '100%' }}>
-          <DisplayWindow
-            {...props}
-            docFile={jsonData.docFile}
-            onLoadTutorial={handleLoadTutorial}
-          />
-        </Grid>
-      </Grid>
+        <Box ref={containerRef} sx={{ flex: 1, overflow: 'hidden', display: 'flex', userSelect: isResizing ? 'none' : 'auto' }}>
+          {/* Left panel — width controlled by splitPct */}
+          <Box sx={{
+            width: activeMenu ? `${splitPct}%` : 0,
+            minWidth: 0,
+            height: '100%',
+            overflowY: 'auto',
+            bgcolor: 'background.paper',
+            flexShrink: 0,
+            transition: isResizing ? 'none' : 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}>
+            {activeMenu && menuComponents[activeMenu]}
+          </Box>
+
+          {/* Drag handle */}
+          {activeMenu && (
+            <Box
+              onMouseDown={onDividerMouseDown}
+              sx={{
+                width: '4px',
+                flexShrink: 0,
+                cursor: 'col-resize',
+                bgcolor: 'divider',
+                transition: 'background-color 0.15s',
+                '&:hover': { bgcolor: 'primary.main' },
+              }}
+            />
+          )}
+
+          {/* Right panel */}
+          <Box sx={{ flex: 1, height: '100%', bgcolor: 'background.paper', minWidth: 0 }}>
+            <DisplayWindow
+              {...props}
+              docFile={jsonData.docFile}
+              onLoadTutorial={handleLoadTutorial}
+            />
+          </Box>
+        </Box>
+
+        {/* Floating dark/light mode toggle */}
+        <Tooltip title={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} placement="left">
+          <IconButton
+            onClick={toggleColorMode}
+            sx={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 1300,
+              width: 48,
+              height: 48,
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+              boxShadow: 4,
+              border: '1px solid',
+              borderColor: 'divider',
+              '&:hover': { bgcolor: 'action.hover', boxShadow: 6 },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {colorMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+          </IconButton>
+        </Tooltip>
+      </Box>
 
       {/* Error Dialog */}
       <Dialog
@@ -352,23 +438,31 @@ export const AppLayout = (props) => {
                 {simError?.message}
             </DialogContentText>
             {simError?.details && (
-                <pre style={{ 
-                    whiteSpace: 'pre-wrap', 
-                    wordBreak: 'break-word', 
-                    backgroundColor: '#f5f5f5', 
-                    padding: '10px',
-                    fontSize: '0.85rem',
-                    maxHeight: '300px',
-                    overflow: 'auto'
-                }}>
+                <Box
+                    component="pre"
+                    sx={{
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        bgcolor: 'action.hover',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        fontSize: '0.8rem',
+                        fontFamily: 'monospace',
+                        maxHeight: 280,
+                        overflow: 'auto',
+                        m: 0,
+                    }}
+                >
                     {simError.details}
-                </pre>
+                </Box>
             )}
 
             {/* Analysis Sections */}
             {errorAnalysis.mean && (
                 <Box sx={{ mt: 3, mb: 1 }}>
-                    <Typography variant="h6" color="primary" sx={{ fontSize: '1rem', fontWeight: 'bold' }}>
+                    <Typography variant="h6" color="primary" sx={{ fontWeight: 700 }}>
                         What does it mean?
                     </Typography>
                     <Typography variant="body1">
@@ -379,7 +473,7 @@ export const AppLayout = (props) => {
 
             {errorAnalysis.do && (
                 <Box sx={{ mt: 2 }}>
-                    <Typography variant="h6" color="primary" sx={{ fontSize: '1rem', fontWeight: 'bold' }}>
+                    <Typography variant="h6" color="primary" sx={{ fontWeight: 700 }}>
                         What should I do?
                     </Typography>
                     <Typography variant="body1">

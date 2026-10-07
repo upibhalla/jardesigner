@@ -12,6 +12,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import NeuromorphoSearchForm from './neuromorpho/NeuromorphoSearchForm';
 import AllenBrainSearchForm from './allenbrain/AllenBrainSearchForm';
+import ICGSearchForm from './icg/ICGSearchForm';
 
 // Keyed by proto type then DB name.
 // SearchForm: component receiving { onResults, baseUrl } — renders the search form,
@@ -22,6 +23,7 @@ const DB_ADAPTERS = {
         AllenBrain:  { SearchForm: AllenBrainSearchForm },
     },
     chan:  {
+        ICG: { SearchForm: ICGSearchForm },
         // ModelDB:    { SearchForm: ModelDBSearchForm },
         // 'NeuroML-DB': { SearchForm: NeuroMLDBSearchForm },
     },
@@ -33,8 +35,8 @@ const DB_ADAPTERS = {
 
 const DB_OPTIONS = {
     morpho: ['Local', 'NeuroMorpho', 'AllenBrain'],
-    chan:   ['Local', 'ModelDB', 'NeuroML-DB'],
-    chem:   ['Local', 'BioModels', 'DOQCS'],
+    chan:   ['Local', 'ICG'],
+    chem:   ['Local', 'DOQCS'],
 };
 
 const UPLOAD_ACCEPT = {
@@ -114,7 +116,7 @@ const DetailRenderer = ({ item, detail }) => {
                     <img
                         src={d.image_url}
                         alt={item.name}
-                        style={{ maxWidth: '100%', border: '1px solid #e0e0e0', borderRadius: 4 }}
+                        style={{ maxWidth: '100%', borderRadius: 4 }}
                     />
                 </Box>
             )}
@@ -157,8 +159,8 @@ const DetailRenderer = ({ item, detail }) => {
 const ProtoRow = React.memo(({ item, onSelect, onDetail, isDetailOpen, isTopTen }) => (
     <TableRow
         sx={{
-            bgcolor: isTopTen ? '#fffde7' : 'inherit',
-            '&:hover': { bgcolor: isTopTen ? '#fff9c4' : '#f5f5f5' },
+            bgcolor: isTopTen ? 'rgba(255,213,0,0.1)' : 'inherit',
+            '&:hover': { bgcolor: isTopTen ? 'rgba(255,213,0,0.15)' : 'action.hover' },
         }}
     >
         <TableCell sx={{ py: 0.5, pl: 1, pr: 0, width: 44 }}>
@@ -195,9 +197,9 @@ const SectionHeaderRow = ({ label, count }) => (
     <TableRow>
         <TableCell
             colSpan={5}
-            sx={{ py: 0.5, bgcolor: '#f5f5f5', borderBottom: 'none', userSelect: 'none' }}
+            sx={{ py: 0.5, bgcolor: 'action.selected', borderBottom: 'none', userSelect: 'none' }}
         >
-            <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#555' }}>
+            <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
                 {label}{count != null ? ` (${count})` : ''}
             </Typography>
         </TableCell>
@@ -361,11 +363,12 @@ const ProtoPickerDialog = ({ open, onClose, onSelect, type, title, clientId }) =
             displayItems:  searchResults.filter(i => !i.topTen),
             displayTopTen: searchResults.filter(i =>  i.topTen),
         };
+        if (selectedDb !== 'Local') return { displayItems: [], displayTopTen: [] };
         return {
             displayItems:  digest.filter(d => !d.topTen),
             displayTopTen: digest.filter(d =>  d.topTen),
         };
-    }, [digest, searchResults]);
+    }, [digest, searchResults, selectedDb]);
     return (
         <Dialog
             open={open}
@@ -390,7 +393,7 @@ const ProtoPickerDialog = ({ open, onClose, onSelect, type, title, clientId }) =
                     onChange={handleUpload}
                 />
                 {/* Search bar */}
-                <Box sx={{ display: 'flex', gap: 1, p: 1.5, alignItems: 'center', borderBottom: '1px solid #e0e0e0', flexShrink: 0 }}>
+                <Box sx={{ display: 'flex', gap: 1, p: 1.5, alignItems: 'center', borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
                     <FormControl size="small" sx={{ minWidth: 130 }}>
                         <InputLabel>Database</InputLabel>
                         <Select value={selectedDb} label="Database" onChange={e => setSelectedDb(e.target.value)}>
@@ -444,28 +447,28 @@ const ProtoPickerDialog = ({ open, onClose, onSelect, type, title, clientId }) =
                     <Box sx={{ flex: detailItem ? '0 0 58%' : '1 1 100%', display: 'flex', flexDirection: 'column', minHeight: 0, transition: 'flex-basis 0.15s' }}>
                     <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
                         {stagingError && (
-                            <Box sx={{ m: 2, p: 1.5, bgcolor: '#fdecea', border: '1px solid #f5c6cb', borderRadius: 1 }}>
-                                <Typography variant="body2" color="error" sx={{ fontWeight: 600 }}>
+                            <Box sx={{ m: 2, p: 1.5, bgcolor: 'error.light', border: '1px solid', borderColor: 'error.main', borderRadius: 1 }}>
+                                <Typography variant="body2" color="error.dark" sx={{ fontWeight: 600 }}>
                                     Download failed
                                 </Typography>
-                                <Typography variant="body2" color="error">{stagingError}</Typography>
+                                <Typography variant="body2" color="error.dark">{stagingError}</Typography>
                             </Box>
                         )}
                         {(loading || staging || uploading) ? (
                             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 6 }}>
                                 <CircularProgress />
-                                {staging && <Typography sx={{ ml: 2 }}>Loading file…</Typography>}
+                                {staging && <Typography sx={{ ml: 2 }}>Loading file...</Typography>}
                                 {uploading && <Typography sx={{ ml: 2 }}>Uploading…</Typography>}
                             </Box>
                         ) : (
                             <Table size="small" stickyHeader>
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell sx={{ width: 44, bgcolor: '#fafafa' }} />
-                                        <TableCell sx={{ fontWeight: 'bold', bgcolor: '#fafafa' }}>Name</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold', bgcolor: '#fafafa' }}>Source</TableCell>
-                                        <TableCell sx={{ fontWeight: 'bold', bgcolor: '#fafafa' }}>Description</TableCell>
-                                        <TableCell sx={{ width: 44, bgcolor: '#fafafa' }} />
+                                        <TableCell sx={{ width: 44, bgcolor: 'background.paper' }} />
+                                        <TableCell sx={{ fontWeight: 'bold', bgcolor: 'background.paper' }}>Name</TableCell>
+                                        <TableCell sx={{ fontWeight: 'bold', bgcolor: 'background.paper' }}>Source</TableCell>
+                                        <TableCell sx={{ fontWeight: 'bold', bgcolor: 'background.paper' }}>Description</TableCell>
+                                        <TableCell sx={{ width: 44, bgcolor: 'background.paper' }} />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -506,7 +509,9 @@ const ProtoPickerDialog = ({ open, onClose, onSelect, type, title, clientId }) =
                                     {displayTopTen.length === 0 && displayItems.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={5} sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
-                                                No prototypes found
+                                                {selectedDb !== 'Local' && searchResults === null
+                                                    ? `Search ${selectedDb} above to find prototypes`
+                                                    : 'No prototypes found'}
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -519,7 +524,7 @@ const ProtoPickerDialog = ({ open, onClose, onSelect, type, title, clientId }) =
 
                     {/* Detail panel */}
                     {detailItem && (
-                        <Box sx={{ flex: 1, borderLeft: '1px solid #e0e0e0', overflow: 'auto', minHeight: 0, p: 2 }}>
+                        <Box sx={{ flex: 1, borderLeft: 1, borderColor: 'divider', overflow: 'auto', minHeight: 0, p: 2 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                                 <Typography variant="h6" sx={{ wordBreak: 'break-word', lineHeight: 1.3, flex: 1, minWidth: 0 }}>
                                     {detailItem.name}

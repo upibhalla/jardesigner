@@ -5,7 +5,7 @@ import {
     Tab,
     Typography,
     TextField,
-    Grid,
+    Grid2 as Grid,
     IconButton,
     MenuItem,
     Button,
@@ -419,7 +419,7 @@ const StimMenuBox = ({
     const showChemCompartmentWarning = isChemField && !chemCompartmentOptions.length;
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Stimulus Configuration</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
@@ -428,17 +428,17 @@ const StimMenuBox = ({
                 </Button>
             </Box>
              <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-                 <Tabs value={activeStim} onChange={(e, nv) => setActiveStim(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
+                 <Tabs value={activeStim} onChange={(e, nv) => setActiveStim(nv)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
                      {stims.map((stim, index) => <Tab key={index} label={getTabLabel(stim)} />)}
                       <IconButton onClick={addStim} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                   </Tabs>
               </Box>
               {activeStimData && (
-                  <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                  <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                       <Grid container spacing={2}>
                           
                           {/* 1. Parent Elec Compartment - First Row, Full Width */}
-                          <Grid item xs={12}>
+                          <Grid size={12}>
                               <HelpField 
                                 id="path" 
                                 label="Parent Elec Compartment" 
@@ -458,12 +458,12 @@ const StimMenuBox = ({
                               </HelpField>
                           </Grid>
 
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                               <HelpField id="type" label="Type" select required value={activeStimData.type} onChange={(id, v) => updateStim(activeStim, id, v)} helptext={helpText.fields.type}>{typeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField>
                           </Grid>
                           
                           {isFieldType && (
-                            <Grid item xs={12} sm={6}>
+                            <Grid size={{ xs: 12, sm: 6 }}>
                                 <HelpField id="field" label="Field" select required
                                     error={!activeStimData.field}
                                     helperText={!activeStimData.field ? 'Select a field' : undefined}
@@ -484,7 +484,7 @@ const StimMenuBox = ({
                               const weightN = Number(activeStimData.weight);
                               const weightWarn = !isNaN(weightN) && weightN <= 0 ? 'Weight should be positive' : undefined;
                               return (
-                                  <Grid item xs={12} sm={6}>
+                                  <Grid size={{ xs: 12, sm: 6 }}>
                                       <HelpField id="weight" label="Weight" type="number" required
                                           value={activeStimData.weight}
                                           onChange={(id, v) => updateStim(activeStim, id, v)}
@@ -501,7 +501,7 @@ const StimMenuBox = ({
                           {isChemField ? (
                             // --- Chemical Field Logic ---
                              <>
-                                <Grid item xs={12} sm={6}>
+                                <Grid size={{ xs: 12, sm: 6 }}>
                                       <HelpField 
                                           id="chemProto" 
                                           label="Chem Compartment" 
@@ -520,7 +520,7 @@ const StimMenuBox = ({
                                           <FormHelperText error>{showChemCompartmentWarning ? "Warning: No Chem Compartments found" : "Required"}</FormHelperText>}
                                 </Grid>
 
-                                <Grid item xs={12} sm={6}>
+                                <Grid size={{ xs: 12, sm: 6 }}>
                                     <HelpField 
                                         id="childPath" 
                                         label="Molecule Path" 
@@ -537,7 +537,7 @@ const StimMenuBox = ({
                                     </HelpField>
                                     {!activeStimData.childPath && <FormHelperText error>Required</FormHelperText>}
                                 </Grid>
-                                <Grid item xs={12} sm={6}>
+                                <Grid size={{ xs: 12, sm: 6 }}>
                                     <HelpField 
                                         id="molIndex" 
                                         label="Molecule Index (int/blank)" 
@@ -552,7 +552,7 @@ const StimMenuBox = ({
                              const relpathRequired = RELPATH_REQUIRED_FIELDS.has(activeStimData.field);
                              return (
                              // --- Non-Chemical (Electrical/Synapse) Logic ---
-                             <Grid item xs={12} sm={6}>
+                             <Grid size={{ xs: 12, sm: 6 }}>
                                 <HelpField
                                     id="childPath"
                                     label={relpathRequired ? "Relative Path" : "Relative Path (Optional)"}
@@ -573,7 +573,7 @@ const StimMenuBox = ({
                              );
                          })()}
 
-                          <Grid item xs={12} sm={6}>
+                          <Grid size={{ xs: 12, sm: 6 }}>
                               <ExprHelpField
                                 id="geometryExpression"
                                 label="Geometry Expr"
@@ -585,7 +585,7 @@ const StimMenuBox = ({
                           </Grid>
 
                           {/* Stimulus Expression - Full Width, Last Row */}
-                          <Grid item xs={12}>
+                          <Grid size={12}>
                               {(() => {
                                   const unit = getStimExprUnit(activeStimData.field, activeStimData.type, activeStimData.exprInSI);
                                   return (
@@ -602,7 +602,7 @@ const StimMenuBox = ({
                           </Grid>
                       </Grid>
 
-                      <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeStim(activeStim)} sx={{ mt: 2 }}>Remove Stim</Button>
+                      <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeStim(activeStim)} sx={{ mt: 2 }}>Remove Stim</Button>
                   </Box>
               )}
              {stims.length === 0 && <Typography sx={{ mt: 1, fontStyle: 'italic' }}>No stimuli defined.</Typography>}
@@ -623,8 +623,8 @@ const StimMenuBox = ({
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSaveDialog}>Set</Button>
+                    <Button variant="text" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                    <Button variant="contained" onClick={handleSaveDialog}>Set</Button>
                 </DialogActions>
             </Dialog>
         </Box>

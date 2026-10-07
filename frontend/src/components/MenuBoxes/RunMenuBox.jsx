@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, Typography, TextField, Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
+import { Box, Typography, TextField, Grid2 as Grid, Button, CircularProgress, Alert, Divider, Checkbox, FormControlLabel, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -304,11 +304,11 @@ const RunMenuBox = ({
         : null;
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <Grid container spacing={1} sx={{ mb: 2 }}>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }} onClick={handleStart} disabled={isSimulating || (currentTime > 0 && !activeSimPid)}>{startButtonText}</Button></Grid>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<StopIcon />} sx={{ bgcolor: 'error.main', '&:hover': { bgcolor: 'error.dark' } }} onClick={handleStop} disabled={!isSimulating}>Stop</Button></Grid>
-                <Grid item xs={4}><Button variant="contained" fullWidth startIcon={<RestartAltIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0, 0, 0, 0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
+                <Grid size={4}><Button variant="contained" color="success" fullWidth startIcon={isSimulating ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />} onClick={handleStart} disabled={isSimulating || (currentTime > 0 && !activeSimPid)}>{startButtonText}</Button></Grid>
+                <Grid size={4}><Button variant="contained" color="error" fullWidth startIcon={<StopIcon />} onClick={handleStop} disabled={!isSimulating}>Stop</Button></Grid>
+                <Grid size={4}><Button variant="contained" fullWidth startIcon={<RestartAltIcon />} sx={{ bgcolor: '#ffeb3b', color: 'rgba(0,0,0,0.87)', '&:hover': { bgcolor: '#fdd835' } }} onClick={handleReset} disabled={!activeSimPid}>Reset</Button></Grid>
             </Grid>
 
             {statusMessage.text && !(modelDirty && !activeSimPid && !isSimulating) && <Alert severity={statusMessage.type || 'info'} sx={{ mb: 2, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{statusMessage.text}</Alert>}
@@ -329,13 +329,13 @@ const RunMenuBox = ({
             )}
 
             <Grid container spacing={1.5} sx={{ mb: 2 }}>
-                <Grid item xs={6}>
+                <Grid size={6}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <TextField fullWidth size="small" label="Total Runtime (s)" type="text" value={runtime} onChange={(e) => handleRuntimeChange(e.target.value)} error={!!runtimeError} helperText={runtimeError || undefined} />
                         <InfoTooltip title={helpText.runControls.totalRuntime} />
                     </Box>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={6}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <TextField fullWidth size="small" label="Current Time (s)" type="number" value={currentTime.toFixed(4)} InputProps={{ readOnly: true }} variant="filled" />
                         <InfoTooltip title={helpText.runControls.currentTime} />
@@ -351,16 +351,16 @@ const RunMenuBox = ({
             </Box>
 
             <Grid container spacing={1.5} sx={{mb: 2}}>
-                <Grid item xs={12} sm={6} container spacing={1.5}>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} disabled={configSettings.turnOffElec} error={!!elecError} helperText={elecError || undefined} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} error={!!chemError} helperText={chemError || undefined} /><InfoTooltip title={helpText.clocks.chemDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} error={!!diffError} helperText={diffError || undefined} /><InfoTooltip title={helpText.clocks.diffusionDt} /></Box></Grid>
+                <Grid size={{ xs: 12, sm: 6 }} container spacing={1.5}>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Dt (s)" value={clocks.elec} onChange={(e) => updateClock('elec', e.target.value)} disabled={configSettings.turnOffElec} error={!!elecError} helperText={elecError || undefined} /><InfoTooltip title={helpText.clocks.elecDt} /></Box></Grid>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Dt (s)" value={clocks.chem} onChange={(e) => updateClock('chem', e.target.value)} error={!!chemError} helperText={chemError || undefined} /><InfoTooltip title={helpText.clocks.chemDt} /></Box></Grid>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Diffusion Dt (s)" value={clocks.diffusion} onChange={(e) => updateClock('diffusion', e.target.value)} error={!!diffError} helperText={diffError || undefined} /><InfoTooltip title={helpText.clocks.diffusionDt} /></Box></Grid>
                 </Grid>
-                <Grid item xs={12} sm={6} container spacing={1.5}>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} disabled={configSettings.turnOffElec} error={!!elecPlotError} helperText={elecPlotError || elecPlotWarn || undefined} FormHelperTextProps={!elecPlotError && elecPlotWarn ? { sx: { color: 'warning.main' } } : undefined} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} error={!!chemPlotError} helperText={chemPlotError || chemPlotWarn || undefined} FormHelperTextProps={!chemPlotError && chemPlotWarn ? { sx: { color: 'warning.main' } } : undefined} /><InfoTooltip title={helpText.clocks.chemPlotDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} error={!!funcError} helperText={funcError || undefined} /><InfoTooltip title={helpText.clocks.functionDt} /></Box></Grid>
-                    <Grid item xs={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} /><InfoTooltip title={helpText.clocks.statusDt} /></Box></Grid>
+                <Grid size={{ xs: 12, sm: 6 }} container spacing={1.5}>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Elec Plot Dt (s)" value={clocks.elecPlot} onChange={(e) => updateClock('elecPlot', e.target.value)} disabled={configSettings.turnOffElec} error={!!elecPlotError} helperText={elecPlotError || elecPlotWarn || undefined} FormHelperTextProps={!elecPlotError && elecPlotWarn ? { sx: { color: 'warning.main' } } : undefined} /><InfoTooltip title={helpText.clocks.elecPlotDt} /></Box></Grid>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Chem Plot Dt (s)" value={clocks.chemPlotDt} onChange={(e) => updateClock('chemPlotDt', e.target.value)} error={!!chemPlotError} helperText={chemPlotError || chemPlotWarn || undefined} FormHelperTextProps={!chemPlotError && chemPlotWarn ? { sx: { color: 'warning.main' } } : undefined} /><InfoTooltip title={helpText.clocks.chemPlotDt} /></Box></Grid>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Function Dt (s)" value={clocks.function} onChange={(e) => updateClock('function', e.target.value)} error={!!funcError} helperText={funcError || undefined} /><InfoTooltip title={helpText.clocks.functionDt} /></Box></Grid>
+                    <Grid size={12}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><TextField fullWidth size="small" label="Status Dt (s)" value={clocks.status} onChange={(e) => updateClock('status', e.target.value)} /><InfoTooltip title={helpText.clocks.statusDt} /></Box></Grid>
                 </Grid>
             </Grid>
 
@@ -372,15 +372,15 @@ const RunMenuBox = ({
 
             <Typography variant="body2" gutterBottom sx={{ mt: 1, fontWeight: 'medium' }}>Flags</Typography>
             <Grid container spacing={1} rowSpacing={0}>
-                <Grid item xs={6}><Tooltip title={helpText.flags.turnOffElec}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.combineSegments}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => { const v = !configSettings.combineSegments; updateConfigSetting('combineSegments', v); onConfigurationChange({ combineSegments: v }); }} /> } label="Combine Segments" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.useGssa}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => { const v = !configSettings.useGssa; updateConfigSetting('useGssa', v); onConfigurationChange({ useGssa: v }); }} /> } label="Use GSSA" /></Tooltip></Grid>
-                <Grid item xs={6}><Tooltip title={helpText.flags.reuseLibraryCell}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => { const v = !configSettings.reuseLibraryCell; updateConfigSetting('reuseLibraryCell', v); onConfigurationChange({ stealCellFromLibrary: v }); }} /> } label="Reuse Library Cell" /></Tooltip></Grid>
+                <Grid size={6}><Tooltip title={helpText.flags.turnOffElec}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.turnOffElec} onChange={handleTurnOffElecChange} /> } label="Turn Off Elec" /></Tooltip></Grid>
+                <Grid size={6}><Tooltip title={helpText.flags.combineSegments}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.combineSegments} onChange={() => { const v = !configSettings.combineSegments; updateConfigSetting('combineSegments', v); onConfigurationChange({ combineSegments: v }); }} /> } label="Combine Segments" /></Tooltip></Grid>
+                <Grid size={6}><Tooltip title={helpText.flags.useGssa}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.useGssa} onChange={() => { const v = !configSettings.useGssa; updateConfigSetting('useGssa', v); onConfigurationChange({ useGssa: v }); }} /> } label="Use GSSA" /></Tooltip></Grid>
+                <Grid size={6}><Tooltip title={helpText.flags.reuseLibraryCell}><FormControlLabel control={ <Checkbox size="small" checked={configSettings.reuseLibraryCell} onChange={() => { const v = !configSettings.reuseLibraryCell; updateConfigSetting('reuseLibraryCell', v); onConfigurationChange({ stealCellFromLibrary: v }); }} /> } label="Reuse Library Cell" /></Tooltip></Grid>
             </Grid>
 
             <Typography variant="body2" gutterBottom sx={{ mt: 2, fontWeight: 'medium' }}>Other Settings</Typography>
             <Grid container spacing={1.5}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                         <TextField fullWidth size="small" label="Model Path" value={configSettings.modelPath} onChange={(e) => updateConfigSetting('modelPath', e.target.value)} />
                         <InfoTooltip title={helpText.otherSettings.modelPath} />
@@ -390,7 +390,7 @@ const RunMenuBox = ({
                         <InfoTooltip title={helpText.otherSettings.odeMethod} />
                     </Box>
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                         <TextField fullWidth size="small" label="Rand Seed" type="number" value={configSettings.randSeed} onChange={(e) => updateConfigSetting('randSeed', e.target.value)} />
                         <InfoTooltip title={helpText.otherSettings.randSeed} />

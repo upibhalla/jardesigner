@@ -6,6 +6,22 @@ import { createShape } from './ShapeFactory';
 // D: Emissive factor — adds self-glow proportional to object color for vibrancy.
 const EMISSIVE_FACTOR = 0.25;
 
+// Specular highlight color — MeshPhongMaterial defaults to a near-black
+// 0x111111 specular, which makes the light-reflection highlight nearly
+// invisible on every object (worst on dark colormap colors like low-value
+// blue). Brighten it so objects visibly catch light regardless of hue.
+// Theme-aware: on the dark canvas objects need a strong highlight to read,
+// but against the white light-mode background that same highlight becomes
+// glare, so the light-mode values are dialed down.
+const SPECULAR = {
+  dark:  { base: 0x2e2e2e, reflective: 0x808080 },
+  light: { base: 0x1c1c1c, reflective: 0x555555 },
+};
+
+// Framerate-independent exponential smoothing factor for a given speed/delta.
+// Multiply into a lerp each frame: value += (target - value) * dampAlpha(speed, delta).
+const dampAlpha = (speed, delta) => 1 - Math.exp(-speed * delta);
+
 export default class ThreeDManager {
   constructor(container, onSelectionChange) {
     this.container = container;
@@ -25,7 +41,8 @@ export default class ThreeDManager {
     this.world = new THREE.Group();
     this.scene.add(this.world);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setClearColor(0x000000, 0); // fully transparent — CSS bg shows through
     this.container.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 1e-9, 1e3);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -49,22 +66,47 @@ export default class ThreeDManager {
 
     // Lighting: VPython directions, boosted ambient and fill for more brightness.
     // A: Ambient at 0x5d5d5d (37%) — midpoint between original 20% and boosted 53%.
-    this.world.add(new THREE.AmbientLight(0x5d5d5d));
+    this.ambientLight = new THREE.AmbientLight(0x5d5d5d);
+    this.world.add(this.ambientLight);
 
     // Main light (direction <0.22, 0.44, 0.88>, 80% gray)
-    const light1 = new THREE.DirectionalLight(0xcccccc, 1.0);
-    light1.position.set(0.22, 0.44, 0.88).normalize();
-    this.world.add(light1);
+    this.light1 = new THREE.DirectionalLight(0xcccccc, 1.0);
+    this.light1.position.set(0.22, 0.44, 0.88).normalize();
+    this.world.add(this.light1);
 
     // B: Fill light at 0x737373 (45%) — midpoint between original 30% and boosted 60%.
-    const light2 = new THREE.DirectionalLight(0x737373, 1.0);
-    light2.position.set(-0.88, -0.22, -0.44).normalize();
-    this.world.add(light2);
+    this.light2 = new THREE.DirectionalLight(0x737373, 1.0);
+    this.light2.position.set(-0.88, -0.22, -0.44).normalize();
+    this.world.add(this.light2);
+
+    this.isDark = false;
+    this.isReflective = false;
+
+    // Smooth theme transition: animate() eases current values toward these
+    // targets each frame instead of setThemeMode()/setBgColor() snapping them.
+    this.themeLightSpeed = 10;
+    this.targetAmbientColor = this.ambientLight.color.clone();
+    this.targetLight1Intensity = this.light1.intensity;
+    this.targetLight2Intensity = this.light2.intensity;
+
+    // Background color fades in step with the main lights (same speed) so the
+    // canvas doesn't "pop" to the new theme while lighting is still easing in.
+    this.currentBgColor = new THREE.Color(0x000000);
+    this.targetBgColor = new THREE.Color(0x000000);
+    this.currentBgAlpha = 0; // matches the fully-transparent initial clear color below
+    this.targetBgAlpha = 0;
+
+    // Simulation data color easing: updateSceneData() sets a target color per
+    // object instead of snapping, and animate() eases toward it — smooths out
+    // the frame-to-frame color pop while a sim is streaming data.
+    this.dataColorSpeed = 12;
+    this.colorAnimQueue = new Set();
 
     this.onWindowResize = this.onWindowResize.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleClick = this.handleClick.bind(this);
-    window.addEventListener('resize', this.onWindowResize);
+    this.resizeObserver = new ResizeObserver(() => this.onWindowResize());
+    this.resizeObserver.observe(container);
     window.addEventListener('keydown', this.handleKeyDown);
     this.renderer.domElement.addEventListener('click', this.handleClick);
 
@@ -99,13 +141,28 @@ export default class ThreeDManager {
     }
   }
 
-  setReflectivity(isEnabled) {
-    const shininess = isEnabled ? 100 : 30;
+  // Specular hex for the current theme + reflectivity state.
+  specularHex() {
+    const set = this.isDark ? SPECULAR.dark : SPECULAR.light;
+    return this.isReflective ? set.reflective : set.base;
+  }
+
+  // Reapply specular/shininess to every material — call after theme or
+  // reflectivity changes so highlights track the current mode.
+  applyMaterialSpecular() {
+    const specular = this.specularHex();
+    const shininess = this.isReflective ? 100 : 30;
     this.sceneObjects.forEach(obj => {
         if (obj.material) {
             obj.material.shininess = shininess;
+            obj.material.specular.setHex(specular);
         }
     });
+  }
+
+  setReflectivity(isEnabled) {
+    this.isReflective = isEnabled;
+    this.applyMaterialSpecular();
   }
   
   /**
@@ -160,16 +217,17 @@ export default class ThreeDManager {
     this.sceneObjects = [];
     this.entityConfigs.clear();
     this.diameterScales.clear();
+    this.colorAnimQueue.clear();
 
-    // Remove existing children but keep the first 3 (Ambient + 2 Directional Lights)
-    while(this.world.children.length > 3){ 
+    // Remove existing children but keep the first 3 (Ambient + 2 Directional)
+    while(this.world.children.length > 3){
         const child = this.world.children[3];
         this.world.remove(child);
         if(child.geometry) child.geometry.dispose();
         if(child.material) child.material.dispose();
     }
 
-    this.renderer.setClearColor(new THREE.Color(config.bg === 'default' ? '#FFFFFF' : config.bg || '#FFFFFF'));
+    // bg colour is managed by ThreeDViewer via setBgColor() — don't override here
     this.boundingBox.makeEmpty();
 
     config.drawables.forEach(entity => {
@@ -188,9 +246,10 @@ export default class ThreeDManager {
         const material = new THREE.MeshPhongMaterial({
             color: materialColor,
             emissive: emissiveColor,
+            specular: this.specularHex(),
             transparent: true,
             opacity: entity.transparency || 1.0,
-            shininess: 30,
+            shininess: this.isReflective ? 100 : 50,
         });
 
         const shapeObject = createShape(primitive, material);
@@ -292,6 +351,7 @@ export default class ThreeDManager {
             if (obj.material) {
                 obj.material.color.set(newColor);
                 obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);
+                this.colorAnimQueue.delete(obj); // instant set — don't let a stale ease target override it
             }
         }
     });
@@ -315,8 +375,9 @@ export default class ThreeDManager {
         const obj = relevantObjects[i];
         obj.userData.lastPhysicalValue = f32[i];
         if (obj.material) {
-            obj.material.color.set(newColor);
-            obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);
+            if (!obj.userData.targetColor) obj.userData.targetColor = new THREE.Color();
+            obj.userData.targetColor.set(newColor);
+            this.colorAnimQueue.add(obj);
         }
     }
   }
@@ -382,6 +443,7 @@ export default class ThreeDManager {
                 obj.material.color.set(newColor);
                 obj.material.emissive.set(newColor).multiplyScalar(EMISSIVE_FACTOR);
                 obj.material.needsUpdate = true;
+                this.colorAnimQueue.delete(obj); // instant set — don't let a stale ease target override it
             }
         }
     });
@@ -494,6 +556,35 @@ export default class ThreeDManager {
 
     const delta = this.clock.getDelta();
 
+    // --- SMOOTH THEME LIGHTING + BACKGROUND TRANSITION ---
+    const lightAlpha = dampAlpha(this.themeLightSpeed, delta);
+    this.ambientLight.color.lerp(this.targetAmbientColor, lightAlpha);
+    this.light1.intensity += (this.targetLight1Intensity - this.light1.intensity) * lightAlpha;
+    this.light2.intensity += (this.targetLight2Intensity - this.light2.intensity) * lightAlpha;
+    this.currentBgColor.lerp(this.targetBgColor, lightAlpha);
+    this.currentBgAlpha += (this.targetBgAlpha - this.currentBgAlpha) * lightAlpha;
+    this.renderer.setClearColor(this.currentBgColor, this.currentBgAlpha);
+    // --- END SMOOTH THEME LIGHTING + BACKGROUND TRANSITION ---
+
+    // --- SMOOTH SIMULATION DATA COLOR TRANSITION ---
+    if (this.colorAnimQueue.size > 0) {
+        const dataAlpha = dampAlpha(this.dataColorSpeed, delta);
+        for (const obj of this.colorAnimQueue) {
+            const mat = obj.material;
+            const target = obj.userData.targetColor;
+            if (!mat || !target) { this.colorAnimQueue.delete(obj); continue; }
+            mat.color.lerp(target, dataAlpha);
+            mat.emissive.copy(mat.color).multiplyScalar(EMISSIVE_FACTOR);
+            const dr = mat.color.r - target.r, dg = mat.color.g - target.g, db = mat.color.b - target.b;
+            if (dr * dr + dg * dg + db * db < 1e-5) {
+                mat.color.copy(target);
+                mat.emissive.copy(target).multiplyScalar(EMISSIVE_FACTOR);
+                this.colorAnimQueue.delete(obj);
+            }
+        }
+    }
+    // --- END SMOOTH SIMULATION DATA COLOR TRANSITION ---
+
     // --- MANUAL AUTO-ROTATE ---
     if (this.isAutoRotating && this.autoRotateSpeedRads > 0) {
         // We *always* rotate around the world Y-axis, which is always "up"
@@ -519,8 +610,22 @@ export default class ThreeDManager {
     this.renderer.render(this.scene, this.camera);
   }
 
+  setBgColor(color) {
+    this.targetBgColor.set(color);
+    this.targetBgAlpha = 1;
+  }
+
+  setThemeMode(isDark) {
+    this.isDark = isDark;
+    this.targetAmbientColor.setHex(isDark ? 0xbbbbbb : 0x5d5d5d);
+    this.targetLight1Intensity = isDark ? 1.8 : 1.0;
+    this.targetLight2Intensity = isDark ? 1.4 : 1.0;
+    // Highlights are toned down in light mode to avoid glare on the white bg.
+    this.applyMaterialSpecular();
+  }
+
   dispose() {
-    window.removeEventListener('resize', this.onWindowResize);
+    this.resizeObserver?.disconnect();
     window.removeEventListener('keydown', this.handleKeyDown);
     this.renderer.domElement.removeEventListener('click', this.handleClick);
     if(this.container && this.renderer.domElement) {

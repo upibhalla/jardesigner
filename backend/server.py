@@ -42,6 +42,11 @@ from allenbrain.allenbrain_routes import allenbrain_routes, stage_specimen as _a
 from allenbrain.allenbrain import fetch_specimen_by_id as _ab_fetch_by_id, specimen_to_details as _ab_to_details
 app.register_blueprint(allenbrain_routes, url_prefix="/allenbrain")
 
+from icg_database.icg_routes import icg_routes
+from icg_database.icg import get_channel_detail as icg_get_channel_detail, stage_channel as icg_stage
+app.register_blueprint(icg_routes, url_prefix="/icg")
+
+
 # --- Store running process and session info ---
 running_processes = {}
 client_sim_map = {}
@@ -241,7 +246,7 @@ def _load_registry(proto_type):
     path = os.path.join(PROTO_REGISTRY_DIR, f'{proto_type}_protos.json')
     if not os.path.exists(path):
         return None
-    with open(path, 'r') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 @app.route('/proto_digest/<proto_type>', methods=['GET'])
@@ -268,6 +273,16 @@ def get_proto_detail(proto_id):
             return jsonify(_ab_to_details(specimen))
         except Exception:
             return jsonify({})
+
+    if proto_id.startswith('icg_'):
+        # id format: icg_{modeldb_id}_{suffix}  e.g.  icg_12345_Na_mit_usb
+        m = re.match(r'^icg_(\d+)_(.+)$', proto_id)
+        if m:
+            try:
+                return jsonify(icg_get_channel_detail(int(m.group(1)), m.group(2)))
+            except Exception:
+                pass
+        return jsonify({})
 
     for proto_type in ('morpho', 'chan', 'chem'):
         data = _load_registry(proto_type)
@@ -320,6 +335,15 @@ def stage_proto_file(proto_id, client_id):
     if proto_id.startswith('ab_'):
         try:
             return jsonify(_ab_stage(int(proto_id[3:]), client_id))
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    if proto_id.startswith('icg_'):
+        m = re.match(r'^icg_(\d+)_(.+)$', proto_id)
+        if not m:
+            return jsonify({'error': 'Invalid ICG proto ID'}), 400
+        try:
+            return jsonify(icg_stage(int(m.group(1)), m.group(2), client_id))
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 

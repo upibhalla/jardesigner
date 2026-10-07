@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-    Box, Typography, Button, Grid, TextField, MenuItem, Tabs, Tab, IconButton, Tooltip, FormHelperText
+    Box, Typography, Button, Grid2 as Grid, TextField, MenuItem, Tabs, Tab, IconButton, Tooltip, FormHelperText
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -182,24 +182,24 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
         : null;
 
     return (
-        <Box sx={{ p: 2, background: '#f5f5f5', borderRadius: 2 }}>
+        <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>Define Simulation Output Files</Typography>
                 <Tooltip title={helpText.main} placement="right"><IconButton size="small"><InfoOutlinedIcon fontSize="small" /></IconButton></Tooltip>
             </Box>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-                <Tabs value={activeOutputFileIndex} onChange={(e, nv) => setActiveOutputFileIndex(nv)} sx={{ '& .MuiTabs-scroller': { overflow: 'visible !important' }, '& .MuiTabs-flexContainer': { flexWrap: 'wrap' } }}>
+                <Tabs value={activeOutputFileIndex} onChange={(e, nv) => setActiveOutputFileIndex(nv)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
                     {outputFiles.map((fileEntry, index) => <Tab key={index} label={fileEntry.file || `File ${index + 1}`} />)}
                     <IconButton onClick={addOutputFile} sx={{ alignSelf: 'center', ml: '10px' }}><AddIcon /></IconButton>
                  </Tabs>
              </Box>
              {activeFileData && (
-                 <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: '4px' }}>
+                 <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: '8px' }}>
                      <Grid container spacing={2}>
-                         <Grid item xs={12} sm={7}><HelpField id="file" label="Output Filename" required value={activeFileData.file} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.file} error={!!fileError} helperText={fileError || undefined} /></Grid>
-                         <Grid item xs={12} sm={5}><HelpField id="type" label="File Type" required select value={activeFileData.type} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.type}>{outputTypeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="path" label="Data Source Path" required value={activeFileData.path} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.path} error={!!pathError} helperText={pathError || undefined} /></Grid>
-                         <Grid item xs={12} sm={6}>
+                         <Grid size={{ xs: 12, sm: 7 }}><HelpField id="file" label="Output Filename" required value={activeFileData.file} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.file} error={!!fileError} helperText={fileError || undefined} /></Grid>
+                         <Grid size={{ xs: 12, sm: 5 }}><HelpField id="type" label="File Type" required select value={activeFileData.type} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.type}>{outputTypeOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}</HelpField></Grid>
+                         <Grid size={{ xs: 12, sm: 6 }}><HelpField id="path" label="Data Source Path" required value={activeFileData.path} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.path} error={!!pathError} helperText={pathError || undefined} /></Grid>
+                         <Grid size={{ xs: 12, sm: 6 }}>
                              <HelpField id="field" label="Data Source Field" required select value={activeFileData.field} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.field}>
                                  <MenuItem value=""><em>Select...</em></MenuItem>
                                  {fieldOptions.map(opt => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
@@ -207,25 +207,25 @@ const SimOutputMenuBox = ({ onConfigurationChange, currentConfig = [], getChemPr
                          </Grid>
                           {isChemField ? (
                               <>
-                                  <Grid item xs={12} sm={6}>
+                                  <Grid size={{ xs: 12, sm: 6 }}>
                                       <HelpField id="chemProto" label="Chem Prototype" required select value={activeFileData.chemProto} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.chemProto} error={showChemProtoWarning || !activeFileData.chemProto}>
                                           <MenuItem value=""><em>Select...</em></MenuItem>
                                           {availableChemProtos.map(protoName => <MenuItem key={protoName} value={protoName}>{protoName}</MenuItem>)}
                                       </HelpField>
                                       {(showChemProtoWarning || !activeFileData.chemProto) && <FormHelperText error>{showChemProtoWarning ? "Warning: No Chem Protos defined" : "Required"}</FormHelperText>}
                                   </Grid>
-                                  <Grid item xs={12} sm={6}><HelpField id="childPath" label="Child Object Path" required value={activeFileData.childPath} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.childPath} error={!activeFileData.childPath} /></Grid>
+                                  <Grid size={{ xs: 12, sm: 6 }}><HelpField id="childPath" label="Child Object Path" required value={activeFileData.childPath} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.childPath} error={!activeFileData.childPath} /></Grid>
                               </>
                           ) : (
                               <>
-                                  <Grid item xs={12} sm={6}><HelpField id="chemProto" label="Chem Prototype" select disabled value={activeFileData.chemProto} onChange={()=>{}} helptext={helpText.fields.chemProto}><MenuItem value=".">.</MenuItem></HelpField></Grid>
-                                  <Grid item xs={12} sm={6}><HelpField id="childPath" label="Relative Path (Optional)" value={activeFileData.childPath} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.childPath}/></Grid>
+                                  <Grid size={{ xs: 12, sm: 6 }}><HelpField id="chemProto" label="Chem Prototype" select disabled value={activeFileData.chemProto} onChange={()=>{}} helptext={helpText.fields.chemProto}><MenuItem value=".">.</MenuItem></HelpField></Grid>
+                                  <Grid size={{ xs: 12, sm: 6 }}><HelpField id="childPath" label="Relative Path (Optional)" value={activeFileData.childPath} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.childPath}/></Grid>
                               </>
                           )}
-                         <Grid item xs={12} sm={6}><HelpField id="dt" label="Sampling Interval dt (s)" required type="number" value={activeFileData.dt} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.dt} InputProps={{ inputProps: { min: 1e-7, step: 0.01 } }} error={!!dtError} helperText={dtError || undefined} /></Grid>
-                         <Grid item xs={12} sm={6}><HelpField id="flushSteps" label="Flush Steps (Optional, >=1)" type="number" value={activeFileData.flushSteps} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.flushSteps} InputProps={{ inputProps: { min: 1, step: 1 } }} error={!!flushError} helperText={flushError || undefined} /></Grid>
+                         <Grid size={{ xs: 12, sm: 6 }}><HelpField id="dt" label="Sampling Interval dt (s)" required type="number" value={activeFileData.dt} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.dt} InputProps={{ inputProps: { min: 1e-7, step: 0.01 } }} error={!!dtError} helperText={dtError || undefined} /></Grid>
+                         <Grid size={{ xs: 12, sm: 6 }}><HelpField id="flushSteps" label="Flush Steps (Optional, >=1)" type="number" value={activeFileData.flushSteps} onChange={(id, v) => updateOutputFile(activeOutputFileIndex, id, v)} helptext={helpText.fields.flushSteps} InputProps={{ inputProps: { min: 1, step: 1 } }} error={!!flushError} helperText={flushError || undefined} /></Grid>
                      </Grid>
-                     <Button variant="outlined" color="secondary" startIcon={<DeleteIcon />} onClick={() => removeOutputFile(activeOutputFileIndex)} sx={{ mt: 2 }}>
+                     <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeOutputFile(activeOutputFileIndex)} sx={{ mt: 2 }}>
                          Remove Output File
                      </Button>
                  </Box>
