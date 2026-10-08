@@ -35,11 +35,11 @@
 	"tags": ["electrical", "synapse", "Calcium", "Diffusion"], 
 	"description": "Synaptically driven Calcium dynamics and diffusion."
   },
-  { "name": "Tut8_spines", 
+  { "name": "Tut8_spine_morpho", 
 	"title": "Tutorial 8: Spine placement", 
-	"difficulty": "advanced", 
+	"difficulty": "intermediate", 
 	"tags": ["electrical", "spine"], 
-	"description": "Placing spines on linear and complex geometries."
+	"description": "Placing spines on linear and complex cell morphologies."
   },
   { "name": "cTut1_oscillator", 
 	"title": "Chemical Tutorial 1: Oscillator", 
