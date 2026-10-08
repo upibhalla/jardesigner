@@ -24,7 +24,9 @@
     "sizeStdDev": "Standard deviation for size scaling, adding random variability. May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL.",
     "angle": "Mean emergence angle of spines from the dendrite, in radians (0 = perpendicular). May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL.",
     "angleStdDev": "Standard deviation for emergence angle (radians). May be a number or a muParser expression using: p, g, L, len, dia, maxP, maxG, maxL.",
-    "randSeed": "Integer. Random seed for spine building, affects all of spacing, sizeScale, and angle. randSeed>0 gives repeatable distributions. randSeed==0 uses ongoing system values and outcomes will differ between runs."
+    "randSeed": "Integer. Random seed for spine building, affects all of spacing, sizeScale, and angle. randSeed>0 gives repeatable distributions. randSeed==0 uses ongoing system values and outcomes will differ between runs.",
+    "headName": "Base name for the spine head compartments of this distribution. Each head is named <headName><index>, e.g. head0, head1. Must contain 'head' and be distinct across distributions. Default is 'head' for the first distribution, then head1_, head2_, ...",
+    "shaftName": "Base name for the spine shaft compartments of this distribution. Each shaft is named <shaftName><index>, e.g. shaft0, shaft1. Must contain 'shaft' and be distinct across distributions. Default is 'shaft' for the first distribution, then shaft1_, shaft2_, ..."
   }
 }
 

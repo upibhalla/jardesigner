@@ -320,6 +320,14 @@
 				{ "type": "number", "default": 1234 },
 				{ "type": "string", "default": "1234" }
 			]
+          },
+          "headName": {
+            "type": "string",
+            "default": "head"
+          },
+          "shaftName": {
+            "type": "string",
+            "default": "shaft"
           }
         },
         "required": ["proto", "path", "spacing", "randSeed"],

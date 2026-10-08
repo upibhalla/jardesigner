@@ -333,9 +333,18 @@ export default class ThreeDManager {
       if (intersects.length > 0) {
           // let clickedObject = intersects[0].object;
 		  let firstVisibleIntersect = null;
+          // Raycaster ignores .visible, so hidden objects (e.g. channel
+          // icons in spine heads) must be skipped explicitly. Visibility
+          // may be set on an ancestor, so check up to the world.
+          const isShown = (obj) => {
+              for (let o = obj; o && o !== this.world; o = o.parent) {
+                  if (!o.visible) return false;
+              }
+              return true;
+          };
           for (const intersect of intersects) {
               // We must check the material property exists and opacity is greater than 0.
-              if (intersect.object.material && intersect.object.material.opacity > 0.0) {
+              if (intersect.object.material && intersect.object.material.opacity > 0.0 && isShown(intersect.object)) {
                   firstVisibleIntersect = intersect;
                   break; // We found the closest visible object
               }

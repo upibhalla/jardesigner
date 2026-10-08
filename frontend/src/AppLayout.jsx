@@ -273,6 +273,10 @@ export const AppLayout = (props) => {
 
   return (
     <ReplayContext.Provider value={{ replayTime }}>
+      {/* Full-height column: the AppBar takes its natural height (which
+          varies as the toolbar wraps), the panels fill the rest, and the
+          menu panel scrolls on its own rather than the whole page. */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <AppBar position="static">
         <Toolbar style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap' }}>
             <Button color="inherit" onClick={() => toggleMenu('File')} style={{ flexDirection: 'column', color: activeMenu === 'File' ? 'orange' : 'inherit' }} >
@@ -326,8 +330,8 @@ export const AppLayout = (props) => {
         </Toolbar>
       </AppBar>
 
-      <Grid container spacing={2} style={{ padding: '16px', height: 'calc(100vh - 64px)' }}>
-        <Grid item xs={4} style={{ height: '100%' }}>
+      <Grid container spacing={2} style={{ padding: '16px', flex: 1, minHeight: 0 }}>
+        <Grid item xs={4} style={{ height: '100%', overflowY: 'auto' }}>
           {activeMenu && menuComponents[activeMenu]}
         </Grid>
         <Grid item xs={8} style={{ height: '100%' }}>
@@ -338,6 +342,7 @@ export const AppLayout = (props) => {
           />
         </Grid>
       </Grid>
+      </Box>
 
       {/* Error Dialog */}
       <Dialog
