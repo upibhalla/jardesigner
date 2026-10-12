@@ -557,10 +557,10 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
                         <Grid size={6}>
                              <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid size={6}>
                              <HelpField id="headName" label="Head Name" value={distributions[activeDistribution].headName} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.headName} error={!!headNameError} helperText={headNameError || undefined} />
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid size={6}>
                              <HelpField id="shaftName" label="Shaft Name" value={distributions[activeDistribution].shaftName} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.shaftName} error={!!shaftNameError} helperText={shaftNameError || undefined} />
                         </Grid>
                     </Grid>
