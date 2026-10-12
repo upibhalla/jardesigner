@@ -333,11 +333,13 @@ export const AppLayout = (props) => {
           <Tabs
             value={activeMenu || false}
             onChange={(_, newValue) => newValue !== activeMenu && toggleMenu(newValue)}
-            variant="fullWidth"
-            TabIndicatorProps={{
-              sx: { backgroundColor: 'warning.main', height: '2.5px' },
+            // The sliding indicator assumes a single row, so it is hidden;
+            // the selected tab draws its own underline instead.
+            TabIndicatorProps={{ sx: { display: 'none' } }}
+            sx={{
+              minHeight: 'auto',
+              '& .MuiTabs-flexContainer': { flexWrap: 'wrap', justifyContent: 'space-around' },
             }}
-            sx={{ minHeight: 'auto' }}
           >
             {MENU_ITEMS.map(({ key, icon, label }) => (
               <Tab
@@ -356,7 +358,8 @@ export const AppLayout = (props) => {
                   color: 'common.white',
                   fontSize: '0.875rem',
                   fontWeight: 500,
-                  '&.Mui-selected': { color: 'warning.main', fontWeight: 800 },
+                  borderBottom: '2.5px solid transparent',
+                  '&.Mui-selected': { color: 'warning.main', fontWeight: 800, borderBottomColor: 'warning.main' },
                   '&:hover': { backgroundColor: 'rgba(255,255,255,0.10)', color: 'common.white' },
                 }}
               />
