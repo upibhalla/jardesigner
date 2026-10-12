@@ -325,6 +325,9 @@ export const AppLayout = (props) => {
 
   return (
     <ReplayContext.Provider value={{ replayTime }}>
+      {/* Full-height column: the AppBar takes its natural height (which
+      varies as the toolbar wraps), the panels fill the rest, and the
+      menu panel scrolls on its own rather than the whole page. */}
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <AppBar position="static">
           <Tabs
@@ -361,7 +364,7 @@ export const AppLayout = (props) => {
           </Tabs>
         </AppBar>
 
-        <Box ref={containerRef} sx={{ flex: 1, overflow: 'hidden', display: 'flex', userSelect: isResizing ? 'none' : 'auto' }}>
+        <Box ref={containerRef} sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', userSelect: isResizing ? 'none' : 'auto' }}>
           {/* Left panel — width controlled by splitPct */}
           <Box sx={{
             width: activeMenu ? `${splitPct}%` : 0,

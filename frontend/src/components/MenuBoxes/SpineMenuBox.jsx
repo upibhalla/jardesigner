@@ -82,11 +82,33 @@ const createDefaultPrototype = () => ({
     amparTau1: '2.0', amparTau2: '9.0', nmdarTau1: '20.0', nmdarTau2: '20.0',
     CaTau: '0.013', 
 });
-const createDefaultDistribution = () => ({
+const createDefaultDistribution = (headName = 'head', shaftName = 'shaft') => ({
     prototype: '', path: 'dend#', spacing: '10.0', minSpacing: '1.0',
     sizeScale: '1.0', sizeStdDev: '0.5', angle: '0.0', angleStdDev: '6.2832',
-    randSeed: '1234', 
+    randSeed: '1234', headName, shaftName,
 });
+
+// Spine compartments are named <name><k> with k restarting for each
+// distribution, so each distribution needs distinct head and shaft names.
+// Index 0 uses 'head'/'shaft'; index n uses 'head<n>_'/'shaft<n>_'.
+// Names are kept when other distributions are removed, so skip any in use.
+const pickSpineComptNames = (dists, index) => {
+    const used = new Set(dists.flatMap(d => [d.headName, d.shaftName]));
+    if (index === 0 && !used.has('head') && !used.has('shaft'))
+        return { headName: 'head', shaftName: 'shaft' };
+    let n = Math.max(index, 1);
+    while (used.has(`head${n}_`) || used.has(`shaft${n}_`)) n++;
+    return { headName: `head${n}_`, shaftName: `shaft${n}_` };
+};
+
+// Error message for a head/shaft name, or null if OK.
+const spineComptNameError = (name, required, otherNames) => {
+    if (!name) return 'Required';
+    if (!name.includes(required)) return `Must contain '${required}'`;
+    if (!/^[A-Za-z0-9_]+$/.test(name)) return 'Letters, digits and _ only';
+    if (otherNames.includes(name)) return 'Already used by another distribution';
+    return null;
+};
 
 // --- Reusable HelpField Component ---
 const HelpField = React.memo(({ id, label, value, onChange, type = "text", fullWidth = true, ...props }) => {
@@ -128,7 +150,14 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
     });
 
     const [distributions, setDistributions] = useState(() => {
-        const initialDists = currentConfig?.spineDistrib?.map(d => ({
+        const initialDists = [];
+        (currentConfig?.spineDistrib || []).forEach((d, i) => {
+            // Older files lack head/shaft names: assign them by index.
+            const names = (d.headName && d.shaftName)
+                ? { headName: d.headName, shaftName: d.shaftName }
+                : pickSpineComptNames(initialDists, i);
+            initialDists.push({
+            ...names,
             prototype: d.proto,
             path: d.path,
             spacing: toMicrons(d.spacing) || createDefaultDistribution().spacing,
@@ -137,8 +166,9 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
             sizeStdDev: safeToString(d.sizeSdev, createDefaultDistribution().sizeStdDev),
             angle: safeToString(d.angle, createDefaultDistribution().angle),
             angleStdDev: safeToString(d.angleSdev, createDefaultDistribution().angleStdDev),
-            randSeed: safeToString(d.randSeed, createDefaultDistribution().randSeed), 
-        })) || [];
+            randSeed: safeToString(d.randSeed, createDefaultDistribution().randSeed),
+            });
+        });
         return initialDists.length > 0 ? initialDists : [createDefaultDistribution()];
     });
 
@@ -211,7 +241,10 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
     }, []);
 
     const addDistribution = useCallback(() => {
-        setDistributions((prev) => [...prev, createDefaultDistribution()]);
+        setDistributions((prev) => {
+            const { headName, shaftName } = pickSpineComptNames(prev, prev.length);
+            return [...prev, createDefaultDistribution(headName, shaftName)];
+        });
         setActiveDistribution(distributionsRef.current.length);
     }, []);
 
@@ -295,6 +328,9 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
                  angle: numOrExpr(distState.angle, 0),
                  angleSdev: numOrExpr(distState.angleStdDev, 6.2831853),
                  randSeed: parseInt(distState.randSeed, 10) || 1234,
+                 // Omit defaults so single-distribution files are unchanged.
+                 ...(distState.headName && distState.headName !== 'head' && { headName: distState.headName }),
+                 ...(distState.shaftName && distState.shaftName !== 'shaft' && { shaftName: distState.shaftName }),
              };
          }).filter(d => d !== null);
 
@@ -354,6 +390,13 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
     const caTauNum = Number(activeProto?.CaTau);
     const caTauError = isExcCa && (isNaN(caTauNum) || caTauNum <= 0) ? 'Must be > 0' : null;
     const caTauWarn = !caTauError && isExcCa && (caTauNum < 0.001 || caTauNum > 1.0) ? 'Typical Ca decay time is 0.001–1.0 s' : null;
+
+    const activeDist = distributions[activeDistribution];
+    const otherComptNames = distributions
+        .filter((_, i) => i !== activeDistribution)
+        .flatMap(d => [d.headName, d.shaftName]);
+    const headNameError = activeDist ? spineComptNameError(activeDist.headName, 'head', [...otherComptNames, activeDist.shaftName]) : null;
+    const shaftNameError = activeDist ? spineComptNameError(activeDist.shaftName, 'shaft', [...otherComptNames, activeDist.headName]) : null;
 
     return (
         <Box sx={{ p: 2, bgcolor: 'background.paper' }}>
@@ -513,6 +556,12 @@ const SpineMenuBox = ({ onConfigurationChange, currentConfig, elecPaths = [], ce
                         </Grid>
                         <Grid size={6}>
                              <HelpField id="randSeed" label="Random seed" type="number" value={distributions[activeDistribution].randSeed} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.randSeed}/>
+                        </Grid>
+                        <Grid item xs={6}>
+                             <HelpField id="headName" label="Head Name" value={distributions[activeDistribution].headName} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.headName} error={!!headNameError} helperText={headNameError || undefined} />
+                        </Grid>
+                        <Grid item xs={6}>
+                             <HelpField id="shaftName" label="Shaft Name" value={distributions[activeDistribution].shaftName} onChange={(id,v) => updateDistribution(activeDistribution, id, v)} helptext={helpText.distributions.shaftName} error={!!shaftNameError} helperText={shaftNameError || undefined} />
                         </Grid>
                     </Grid>
                     <Button variant="outlined" color="error" startIcon={<DeleteIcon />} onClick={() => removeDistribution(activeDistribution)} sx={{ mt: 2 }}>

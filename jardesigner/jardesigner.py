@@ -897,11 +897,44 @@ print( "Wall Clock Time = {:8.2f}, simtime = {:8.3f}".format( time.time() - _sta
         defaults = ['spine', '#dend#,#apical#', '10e-6', '1e-6', '1', '0.5', '0', '6.2831853' ]
         argKeys = ['proto', 'path', 'spacing', 'minSpacing', 'sizeScale', 'sizeSdev', 'angle', 'angleSdev' ]
         argKeys2 = ['proto', 'path', 'spacing', 'spacingDistrib', 'size', 'sizeDistrib', 'angle', 'angleDistrib' ]
+
+        # Neuron::addSpine names spine compartments as <name><k>, with k
+        # restarting at 0 for each distrib. So each distrib needs distinct
+        # head and shaft names, else the second distrib collides with the
+        # first. Names must keep 'head' and 'shaft' in them, as NeuroMesh
+        # and wildcards like 'head#' use these to identify spines.
+        seenNames = set()
+        for idx, ii in enumerate( self.spineDistrib ):
+            headName = ii.get( 'headName', 'head' )
+            shaftName = ii.get( 'shaftName', 'shaft' )
+            if 'head' not in headName or 'shaft' not in shaftName:
+                raise BuildError( "spineDistrib[{}]: headName '{}' must contain 'head' and shaftName '{}' must contain 'shaft'".format( idx, headName, shaftName ) )
+            for nn in ( headName, shaftName ):
+                if nn in seenNames:
+                    raise BuildError( "spineDistrib[{}]: spine compartment name '{}' is already used by another distribution".format( idx, nn ) )
+                seenNames.add( nn )
+
         for ii in self.spineDistrib:
             moose.seed( ii['randSeed'] ) # 0 is system, >=1 is specific seed.
-            line = []
-            for jj in argKeys[:2]:
-                line.append( ii[jj] )
+            protoName = ii['proto']
+            headName = ii.get( 'headName', 'head' )
+            shaftName = ii.get( 'shaftName', 'shaft' )
+            if ( headName != 'head' or shaftName != 'shaft' ) and moose.exists( '/library/' + protoName ):
+                # Use a variant of the proto with renamed head and shaft,
+                # as several distribs may share the original proto. The
+                # variant is kept in /library so the distrib can be rebuilt
+                # later in the session. It is refreshed from the original
+                # here so that any changes to the original are used.
+                protoName = "{}_{}".format( ii['proto'], headName )
+                if moose.exists( '/library/' + protoName ):
+                    moose.delete( '/library/' + protoName )
+                spineCopy = moose.copy( '/library/' + ii['proto'], '/library', protoName )
+                for cc in moose.wildcardFind( spineCopy.path + '/#[ISA=CompartmentBase]' ):
+                    if cc.name == 'head':
+                        cc.name = headName
+                    elif cc.name == 'shaft':
+                        cc.name = shaftName
+            line = [protoName, ii['path']]
             for jj, kk in zip (argKeys[2:], argKeys2[2:] ):
                 line.append( kk )       # Put in the name the C code knows
                 line.append( str(ii[jj]) )   # Put in the value from json dict
