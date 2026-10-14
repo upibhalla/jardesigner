@@ -325,16 +325,21 @@ export const AppLayout = (props) => {
 
   return (
     <ReplayContext.Provider value={{ replayTime }}>
+      {/* Full-height column: the AppBar takes its natural height (which
+      varies as the toolbar wraps), the panels fill the rest, and the
+      menu panel scrolls on its own rather than the whole page. */}
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <AppBar position="static">
           <Tabs
             value={activeMenu || false}
             onChange={(_, newValue) => newValue !== activeMenu && toggleMenu(newValue)}
-            variant="fullWidth"
-            TabIndicatorProps={{
-              sx: { backgroundColor: 'warning.main', height: '2.5px' },
+            // The sliding indicator assumes a single row, so it is hidden;
+            // the selected tab draws its own underline instead.
+            TabIndicatorProps={{ sx: { display: 'none' } }}
+            sx={{
+              minHeight: 'auto',
+              '& .MuiTabs-flexContainer': { flexWrap: 'wrap', justifyContent: 'space-around' },
             }}
-            sx={{ minHeight: 'auto' }}
           >
             {MENU_ITEMS.map(({ key, icon, label }) => (
               <Tab
@@ -353,7 +358,8 @@ export const AppLayout = (props) => {
                   color: 'common.white',
                   fontSize: '0.875rem',
                   fontWeight: 500,
-                  '&.Mui-selected': { color: 'warning.main', fontWeight: 800 },
+                  borderBottom: '2.5px solid transparent',
+                  '&.Mui-selected': { color: 'warning.main', fontWeight: 800, borderBottomColor: 'warning.main' },
                   '&:hover': { backgroundColor: 'rgba(255,255,255,0.10)', color: 'common.white' },
                 }}
               />
@@ -361,7 +367,7 @@ export const AppLayout = (props) => {
           </Tabs>
         </AppBar>
 
-        <Box ref={containerRef} sx={{ flex: 1, overflow: 'hidden', display: 'flex', userSelect: isResizing ? 'none' : 'auto' }}>
+        <Box ref={containerRef} sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', userSelect: isResizing ? 'none' : 'auto' }}>
           {/* Left panel — width controlled by splitPct */}
           <Box sx={{
             width: activeMenu ? `${splitPct}%` : 0,
